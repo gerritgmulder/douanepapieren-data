@@ -5356,7 +5356,12 @@ async function dpRefreshProductie(env) {
     const rows = Array.isArray(rowsResp) ? rowsResp : ((rowsResp && rowsResp.Records) || []);
     for (const r of rows) {
       const model = codeToModel[String(r.ProductCode || "")]; if (!model) continue;
-      const qty = Number(r.QtyToDeliver) || Number(r.QtyToOrder) || 0; if (qty <= 0) continue;
+      /* Nog te leveren, en alleen als dat veld ontbreekt het bestelde aantal.
+         Hier stond "QtyToDeliver || QtyToOrder": een regel die al helemaal
+         geleverd was (0 te leveren) telde dan met zijn volle bestelaantal mee
+         als productie (Gerrit, 7 okt 2026: 965 in productie tegen 620 besteld). */
+      const qty = r.QtyToDeliver != null && r.QtyToDeliver !== "" ? Number(r.QtyToDeliver) || 0 : Number(r.QtyToOrder) || 0;
+      if (qty <= 0) continue;
       const code = String(r.ProductCode || "");
       (byModel[model] = byModel[model] || []).push({
         iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 80) || null,
@@ -7774,8 +7779,9 @@ async function ketenControle(env) {
     const verwerkt = await lees("qb-verwerkt");
     const verwerktNrs = new Set(Object.values(verwerkt.ids || {}).map(v => String((v && v.docNr) || "")).filter(Boolean));
     for (const k of Object.keys(verwerkt.ids || {})) if (!k.startsWith("qb:")) verwerktNrs.add(k);
+    const auto = await qbAutoPerFactuur(env).catch(() => ({}));
     for (const w of (wires.wires || [])) {
-      let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}); } catch { continue; }
+      let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}, auto); } catch { continue; }
       const regels = (b.regels || []).filter(r => !verwerktNrs.has(String(r.factuur || "")) && (Number(r.bedrag) || 0) > 0);
       const los = regels.filter(r => r.status === "geen factuurnummer" || r.status === "geen Logic4-order" || r.status === "meerdere orders");
       for (const r of los) {
@@ -8973,10 +8979,56 @@ async function voorraadbepalingHandle(request, env, url) {
   if (!(await toegangMag(env, "voorraadbepaling", wie))) return reply(403, { ok: false, error: "geen toegang" });
   const vers = url.searchParams.get("vers") === "1";
   const oud = await env.FONTEYN_DATA.get("voorraadbepaling", { type: "json" });
-  if (!vers && oud && oud.ts && Date.now() - Date.parse(oud.ts) < 6 * 3600000) return reply(200, { ...oud, uitCache: true });
+  if (!vers && oud && oud.ts && Date.now() - Date.parse(oud.ts) < 6 * 3600000) return reply(200, { ...(await vbMetOverzicht(env, oud)), uitCache: true });
   const nieuw = await voorraadbepalingBereken(env);
   if (nieuw.ok) await env.FONTEYN_DATA.put("voorraadbepaling", JSON.stringify(nieuw));
-  return reply(200, nieuw);
+  return reply(200, nieuw.ok ? await vbMetOverzicht(env, nieuw) : nieuw);
+}
+/* Gerrit (7 okt 2026): "je moet de inhoud die bij Overzicht in Voorraadbeheer
+   staat wel meerekenen." Per model dezelfde cijfers als Voorraadbeheer >
+   Overzicht, op dezelfde manier geteld (renderOverzicht in voorraad.html):
+   reserveringen van Fonteyn zonder partnercontainers, vrije voorraad in Uddel,
+   op zee, en in productie min wat van dezelfde proforma al vaart. Elke keer
+   vers uit KV, zodat het zo nieuw is als de uursync; de verkoop blijft 6 uur. */
+async function vbMetOverzicht(env, basis) {
+  const [resv, hal, ship, prod] = await Promise.all(["reserveringen-live", "voorraad-hallen", "voorraad-schepen", "voorraad-productie"]
+    .map(k => env.FONTEYN_DATA.get(k, { type: "json" }).then(x => x || {}).catch(() => ({}))));
+  const nrs = (s) => [...String(s || "").matchAll(/\b(\d{4})\b/g)].map(m => m[1]);
+  const zeeM = {}, zeePf = {};
+  // Zelfde regel als schipOnderweg in voorraad.html: binnen gemeld, dealercontainers en oude ETA's tellen niet.
+  const grens = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const onderweg = (s) => {
+    if (!s || s.binnenGemeld || s.dealerContainer || s.alleenDocumenten) return false;
+    const eta = String(s.etaHand || s.eta || (s.track && s.track.eta) || "").slice(0, 10);
+    return !(/^\d{4}-\d{2}-\d{2}$/.test(eta) && eta < grens);
+  };
+  for (const s of (ship.ships || []).filter(onderweg)) for (const [m, q] of Object.entries(s.models || {})) {
+    zeeM[m] = (zeeM[m] || 0) + (Number(q) || 0);
+    for (const nr of nrs(s.ref || s.trackRef || s.file)) { (zeePf[nr] = zeePf[nr] || {})[m] = ((zeePf[nr] || {})[m] || 0) + (Number(q) || 0); }
+  }
+  const prodTelt = (regels, m) => {
+    const perPf = {};
+    for (const x of (regels || [])) {
+      if (VB_AMERIKA_IKO.test(String(x.ref || ""))) continue;     // Houston dekt niets in Nederland
+      const nr = nrs(x.ref)[0] || ""; perPf[nr] = (perPf[nr] || 0) + (Number(x.qty) || 0);
+    }
+    let som = 0;
+    for (const nr of Object.keys(perPf)) som += Math.max(0, perPf[nr] - (nr ? ((zeePf[nr] || {})[m] || 0) : 0));
+    return som;
+  };
+  const byModel = resv.byModel || {}, halM = hal.models || {}, prodM = prod.models || {};
+  const per = {};
+  const alle = new Set([...(basis.modellen || []).map(x => x.model), ...Object.keys(byModel), ...Object.keys(prodM), ...Object.keys(zeeM)]);
+  for (const m of alle) {
+    const res = (byModel[m] || []).filter(r => !r.container).reduce((a, r) => a + (Number(r.qty) || 0), 0);
+    const nl = Number((halM[m] || {}).available) || 0, zee = zeeM[m] || 0, pr = prodTelt(prodM[m], m);
+    per[m] = { res, nl, zee, prod: pr, vrij: nl + zee + pr - res, tekortOverzicht: Math.max(0, res - nl - zee - pr) };
+  }
+  const modellen = (basis.modellen || []).map(x => ({ ...x, ...(per[x.model] || { res: 0, nl: 0, zee: 0, prod: 0, vrij: 0, tekortOverzicht: 0 }) }));
+  for (const m of alle) if (!modellen.some(x => x.model === m) && (per[m].res || per[m].vrij))
+    modellen.push({ model: m, verkocht: 0, aandeel: 0, besteld: 0, hoort: 0, verschil: 0, ikos: [], ...per[m] });
+  return { ...basis, modellen, overzicht: { bron: { reserveringen: resv.updated || resv.ts || null, hallen: hal.updated || hal.ts || null,
+           schepen: ship.updated || null, productie: prod.updated || prod.ts || null } } };
 }
 
 async function dpOrderUitleg(env, nr) {
@@ -11995,7 +12047,7 @@ function qbBatchVingerafdruk(w) {
 
 /* Eén batch doorrekenen. Er wordt hier niets geboekt en niets opgeslagen;
    dit bepaalt alleen of de batch mag. */
-function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
+function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen, auto) {
   const regels = wire.regels || [];
   const totaalRegel = regels.find(r => String(r.soort || "") === "totaal");
   const geld = regels.filter(r => QB_GELDSOORTEN.has(String(r.soort || "")));
@@ -12066,6 +12118,14 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
        Logic staat kan het als credit verwerkt worden"). Die wordt als
        negatieve betaling op de order geboekt. */
     if (rij.bedrag < 0 && rij.status === "klaar om te boeken") rij.terugbetaling = true;
+    /* Al door de Amerika-automaat geboekt toen de betaling in QuickBooks
+       binnenkwam. Dan niet nog een keer. De map loopt af per regel, zodat
+       twee regels voor dezelfde factuur elk hun eigen deel vinden. */
+    if (auto && factuur && rij.status === "klaar om te boeken" && rij.bedrag > 0 &&
+        (Number(auto[factuur]) || 0) >= rij.bedrag - 0.02) {
+      auto[factuur] = Math.round((Number(auto[factuur]) - rij.bedrag) * 100) / 100;
+      rij.status = "al automatisch geboekt"; rij.auto = true;
+    }
     return rij;
   });
 
@@ -12147,7 +12207,7 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
 
   const geradenLijst = uit.filter(r => r.geraden);
   const teBoeken = uit.filter(r => r.status === "klaar om te boeken");
-  const alGeboekt = uit.filter(r => r.status === "al geboekt");
+  const alGeboekt = uit.filter(r => r.status === "al geboekt" || r.status === "al automatisch geboekt");
   const kostenSleutel = "bankkosten:" + wire.id;
   const kostenAl = !!((geboekt && geboekt.ids) || {})[kostenSleutel];
 
@@ -12161,7 +12221,7 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
      Dat is bij de batch van 31-07 het geval. Daar staat een saldoregel van
      3,20 die nergens bij hoort. Op de kostenkolom zou er 505,90 naar 4630
      gaan en bleef er 3,20 op 1160 staan; nu gaat er 502,70 en klopt het. */
-  const opOrders = qbCent(uit.filter(r => r.status === "klaar om te boeken" || r.status === "al geboekt")
+  const opOrders = qbCent(uit.filter(r => r.status === "klaar om te boeken" || r.status === "al geboekt" || r.status === "al automatisch geboekt")
                              .reduce((n, r) => n + r.bedrag, 0));
   /* Alleen als de batch verder klopt. Ligt er nog een factuur zonder order,
      dan gaat er toch niets weg en zou dit verschil een onzinbedrag zijn - het
@@ -12660,12 +12720,14 @@ async function qbHandleRefundReden(request, env) {
    volgende uur hem opnieuw. Er wordt alleen weggeschreven als er iets
    veranderd is, want KV heeft duizend schrijfacties per dag. */
 const WIRE_DREMPEL = 40000;
-const WIRE_WACHT_MS = 7 * 24 * 3600 * 1000;
+/* Gerrit (7 okt 2026): "Betaalt Audrey binnen 5 werkdagen niet? Krijgt ze een
+   herinneringsmail met Chantal in de cc." Was 7 x 24 uur. */
+const WIRE_WACHT_WERKUREN = 5 * 24;
 const WIRE_AAN = "audrey@passionspas.com";
 const WIRE_CC = "chantal@fonteyn.nl";
 const WIRE_SLEUTEL = "amerika-wire-bewaking";
 
-const wireDollar = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const wireDollar = (n) => ((Number(n) || 0) < 0 ? "-$" : "$") + Math.abs(Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const wireDag = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
 // QuickBooks wil een tijd met zone en zonder milliseconden.
 const wireQbTijd = (iso) => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "-00:00");
@@ -12746,7 +12808,7 @@ async function wireRonde(env, opties) {
   // 3. Verzoek of herinnering?
   let actie = null;
   if (!s.verzoek && s.teller >= WIRE_DREMPEL) actie = "verzoek";
-  else if (s.verzoek && !s.herinnering && nu.getTime() - Date.parse(s.verzoek.op) >= WIRE_WACHT_MS) actie = "herinnering";
+  else if (s.verzoek && !s.herinnering && nu.getTime() >= dpWerkurenLater(new Date(s.verzoek.op), WIRE_WACHT_WERKUREN).getTime()) actie = "herinnering";
   let mail = null;
   if (actie) {
     mail = wireMail(actie, s);
@@ -12760,6 +12822,370 @@ async function wireRonde(env, opties) {
     await env.FONTEYN_DATA.put(WIRE_SLEUTEL, JSON.stringify(s));
   return { ok: true, proef, actie, verstuurd: !proef && !!actie && !s.laatsteFout, mail: proef ? mail : undefined,
            toestand: s, nogTeGaan: Math.max(0, Math.round((WIRE_DREMPEL - s.teller) * 100) / 100) };
+}
+
+/* ═══ Amerika-automaat: QuickBooks → Logic4 ════════════════════════════
+   Gerrit (7 okt 2026), samengevat:
+   1. QuickBooks elk uur uitlezen.
+   2. Een order in Logic4 aanmaken zodra er op de QuickBooks-factuur iets is
+      betaald, al is het een paar dollar. Zonder betaling is het een offerte.
+   4. Elke betaling die in QuickBooks binnenkomt meteen op die order boeken.
+   5. Is alles betaald, dan de order uitleveren (Osman doet nu 'Uitlevering
+      aanmaken', status 'Te factureren') en de factuur maken.
+   7. Chantal een bericht als er geen Credit Card Charge op staat, als er een
+      minbedrag op een regel staat, of als iets onder de bekende prijs is verkocht.
+
+   HOE
+   De betaling is het startsein. Elk uur haalt de automaat de betalingen op
+   die sinds het aanzetten in QuickBooks zijn gezet (Payment, met per regel
+   de factuur waar hij op is afgeletterd). Per betaalde factuur:
+     - staat er nog geen Logic4-order (qb-approved), dan maakt hij die aan op
+       dezelfde manier als de knop van Chantal. Twijfelt hij (spamodel of kleur
+       onbekend, lijkt al in Logic4 te staan, verborgen door Chantal), dan
+       laat hij de factuur staan voor Chantal met een bericht. De betaling
+       wacht dan en wordt geboekt zodra de order er is;
+     - de betaling gaat met AddPayment op de order, net als bij de batches:
+       dagboek 45 (grootboek 1160), tegenrekening 78, dollars gedeeld door 1,12.
+       De laatste betaling sluit de order precies op nul;
+     - is de order daarmee helemaal betaald, dan gaat hij in de rij om te
+       factureren: uitlevering aanmaken voor alle regels, status 'te
+       factureren' (17), factuur maken en verwerken.
+
+   WAT HIJ BEWUST LAAT LIGGEN
+     - Betalingen van vóór het aanzetten: die liepen al via de batches.
+     - Facturen die al vóór het aanzetten betaald waren maar nog geen order
+       hebben: die staan in de lijst van Chantal zoals altijd.
+     - Factureren begint pas als het aanstaat (toestand.factureren). Een
+       verwerkte factuur is niet meer weg te halen; de eerste doen Gerrit en
+       Osman samen met POST /amerika/automaat/factureer.
+
+   DE BATCHES VAN AUDREY
+   Een betaling die de automaat al boekte, staat later ook in een overzicht
+   van Audrey. qbBatchLezen krijgt daarom per factuur het bedrag mee dat
+   automatisch is geboekt, en zet zo'n regel op "al automatisch geboekt" in
+   plaats van hem nog een keer te boeken.
+
+   BUDGET
+   Een worker mag per keer vijftig keer naar buiten. Elke stap telt mee; is
+   het op, dan gaat het volgende uur verder waar hij was. */
+const AUTO_SLEUTEL = "qb-automaat";
+const AUTO_BUDGET = 42;
+const AUTO_OSMAN = "osman@fonteyn.nl";
+const AUTO_KOSTENREGEL = /^(credit card|houston|freight|shipping|sales tax)/i;
+
+async function autoLees(env) {
+  return await env.FONTEYN_DATA.get(AUTO_SLEUTEL, { type: "json" });
+}
+
+/* Per factuurnummer: hoeveel dollar de automaat erop boekte. Voor qbBatchLezen. */
+async function qbAutoPerFactuur(env) {
+  const st = await autoLees(env);
+  const per = {};
+  for (const g of Object.values((st && st.geboekt) || {})) {
+    if (!g || !g.factuur || !(Number(g.usd) > 0)) continue;
+    per[String(g.factuur)] = Math.round(((per[String(g.factuur)] || 0) + Number(g.usd)) * 100) / 100;
+  }
+  return per;
+}
+
+/* Is dit een creditcardbetaling? QuickBooks zet dat op twee plekken: de
+   betaalwijze (Visa, MasterCard, "Credit Card") of een CreditCardPayment-blok
+   als het via QuickBooks Payments liep. */
+function autoIsCreditcard(pay) {
+  const naam = String((pay.PaymentMethodRef && pay.PaymentMethodRef.name) || "");
+  return !!pay.CreditCardPayment || /card|visa|master|amex|american express|discover/i.test(naam);
+}
+
+/* De drie controles voor Chantal (punt 7). Eén keer per factuur. */
+async function autoControles(env, inv, pay, itemPrijs, d, alleenCreditcard) {
+  let nieuw = 0;
+  const nr = inv.DocNumber || inv.Id, klant = (inv.CustomerRef && inv.CustomerRef.name) || "";
+  const regels = (inv.Line || []).filter(l => l.DetailType === "SalesItemLineDetail");
+  const naamVan = (l) => String((l.SalesItemLineDetail && l.SalesItemLineDetail.ItemRef && l.SalesItemLineDetail.ItemRef.name) || l.Description || "").replace(/^[^:]*:/, "").trim();
+  // 1. Creditcard betaald, maar geen Credit Card Charge op de factuur.
+  if (pay && autoIsCreditcard(pay) && !regels.some(l => /^credit card/i.test(naamVan(l)))) {
+    if (berichtErbij(d, { id: "qb-cc:" + inv.Id, aan: [BERICHT_CHANTAL], soort: "qb-controle", ref: { qbId: String(inv.Id), factuur: nr },
+        titel: "Creditcard zonder toeslag: QuickBooks-factuur " + nr + " (" + klant + ")",
+        tekst: "Deze factuur is met een creditcard betaald. Vraag Audrey om de regel Credit Card Charge (3,5%) toe te voegen." })) nieuw++;
+  }
+  if (alleenCreditcard) return nieuw;
+  // 2. Een minbedrag op een regel.
+  const min = regels.filter(l => Number(l.Amount) < 0);
+  if (min.length) {
+    if (berichtErbij(d, { id: "qb-min:" + inv.Id, aan: [BERICHT_CHANTAL], soort: "qb-controle", ref: { qbId: String(inv.Id), factuur: nr },
+        titel: "Minbedrag op QuickBooks-factuur " + nr + " (" + klant + ")",
+        tekst: min.map(l => naamVan(l) + ": " + wireDollar(l.Amount)).join("; ") + ". Kijk na of deze korting zo is afgesproken." })) nieuw++;
+  }
+  // 3. Onder de bekende prijs: de verkoopprijs van het artikel in QuickBooks.
+  const laag = [];
+  for (const l of regels) {
+    const det = l.SalesItemLineDetail || {};
+    const id = det.ItemRef && String(det.ItemRef.value);
+    const naam = naamVan(l);
+    if (!id || id === "SHIPPING_ITEM_ID" || AUTO_KOSTENREGEL.test(naam)) continue;
+    const bekend = Number(itemPrijs[id]) || 0;
+    const stuks = Number(det.Qty) || 1;
+    const prijs = det.UnitPrice != null ? Number(det.UnitPrice) : (Number(l.Amount) || 0) / stuks;
+    if (bekend > 0 && prijs > 0 && prijs < bekend - 0.5) laag.push(naam + ": " + wireDollar(prijs) + " in plaats van " + wireDollar(bekend));
+  }
+  if (laag.length) {
+    if (berichtErbij(d, { id: "qb-prijs:" + inv.Id, aan: [BERICHT_CHANTAL], soort: "qb-controle", ref: { qbId: String(inv.Id), factuur: nr },
+        titel: "Onder de bekende prijs: QuickBooks-factuur " + nr + " (" + klant + ")",
+        tekst: laag.join("; ") + ". De bekende prijs is de verkoopprijs van het artikel in QuickBooks." })) nieuw++;
+  }
+  return nieuw;
+}
+
+/* Wat er op een Logic4-order staat en open is. */
+async function autoOrder(env, token, orderId, budget) {
+  budget.n++;
+  const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ Id: Number(orderId), TakeRecords: 1 }),
+  });
+  const j = await r.json().catch(() => null);
+  const o = Array.isArray(j) ? j[0] : (j && (j.Records || j.Orders || [])[0]);
+  if (!(o && Number(o.Id) === Number(orderId) && o.Totals)) return null;
+  const tot = Math.round((Number(o.Totals.AmountIncl) || 0) * 100) / 100;
+  const betaald = Math.round((Number(o.Totals.Calc_TotalPayed) || 0) * 100) / 100;
+  return { totaal: tot, betaald, open: Math.round((tot - betaald) * 100) / 100, status: Number(o.OrderStatus && o.OrderStatus.Id) || null };
+}
+
+/* Uitleveren en factureren. Geeft { ok, stap, uitleg }. */
+async function autoFactureer(env, token, orderId, budget, proef, nr) {
+  const post = async (pad, body) => {
+    budget.n++;
+    const r = await fetch("https://api.logic4server.nl" + pad, {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const tekst = await r.text();
+    let j = null; try { j = JSON.parse(tekst); } catch {}
+    return { ok: r.ok, status: r.status, j, tekst: tekst.slice(0, 300) };
+  };
+  const o = await autoOrder(env, token, orderId, budget);
+  if (!o) return { ok: false, stap: "order", uitleg: "order " + orderId + " vraagt Logic4 nog een keer" };
+  if (o.open > 0.10) return { ok: false, stap: "betaald", uitleg: "er staat nog " + o.open.toFixed(2) + " euro open" };
+  // Al gefactureerd? Dan is er niets meer te doen.
+  /* Al gefactureerd? Een factuur draagt de referentie van de order mee
+     ("QuickBooks <nr>") en het ordernummer in InvoiceBelongsToOrderNumber. */
+  if (nr) {
+    const inv = await post("/v3/Orders/GetInvoices", { DebtorId: AMERIKA_DEBTOR, Reference: "QuickBooks " + nr, TakeRecords: 10, SkipRecords: 0 });
+    const facturen = Array.isArray(inv.j) ? inv.j : ((inv.j && inv.j.Records) || []);
+    if (facturen.some(f => Number(f.InvoiceBelongsToOrderNumber) === Number(orderId))) return { ok: true, stap: "al-gefactureerd" };
+  }
+  const rijen = await post("/v3/Orders/GetOrderRows", { OrderId: Number(orderId), TakeRecords: 500 });
+  if (!rijen.ok) return { ok: false, stap: "regels", uitleg: "HTTP " + rijen.status + " " + rijen.tekst };
+  const lijst = (Array.isArray(rijen.j) ? rijen.j : ((rijen.j && rijen.j.Records) || []))
+    .filter(r => !r.IsAssemblyChild && !r.ComposedProductOrderRowParentId && !r.OptionVariantProductOrderRowParentId);
+  const uit = lijst.map(r => ({ RowId: Number(r.Id), AmountToDeliver: Math.round(((Number(r.Qty) || 0) - (Number(r.QtyDeliverd) || 0)) * 1000) / 1000 }))
+    .filter(r => r.AmountToDeliver > 0);
+  // Alles al uitgeleverd en niets meer te factureren: dan is hij al klaar.
+  if (!uit.length && !lijst.some(r => Number(r.QtyDeliverd_NotInvoiced) > 0)) return { ok: true, stap: "al-gefactureerd" };
+  if (proef) return { ok: true, stap: "proef", uitleveren: uit.length, status: o.status };
+  if (uit.length) {
+    const lev = await post("/v3/Delivery/CreateDeliveryForOrderRows", { DeliveryRows: uit });
+    if (!lev.ok) return { ok: false, stap: "uitlevering", uitleg: "HTTP " + lev.status + " " + lev.tekst };
+  }
+  const st = await post("/v3/Orders/UpdateOrderStatus", { OrderId: Number(orderId), StatusId: 17 });
+  if (!st.ok) return { ok: false, stap: "status", uitleg: "HTTP " + st.status + " " + st.tekst };
+  const fa = await post("/v3/Orders/CreateAndProcessInvoiceForOrder", Number(orderId));
+  if (!fa.ok) return { ok: false, stap: "factuur", uitleg: "HTTP " + fa.status + " " + fa.tekst };
+  return { ok: true, stap: "gefactureerd", factuur: fa.j };
+}
+
+async function autoRonde(env, opties) {
+  const proef = !!(opties && opties.proef);
+  const nu = new Date();
+  let st = await autoLees(env);
+  if (!st) {
+    // Eerste keer: vanaf hier telt het. Factureren staat uit tot de eerste samen is gedaan.
+    st = { start: nu.toISOString(), aan: true, factureren: false, betalingen: {}, geboekt: {}, wachtOpOrder: {}, factuurRij: {}, log: [] };
+    if (!proef) await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
+    return { ok: true, gestart: st.start };
+  }
+  if (!st.aan && !proef) return { ok: true, uit: true };
+  const budget = { n: 0 };
+  const acties = [];
+  const voor = JSON.stringify(st);
+  const log = (x) => { acties.push(x); st.log = [{ ts: nu.toISOString(), ...x }, ...(st.log || [])].slice(0, 200); };
+
+  // 1. Betalingen sinds het aanzetten (en hooguit 45 dagen terug).
+  const vanaf = new Date(Math.max(Date.parse(st.start), nu.getTime() - 45 * 86400000)).toISOString();
+  const betalingen = [];
+  for (let start = 1; start < 3000; start += 1000) {
+    budget.n++;
+    const j = await qbQuery(env, "SELECT * FROM Payment WHERE MetaData.CreateTime >= '" + wireQbTijd(vanaf) + "' STARTPOSITION " + start + " MAXRESULTS 1000");
+    const rij = (j.QueryResponse && j.QueryResponse.Payment) || [];
+    betalingen.push(...rij);
+    if (rij.length < 1000) break;
+  }
+  betalingen.sort((a, b) => String((a.MetaData || {}).CreateTime).localeCompare(String((b.MetaData || {}).CreateTime)));
+
+  // Per betaling de stukken die op een factuur zijn afgeletterd.
+  const teDoen = [];
+  for (const pay of betalingen) {
+    for (const l of (pay.Line || [])) {
+      for (const lt of (l.LinkedTxn || [])) {
+        if (lt.TxnType !== "Invoice") continue;
+        const sleutel = String(pay.Id) + ":" + String(lt.TxnId);
+        if (st.geboekt[sleutel]) continue;
+        const usd = Math.round((Number(l.Amount) || 0) * 100) / 100;
+        if (!(usd > 0)) continue;
+        teDoen.push({ sleutel, pay, invId: String(lt.TxnId), usd });
+      }
+    }
+  }
+  if (!teDoen.length && !Object.keys(st.factuurRij || {}).length) {
+    st.laatsteRonde = nu.toISOString();
+    if (!proef && JSON.stringify(st) !== voor) await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
+    return { ok: true, proef, acties, budget: budget.n };
+  }
+
+  // 2. De facturen erbij, in één keer.
+  const ids = [...new Set(teDoen.map(t => t.invId))].slice(0, 100);
+  const facturen = {};
+  if (ids.length) {
+    budget.n++;
+    const j = await qbQuery(env, "SELECT * FROM Invoice WHERE Id IN (" + ids.map(i => "'" + i.replace(/\D/g, "") + "'").join(",") + ") MAXRESULTS 1000");
+    for (const inv of ((j.QueryResponse && j.QueryResponse.Invoice) || [])) facturen[String(inv.Id)] = inv;
+  }
+  // De bekende prijzen van de artikelen op die facturen (voor controle 3).
+  const itemPrijs = {};
+  const itemIds = [...new Set(Object.values(facturen).flatMap(inv => (inv.Line || [])
+    .map(l => l.SalesItemLineDetail && l.SalesItemLineDetail.ItemRef && String(l.SalesItemLineDetail.ItemRef.value))
+    .filter(x => x && /^\d+$/.test(x))))].slice(0, 200);
+  if (itemIds.length) {
+    budget.n++;
+    try {
+      const j = await qbQuery(env, "SELECT * FROM Item WHERE Id IN (" + itemIds.map(i => "'" + i + "'").join(",") + ") MAXRESULTS 1000");
+      for (const it of ((j.QueryResponse && j.QueryResponse.Item) || [])) itemPrijs[String(it.Id)] = Number(it.UnitPrice) || 0;
+    } catch (e) { /* zonder prijzen geen prijscontrole; de rest gaat door */ }
+  }
+
+  const berichten = await berichtenLees(env);
+  let berichtenNieuw = 0;
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  approved.ids = approved.ids || {};
+  const verborgen = ((await env.FONTEYN_DATA.get("qb-verborgen", { type: "json" })) || {}).ids || {};
+  let catalog = null, spaModels = null, rel = null;
+  const token = await l4Token(env); budget.n++;
+  const gecontroleerd = st.gecontroleerd = st.gecontroleerd || {};
+
+  // 3. Per betaald stuk: order zeker stellen, dan boeken.
+  for (const t of teDoen) {
+    if (budget.n > AUTO_BUDGET - 8) { log({ soort: "budget", uitleg: "rest volgt het volgende uur" }); break; }
+    const inv = facturen[t.invId];
+    if (!inv) continue;
+    const nr = String(inv.DocNumber || inv.Id), klant = (inv.CustomerRef && inv.CustomerRef.name) || "";
+    // De creditcard bij elke betaling, minbedrag en prijs één keer per factuur.
+    if (!proef) {
+      berichtenNieuw += await autoControles(env, inv, t.pay, itemPrijs, berichten, !!gecontroleerd[t.invId]);
+      gecontroleerd[t.invId] = gecontroleerd[t.invId] || nu.toISOString();
+    }
+    let koppeling = qbGekoppeld(approved, inv);
+    /* Staat hij al te wachten op Chantal, dan één keer per dag opnieuw kijken
+       in plaats van elk uur: dat scheelt aanroepen. */
+    const wacht = st.wachtOpOrder[t.invId];
+    if (!koppeling && wacht && wacht.laatst && nu.getTime() - Date.parse(wacht.laatst) < 24 * 3600000) continue;
+    if (!koppeling) {
+      const waarom = [];
+      if (verborgen[nr]) waarom.push("Chantal heeft deze factuur verborgen");
+      catalog = catalog || ((await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {});
+      spaModels = spaModels || await qbSpaModelList(env, catalog);
+      const mapped = qbMapInvoice(inv, catalog, spaModels);
+      const onbekend = mapped.rows.filter(r => !r.productCode);
+      if (onbekend.length) waarom.push("onbekend artikel: " + onbekend.map(r => r.description).join(", "));
+      if (!waarom.length) {
+        rel = rel || await qbDubbelIndex(env);
+        const dub = await qbMogelijkDubbel(env, inv, rel, token); budget.n += 3;
+        if (dub) waarom.push("lijkt al in Logic4 te staan als order " + dub.orderId + " (" + dub.klant + ")");
+      }
+      if (waarom.length) {
+        st.wachtOpOrder[t.invId] = { factuur: nr, klant, sinds: (st.wachtOpOrder[t.invId] || {}).sinds || nu.toISOString(), laatst: nu.toISOString(), waarom };
+        if (!proef && berichtErbij(berichten, { id: "qb-order:" + inv.Id, aan: [BERICHT_CHANTAL], soort: "qb-controle", ref: { qbId: String(inv.Id), factuur: nr },
+            titel: "Betaald, order nog aan te maken: QuickBooks-factuur " + nr + " (" + klant + ")",
+            tekst: "Er is " + wireDollar(t.usd) + " op betaald. Maak de order aan in Amerika (tabblad Verkoop & dealers): " + waarom.join("; ") + ". De betaling wordt daarna vanzelf geboekt." })) berichtenNieuw++;
+        log({ soort: "order-wacht", factuur: nr, waarom: waarom.join("; ") });
+        continue;
+      }
+      if (proef) { log({ soort: "order-maken", factuur: nr, klant, usd: Number(inv.TotalAmt) || 0 }); koppeling = { orderId: "(nieuw)" }; }
+      else {
+        mapped.klant = await qbKlantVoorLogic4(env, inv, null); budget.n += 1;
+        const res = await dpCreateAmerikaOrder(env, mapped); budget.n += 2;
+        if (!res.ok) { log({ soort: "order-fout", factuur: nr, uitleg: String(res.error || "") }); continue; }
+        // Opnieuw lezen vlak voor het schrijven: Chantal kan tussendoor iets hebben goedgekeurd.
+        const vers = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+        vers.ids = vers.ids || {};
+        vers.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr: nr, totaal: Number(inv.TotalAmt) || null, ts: nu.toISOString(), auto: true };
+        await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(vers));
+        approved.ids = vers.ids;
+        koppeling = vers.ids[qbSleutel(inv)];
+        delete st.wachtOpOrder[t.invId];
+        log({ soort: "order-gemaakt", factuur: nr, klant, orderId: res.orderId });
+      }
+    }
+    // Boeken.
+    if (proef) { log({ soort: "boeken", factuur: nr, orderId: koppeling.orderId, usd: t.usd, eur: amerikaNaarEuro(t.usd) }); continue; }
+    const o = await autoOrder(env, token, koppeling.orderId, budget);
+    if (!o) { log({ soort: "boek-fout", factuur: nr, uitleg: "order " + koppeling.orderId + " vraagt Logic4 nog een keer" }); continue; }
+    let eur = amerikaNaarEuro(t.usd);
+    const onder = Math.round(t.usd / AMERIKA_KOERS * 100) / 100 - 0.10, boven = t.usd + 0.10;
+    if (o.open > 0 && o.open >= onder && o.open <= boven) eur = o.open;     // de laatste betaling sluit precies op nul
+    if (eur > o.open + 0.10) {
+      if (berichtErbij(berichten, { id: "qb-teveel:" + t.sleutel, aan: [BERICHT_CHANTAL, AUTO_OSMAN], soort: "qb-controle", ref: { orderId: koppeling.orderId, factuur: nr },
+          titel: "Meer betaald dan er openstaat: order " + koppeling.orderId + " (QuickBooks-factuur " + nr + ")",
+          tekst: "Betaling " + wireDollar(t.usd) + " (" + eur.toFixed(2) + " euro) tegen " + o.open.toFixed(2) + " euro open. Deze betaling staat klaar om met de hand te boeken." })) berichtenNieuw++;
+      st.geboekt[t.sleutel] = { factuur: nr, orderId: koppeling.orderId, usd: 0, overgeslagen: "meer dan open", ts: nu.toISOString() };
+      log({ soort: "te-veel", factuur: nr, orderId: koppeling.orderId, usd: t.usd, open: o.open });
+      continue;
+    }
+    budget.n++;
+    const datum = String(t.pay.TxnDate || nu.toISOString().slice(0, 10)) + "T12:00:00";
+    const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ OrderId: Number(koppeling.orderId), AmountIncl: eur, BookingId: AMERIKA_DAGBOEK, MatchingLedgerId: 78, DateTime: datum,
+        Description: "Order " + Number(koppeling.orderId) + " - QuickBooks-betaling " + t.pay.Id + " - QuickBooks-factuur " + nr + " (" + t.usd.toFixed(2) + " USD)" }),
+    });
+    if (!rr.ok) { log({ soort: "boek-fout", factuur: nr, orderId: koppeling.orderId, uitleg: "HTTP " + rr.status + " " + (await rr.text()).slice(0, 160) }); continue; }
+    st.geboekt[t.sleutel] = { factuur: nr, orderId: koppeling.orderId, usd: t.usd, eur, betaling: String(t.pay.Id), datum: t.pay.TxnDate || null, ts: nu.toISOString() };
+    log({ soort: "geboekt", factuur: nr, orderId: koppeling.orderId, usd: t.usd, eur });
+    // Helemaal betaald? Dan in de rij om te factureren.
+    if (o.open - eur <= 0.10) {
+      st.factuurRij[String(koppeling.orderId)] = { factuur: nr, klant, sinds: nu.toISOString(), pogingen: 0 };
+      log({ soort: "volledig-betaald", factuur: nr, orderId: koppeling.orderId });
+    }
+  }
+
+  // 4. Factureren - alleen als het aanstaat.
+  for (const [orderId, f] of Object.entries(st.factuurRij || {})) {
+    if (!st.factureren && !proef) break;
+    if (budget.n > AUTO_BUDGET - 6) break;
+    if (f.klaar || (f.pogingen || 0) >= 3) continue;
+    const r = await autoFactureer(env, token, orderId, budget, proef, f.factuur);
+    if (proef) { log({ soort: "factureren", orderId, factuur: f.factuur, ...r }); continue; }
+    f.pogingen = (f.pogingen || 0) + 1; f.laatste = nu.toISOString();
+    if (r.ok) { f.klaar = nu.toISOString(); f.stap = r.stap; log({ soort: "gefactureerd", orderId, factuur: f.factuur, stap: r.stap }); }
+    else {
+      f.fout = r.stap + ": " + (r.uitleg || "");
+      log({ soort: "factuur-fout", orderId, factuur: f.factuur, uitleg: f.fout });
+      if (f.pogingen >= 3 && berichtErbij(berichten, { id: "qb-factuur:" + orderId, aan: [AUTO_OSMAN, BERICHT_CHANTAL], soort: "qb-controle", ref: { orderId: Number(orderId), factuur: f.factuur },
+          titel: "Factureren vraagt een hand: order " + orderId + " (QuickBooks-factuur " + f.factuur + ")",
+          tekst: "De order is helemaal betaald. Uitleveren en factureren vraagt na drie pogingen een hand (" + f.fout + "). Doe het in Logic4 met 'Uitlevering aanmaken'." })) berichtenNieuw++;
+    }
+  }
+  // Opruimen: wat al lang klaar is.
+  const grens = nu.getTime() - 120 * 86400000;
+  for (const [k, g] of Object.entries(st.geboekt)) if (Date.parse(g.ts) < grens) delete st.geboekt[k];
+  for (const [k, f] of Object.entries(st.factuurRij)) if (f.klaar && Date.parse(f.klaar) < grens) delete st.factuurRij[k];
+  for (const [k, v] of Object.entries(gecontroleerd)) if (Date.parse(v) < grens) delete gecontroleerd[k];
+
+  st.laatsteRonde = nu.toISOString();
+  if (!proef) {
+    if (berichtenNieuw) { berichtenOpruimen(berichten); await env.FONTEYN_DATA.put(BERICHTEN_KEY, JSON.stringify(berichten)); }
+    if (JSON.stringify(st) !== voor) await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
+  }
+  return { ok: true, proef, acties, berichten: berichtenNieuw, budget: budget.n };
 }
 
 async function qbHandleNaarChantal(request, env) {
@@ -12829,7 +13255,7 @@ async function qbHandleBatchOrders(request, env) {
   approved.ids = approved.ids || {};
   const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
   const perFactuur = await qbVerrijkDubbel(env, qbOrdersPerFactuur(approved));
-  const b = qbBatchLezen(w, perFactuur, geboekt, null, {});
+  const b = qbBatchLezen(w, perFactuur, geboekt, null, {}, await qbAutoPerFactuur(env).catch(() => ({})));
   const nodig = [];
   const gezien = new Set();
   for (const r of (b.regels || [])) {
@@ -12974,9 +13400,21 @@ async function qbHandleBoeken(request, env) {
              open: Math.round(((Number(tot.AmountIncl) || 0) - (Number(tot.Calc_TotalPayed) || 0)) * 100) / 100 };
   };
 
+  const auto = await qbAutoPerFactuur(env).catch(() => ({}));
   for (let wi = 0; wi < partij.length; wi++) {
     const w = partij[wi];
-    const b = qbBatchLezen(w, perFactuur, geboekt, raad, tweelingen);
+    const b = qbBatchLezen(w, perFactuur, geboekt, raad, tweelingen, auto);
+    /* Wat de automaat al boekte, krijgt bij het echte boeken ook een sleutel in
+       qb-geboekt. Dan ziet het scherm die regel als geboekt. */
+    if (echt) {
+      let bij = false;
+      for (const r of (b.regels || [])) if (r.auto && !geboekt.ids[r.sleutel]) {
+        geboekt.ids[r.sleutel] = { orderId: r.order, factuur: r.factuur, bedrag: r.bedrag, auto: true, batch: String(w.id), ts: new Date().toISOString(),
+                                   door: "automaat" };
+        bij = true;
+      }
+      if (bij) await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
+    }
     /* Klopt er iets niet, dan gaat er van deze batch niets weg. Dat is de
        kern van wat Osman vraagt. */
     if (b.afwijking || !echt) { uit.push(b); continue; }
@@ -16498,6 +16936,13 @@ const FP_WORKER = {
         }
         /* De spa-catalogus (modellen en kleuren) op :45, vier keer per etmaal,
            in een eigen slot: hij leest de hele productlijst van Logic4. */
+        /* De Amerika-automaat (QuickBooks -> Logic4) op :50, met het hele budget
+           voor zichzelf. */
+        if (String(event && event.cron || "").startsWith("50 ")) {
+          const ar = await autoRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          console.log("[cron] amerika-automaat: " + JSON.stringify({ ok: ar.ok, acties: (ar.acties || []).length, berichten: ar.berichten || 0, budget: ar.budget, fout: ar.error || null }));
+          return;
+        }
         if (String(event && event.cron || "").startsWith("45 ")) {
           const cr = await dpBouwSpaCatalogus(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] spa-catalogus: " + JSON.stringify({ ok: cr.ok, modellen: cr.modellen, nieuweModellen: cr.nieuweModellen, nieuweKleuren: (cr.nieuweKleuren || []).length, fout: cr.error || null }));
@@ -17647,6 +18092,43 @@ const FP_WORKER = {
     if (url.pathname === "/amerika/qb/refund-reden" && request.method === "POST") return qbHandleRefundReden(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     /* De wire-bewaking: stand opvragen, of een proefronde die laat zien wat hij
        nu zou doen (welke mail, welk bedrag) zonder te versturen of op te slaan. */
+    /* De Amerika-automaat. Stand, proefronde (doet niets, zegt wat hij zou doen),
+       aan/uit en factureren aan/uit, en één order met de hand factureren. */
+    if (url.pathname.startsWith("/amerika/automaat")) {
+      if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+      if (url.pathname === "/amerika/automaat" && request.method === "GET") return reply(200, { ok: true, toestand: await autoLees(env) });
+      if (url.pathname === "/amerika/automaat/proef" && request.method === "POST")
+        return autoRonde(env, { proef: true }).then(r => reply(200, r)).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+      if (!BERICHT_BEHEER.includes(wie) && wie !== AUTO_OSMAN) return reply(403, { ok: false, error: "alleen voor de beheerders en Osman" });
+      if (url.pathname === "/amerika/automaat/instellen" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const st = await autoLees(env);
+        if (!st) return reply(409, { ok: false, error: "de automaat is nog niet gestart; dat gebeurt bij de eerste ronde" });
+        if (typeof b.aan === "boolean") st.aan = b.aan;
+        if (typeof b.factureren === "boolean") st.factureren = b.factureren;
+        st.ingesteld = { ts: new Date().toISOString(), door: wie, aan: st.aan, factureren: st.factureren };
+        await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
+        return reply(200, { ok: true, aan: st.aan, factureren: st.factureren });
+      }
+      if (url.pathname === "/amerika/automaat/factureer" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const orderId = Number(b.orderId) || 0;
+        if (!orderId) return reply(400, { ok: false, error: "orderId ontbreekt" });
+        const token = await l4Token(env);
+        const st0 = await autoLees(env);
+        const nrBekend = (st0 && st0.factuurRij && st0.factuurRij[String(orderId)] && st0.factuurRij[String(orderId)].factuur) || String(b.factuur || "");
+        const r = await autoFactureer(env, token, orderId, { n: 0 }, b.proef === true, nrBekend);
+        const st = await autoLees(env);
+        if (st && r.ok && b.proef !== true) {
+          st.factuurRij = st.factuurRij || {};
+          st.factuurRij[String(orderId)] = { ...(st.factuurRij[String(orderId)] || {}), klaar: new Date().toISOString(), stap: r.stap, met: "hand", door: wie };
+          await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
+        }
+        return reply(200, { orderId, ...r });
+      }
+      return reply(404, { ok: false, error: "onbekende route" });
+    }
     if (url.pathname === "/amerika/wire-bewaking" && request.method === "GET") {
       if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const st = await env.FONTEYN_DATA.get(WIRE_SLEUTEL, { type: "json" });

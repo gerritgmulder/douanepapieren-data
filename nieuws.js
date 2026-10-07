@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-07", bestand: "amerika.html", soort: "nieuw",
+      titel: "Amerika: de maandfactuur van Audrey controleren",
+      wat:   "Nieuw tabblad Maandfactuur. Upload de maandfactuur van Audrey met wat zij in Amerika voor ons betaalde. Per regel zie je met een vink of een kruis of dat bedrag ook op de order staat (dan betaalt de klant het en kost het ons niets), en of die order al betaald is."
+    },
+    {
       datum: "2026-10-07", bestand: "voorraadbepaling.html", soort: "beter",
       titel: "Voorraadbepaling rekent met Overzicht",
       wat:   "Per model zie je nu wat er verkocht is, wat er besteld staat en wat er vrij is: op voorraad, op zee en in productie, min wat al gereserveerd is. Klik een model open voor de hele berekening. Vul bij 'Nieuwe bestelling' in hoeveel spa's je gaat bestellen, dan zie je per model hoeveel het er moeten zijn."
