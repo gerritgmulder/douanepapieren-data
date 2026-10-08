@@ -10397,11 +10397,13 @@ async function aankomstDHL(env, ref) {
       const van = new Date(Date.now() - 365 * 86400000).toISOString(), tot = new Date().toISOString();
       const r = await fetch(basis + "/shipment-list", {
         method: "POST", headers: { "DHL-API-Key": env.DHL_API_KEY, "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ "container-number": { operator: "OR", values: [zoek] }, lastUpdateFrom: van, lastUpdateTo: tot, size: 5 }),
+        body: JSON.stringify({ containerNumber: { operator: "OR", values: [zoek] }, lastUpdateFrom: van, lastUpdateTo: tot, size: 5 }),
       });
       if (r.ok) {
         const lijst = await r.json().catch(() => ({}));
-        for (const s of (lijst.shipments || [])) if (s.housebill) soorten.push("housebill:" + s.housebill);
+        // DHL antwoordt met shipmentList (getest in de sandbox, 8 okt 2026).
+        for (const s of (lijst.shipmentList || lijst.shipments || [])) if (s.housebill) soorten.push("housebill:" + s.housebill);
+        if (!soorten.length) soorten.push("containerNumber:" + zoek);
       }
     }
     for (const soort of soorten) {
