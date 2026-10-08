@@ -81,6 +81,7 @@
     "html.fp-tel table.fp-kaart,html.fp-tel table.fp-kaart tbody,html.fp-tel table.fp-kaart tr{display:block;width:100%}",
     "html.fp-tel table.fp-kaart tr{border:1px solid #e5e7eb;border-radius:12px;margin:0 0 10px;padding:6px 2px;background:#fff;box-sizing:border-box}",
     "html.fp-tel table.fp-kaart td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0!important;padding:4px 10px!important;text-align:right;white-space:normal!important;max-width:none!important}",
+    "html.fp-tel table.fp-kaart td,html.fp-tel table.fp-kaart th{width:auto!important;min-width:0!important;position:relative!important;left:auto!important}",
     "html.fp-tel table.fp-kaart td::before{content:attr(data-label);flex:0 0 auto;max-width:46%;text-align:left;color:#6b7280;font-size:12px;font-weight:600}",
     "html.fp-tel table.fp-kaart td:not([data-label])::before,html.fp-tel table.fp-kaart td[data-label='']::before{content:none}",
     "html.fp-tel table.fp-kaart td:not([data-label]),html.fp-tel table.fp-kaart td[data-label='']{justify-content:flex-start;text-align:left}",
@@ -96,9 +97,21 @@
     "html.fp-tel .tablewrap,html.fp-tel .table-wrap,html.fp-tel .tabelwrap{max-height:none!important;overflow:visible!important;border:0!important;box-shadow:none!important;background:transparent!important}",
     /* duimvriendelijk */
     "html.fp-tel input:not([type=checkbox]):not([type=radio]):not([type=range]),html.fp-tel select,html.fp-tel textarea{font-size:16px!important;max-width:100%}",
-    "html.fp-tel main button,html.fp-tel main .btn,html.fp-tel main a.btn{min-height:40px}",
-    "html.fp-tel main{padding-left:12px!important;padding-right:12px!important}",
+    "html.fp-tel .fp-hoofd button,html.fp-tel .fp-hoofd .btn,html.fp-tel .fp-hoofd a.btn{min-height:40px}",
+    "html.fp-tel .fp-hoofd{padding-left:12px!important;padding-right:12px!important}",
     "html.fp-tel .card,html.fp-tel .kaart{padding:14px!important;border-radius:14px!important}",
+    /* zoek- en filtervelden: even breed, en een knop ernaast als die past */
+    "html.fp-tel .fp-hoofd :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]),select,textarea):not(table *){width:100%;min-width:0!important;max-width:100%!important;box-sizing:border-box}",
+    /* naast elkaar in een rij: velden delen de breedte, en blokken worden nooit breder dan het scherm */
+    "html.fp-tel .fp-hoofd .fp-rijveld{flex:1 1 170px;width:auto}",
+    "html.fp-tel .fp-hoofd .fp-rijblok{flex:1 1 140px;min-width:0}",
+    "html.fp-tel .fp-hoofd div{max-width:100%;box-sizing:border-box}",
+    /* rijen met knoppen en velden lopen door naar een volgende regel in plaats van van het scherm af */
+    "html.fp-tel .fp-hoofd :is(div,section,form,nav,label,p,span):not(:has(> input[type=checkbox],> input[type=radio])):not(.fp-seg):not(.fp-tabkeus):not(.fp-wat-blok){flex-wrap:wrap!important}",
+    "html.fp-tel .fp-hoofd{overflow-x:hidden}",
+    /* de kop: e-mailadres, 'Ingelogd als' en de Demo-knop zijn op de telefoon ruis */
+    "html.fp-tel .fp-tel-weg{display:none!important}",
+    "html.fp-tel header{row-gap:6px!important}",
     /* lange uitleg inklappen */
     "html.fp-tel .fp-inklap:not(.fp-uit){display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}",
     ".fp-meer{display:none}",
@@ -197,6 +210,21 @@
     });
   }
 
+  /* De kop: wie er is ingelogd staat al op het telefoondashboard, en Demo is
+     voor een presentatie op de pc. */
+  function regelKop() {
+    var kop = doc.querySelector("header");
+    if (!kop) return;
+    kop.querySelectorAll("#userEmail, .user-chip, .fp-kop-wie, #wie, #gebruiker").forEach(function (e) {
+      var doel = e.id === "userEmail" && e.parentElement && e.parentElement !== kop && !e.parentElement.querySelector("button") ? e.parentElement : e;
+      if (!doel.classList.contains("fp-tel-weg")) doel.classList.add("fp-tel-weg");
+    });
+    kop.querySelectorAll("button, a, span").forEach(function (e) {
+      var tx = tekstVan(e);
+      if ((/^(\S+\s)?demo$/i.test(tx) || /^ingelogd als/i.test(tx) || /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(tx)) && !e.classList.contains("fp-tel-weg")) e.classList.add("fp-tel-weg");
+    });
+  }
+
   /* Lange uitleg inklappen. */
   function regelUitleg(p) {
     if (p.__fpInklap || p.querySelector("input,select,textarea,button")) return;
@@ -215,11 +243,24 @@
   }
 
   function ronde() {
+    // Het hoofdvak van de tegel: meestal <main>, bij een paar oudere tegels een .wrap.
+    var hoofd = doc.querySelector("main") || doc.getElementById("wrap") || doc.querySelector("body > .wrap, body > .container, body > .page");
+    if (hoofd && !hoofd.classList.contains("fp-hoofd")) hoofd.classList.add("fp-hoofd");
     var balken = new Set();
     doc.querySelectorAll(TABKLASSE).forEach(function (t) { if (t.parentElement) balken.add(t.parentElement); });
     balken.forEach(function (b) { try { regelTabbalk(b); } catch (e) {} });
-    doc.querySelectorAll("main table, .card table, table.grid").forEach(function (t) { try { regelTabel(t); } catch (e) {} });
-    doc.querySelectorAll("main p.lead, main .lead, main .uitleg").forEach(function (p) { try { regelUitleg(p); } catch (e) {} });
+    doc.querySelectorAll(".fp-hoofd table, .card table, table.grid").forEach(function (t) { try { regelTabel(t); } catch (e) {} });
+    doc.querySelectorAll(".fp-hoofd p.lead, .fp-hoofd .lead, .fp-hoofd .uitleg").forEach(function (p) { try { regelUitleg(p); } catch (e) {} });
+    doc.querySelectorAll(".fp-hoofd .card > p, .fp-hoofd section > p, .fp-hoofd .kaart > p").forEach(function (p) { try { if (tekstVan(p).length > 300) regelUitleg(p); } catch (e) {} });
+    regelKop();
+    doc.querySelectorAll(".fp-hoofd input, .fp-hoofd select, .fp-hoofd textarea").forEach(function (v) {
+      if (v.closest("table") || v.classList.contains("fp-rijveld") || /^(checkbox|radio|range|file|color|hidden)$/.test(v.type)) return;
+      var ou = v.parentElement, c = ou && getComputedStyle(ou);
+      if (c && /flex/.test(c.display) && !/column/.test(c.flexDirection)) { v.classList.add("fp-rijveld"); return; }
+      // Veld met een eigen omhulsel (label + veld) in een rij: dan deelt het omhulsel de breedte.
+      var opa = ou && ou.parentElement, c2 = opa && getComputedStyle(opa);
+      if (c2 && /flex/.test(c2.display) && !/column/.test(c2.flexDirection) && !ou.classList.contains("fp-rijveld") && !ou.closest("header")) ou.classList.add("fp-rijveld", "fp-rijblok");
+    });
   }
   var wacht = null;
   function straks() { clearTimeout(wacht); wacht = setTimeout(ronde, 120); }

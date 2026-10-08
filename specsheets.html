@@ -87,7 +87,7 @@
   /* Alleen op een écht smal scherm onder elkaar zetten (dan heeft meelopen
      geen zin). 1px is bewust de ondergrens: sommige omgevingen melden 0. */
   @media (min-width:1px) and (max-width:980px){
-    .wrap{grid-template-columns:1fr}
+    .wrap{grid-template-columns:minmax(0,1fr)}
     #previewKolom{position:static}
     .sheet-scroll{max-height:none}
   }

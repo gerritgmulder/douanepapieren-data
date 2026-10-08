@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-08", iedereen: true, soort: "beter",
+      titel: "Op de telefoon: velden en knoppen passen op het scherm",
+      wat:   "Op de telefoon zijn zoek- en filtervelden overal even breed, knoppen die niet naast elkaar passen gaan naar de volgende regel, en in kaartjes krijgen keuzelijsten de volle breedte. Bovenin staat alleen nog wat je nodig hebt. Specificatiesheets past nu ook op het scherm."
+    },
+    {
+      datum: "2026-10-08", iedereen: true, soort: "beter",
       titel: "Op de telefoon: tabbladen als menu, tabellen als kaartjes",
       wat:   "Op de telefoon zie je bij een tegel met veel tabbladen één grote knop met het onderdeel waar je bent. Tik erop en kies uit grote knoppen. Twee of drie tabbladen zijn een schakelaar. Tabellen worden kaartjes, invoervelden zoomen niet meer in, en lange uitleg klapt in met 'meer'. Alles werkt hetzelfde als op de pc."
     },
