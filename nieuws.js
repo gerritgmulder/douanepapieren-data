@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-08", bestand: "planning.html", soort: "beter",
+      titel: "Planning: spa in plaats van cover, warmtepomp, alleen leveren, daglijnen",
+      wat:   "Haal je een order op, dan staat bij Wat altijd de spa, ook als er een cover bovenaan de order staat, en '+ warmtepomp' als die erbij hoort. Nieuw vakje 'Alleen leveren': de monteur vult op de opleverbon dan geen checklist in, alleen pakbon en handtekeningen. Tussen de dagen staan dikke lijnen."
+    },
+    {
+      datum: "2026-10-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Particulier: spoed, geannuleerd, klant mailen en vervoerder kiezen",
+      wat:   "Afroep en binnengekomen spa's staan bovenaan, zonder scrollvak in een scrollvak. Nieuw: 'inplannen spoed' zet een order bovenaan, 'geannuleerd' haalt hem uit de lijsten en uit de werkplaats, 'mail klant' stuurt de vaste tekst van de vervoerder vanaf de spa planning, en de vervoerder kies je zelf in de lijst. Het venster bij 'gepland' is weg."
+    },
+    {
       datum: "2026-10-08", bestand: "voorraad.html", soort: "beter",
       titel: "Een ETA die je zelf invult, blijft staan",
       wat:   "Vul je bij een schip zelf een ETA in, dan blijft die staan, ook als iemand anders tegelijk Voorraadbeheer open heeft of de vervoerder iets anders zegt. Een datum van de vervoerder die al maanden voorbij is (een oude reis met hetzelfde containernummer) wordt niet meer overgenomen."

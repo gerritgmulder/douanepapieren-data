@@ -171,7 +171,11 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
    ene dag ophoudt en de volgende begint. Gerrit (14 sep 2026): "een zachte
    kleur voor de maandag, een andere voor de dinsdag, woensdag weer dezelfde
    als maandag". De koppen en de routestroken volgen mee. */
-.dag-cel{position:relative;border-left:1px solid #e5e7eb}
+/* Kevin (5 okt 2026): dikke lijnen tussen de dagen, zodat je in één oogopslag
+   ziet welke afspraak bij welke dag hoort (de routes van een dag staan naast
+   elkaar en liepen in elkaar over). */
+.dag-cel{position:relative;border-left:3px solid #6b7280}
+.routekop-cel,.dag-kop{border-left:3px solid #6b7280!important}
 .dag-cel.even{background:#f8faf5}
 .dag-cel.oneven{background:#f3f6fb}
 .dag-cel.weekend{background:#f5f4f0}
@@ -2496,6 +2500,12 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fLetop" style="width:auto"'+(a.letop?" checked":"")+'> '+
       '<span>Let op: deze afspraak rood laten opvallen op het routebord <span style="color:var(--grijs)">(als er iets bijzonders nodig is, zoals twee man, hijsen of een karretje mee)</span></span></label>'+
+    /* Kevin (5 okt 2026): "alleen leveren" - dan vult de monteur op de
+       opleverbon geen checklist in, alleen pakbon, handtekening klant en
+       monteur. */
+    '<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
+      '<input type="checkbox" id="fAlleenLev" style="width:auto"'+(a.alleenLeveren?" checked":"")+'> '+
+      '<span>Alleen leveren <span style="color:var(--grijs)">(op de opleverbon geen checklist, alleen pakbon en handtekeningen)</span></span></label>'+
     (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
     (nieuw?"":'<div class="gepland-door">Ingepland door '+esc(planNaam(a.door||"?"))+
@@ -2568,8 +2578,13 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
         zet("fOrder", String(o.nr));
         /* Wat er geleverd wordt is voor de monteur het belangrijkste, dus de
            eerste regel van de order (de spa zelf) komt in het veld Wat. */
+        /* De spa, niet de eerste regel (Kevin, 5 okt 2026: bij een cover bovenaan
+           stond er "Spa Cover Pleasure"), en een warmtepomp erachter als die
+           op de order staat (Kevin, 5 okt 2026). */
         var eerste = (o.regels||[]).find(function(x){ return x.omschrijving && x.totaal; });
-        if (eerste) zet("fWat", eerste.omschrijving);
+        var watTekst = o.spaRegel || (eerste && eerste.omschrijving) || "";
+        if (watTekst && o.warmtepomp && !/warmtepomp/i.test(watTekst)) watTekst += " + warmtepomp";
+        if (watTekst) zet("fWat", watTekst);
         uit.className="zoekuit ok";
         uit.textContent = "Gevonden: " + (adr.naam || "order " + o.nr) +
           (o.leverdatum ? "  \u00b7  leverdatum " + String(o.leverdatum).slice(0,10).split("-").reverse().join("-") : "") +
@@ -2658,6 +2673,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       model: a.model || null,          // spanaam uit Voorraadbeheer, dik in het tijdraster
       uitVoorraad: a.uitVoorraad || null,
       letop: $("fLetop").checked,
+      alleenLeveren: $("fAlleenLev").checked,
       door: nieuw ? ik : (a.door||ik), gewijzigdDoor: ik,
       gemaakt: a.gemaakt || new Date().toISOString(), gewijzigd: new Date().toISOString()
     };

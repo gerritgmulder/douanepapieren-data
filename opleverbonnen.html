@@ -196,7 +196,7 @@ async function bonDetail(id){
     '<div><span>Monteur</span> '+esc([bon.monteur,bon.monteur2].filter(Boolean).join(" & "))+'</div><div><span>Kenteken</span> '+esc(bon.kenteken||"-")+'</div>'+
     '<div><span>Spa</span> '+esc(bon.spaType||"-")+'</div><div><span>Serienummer</span> '+esc(bon.serienr||"-")+'</div>'+
     '<div><span>Adviseur</span> '+esc(bon.adviseur||"-")+'</div><div><span>Laatst gewijzigd</span> '+esc(String(bon.gewijzigd||"").replace("T"," ").slice(0,16))+' door '+esc(planNaam(bon.door||""))+'</div></div>'+
-    (isService ? serviceHtml : '<h4>Te doen bij klant</h4><table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
+    (isService ? serviceHtml : bon.alleenLeveren ? '<h4>Te doen bij klant</h4><p><b>Alleen leveren</b> - geen checklist, alleen pakbon en handtekeningen.</p>' : '<h4>Te doen bij klant</h4><table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
       return '<tr><td style="width:45%">'+esc(v.t)+'</td><td class="'+esc(c.a||"")+'" style="width:70px">'+esc(A[c.a]||"-")+'</td><td>'+esc(c.opm||"")+'</td></tr>'; }).join("")+'</table>')+
     '<h4>Betaling</h4><table class="vr">'+
       '<tr><td style="width:45%">Orderbedrag</td><td>'+bonGeld(bt.orderbedrag)+'</td></tr><tr><td>Al betaald</td><td>'+bonGeld(bt.reedsBetaald)+'</td></tr>'+

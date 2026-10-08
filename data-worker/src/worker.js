@@ -7338,6 +7338,13 @@ async function planningRoutePrint(env, url) {
 
   const token = await l4Token(env);
   const medewerkers = await l4Medewerkers(env);
+  /* Welke regel is de spa? (Kevin, 5 okt 2026: bij order 3520081 stond "Spa
+     Cover Pleasure" in de planning omdat de cover bovenaan de order stond.)
+     De spa is de regel waarvan de artikelcode in de spacatalogus staat. */
+  const catRP = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const spaCodesRP = new Set();
+  for (const vs of Object.values(catRP.models || {})) for (const v of (vs || [])) if (v && v.code) spaCodesRP.add(String(v.code));
+  const WARMTEPOMP = /warmtepomp|heat\s*pump|heatmaster|intellisaver/i;
   /* De veldnamen van Logic4 zijn hier net anders dan je zou gokken: de naam
      zit in ContactName (niet Name), de postcode in Zipcode (niet PostalCode)
      en het telefoonnummer in TelephoneNumber. Op de eerste proef kwamen naam,
@@ -7390,9 +7397,15 @@ async function planningRoutePrint(env, url) {
           omschrijving: String(x.Description || "").trim(),
           stukprijs: x.InclPrice != null ? Number(x.InclPrice) : null,
           totaal: x.InclPrice != null ? Math.round(Number(x.InclPrice) * (Number(x.Qty) || 0) * 100) / 100 : null,
+          spa: spaCodesRP.has(String(x.ProductCode || "").trim()) && !DP_GEEN_SPA.test(String(x.Description || "")),
+          warmtepomp: WARMTEPOMP.test(String(x.Description || "")) || WARMTEPOMP.test(String(x.ProductCode || "")),
         }));
+      // De spa (of anders de eerste regel met een bedrag) en of er een warmtepomp bij zit.
+      const spaRij = regels.find(x => x.spa) || null;
       orders.push({
         nr, ok: true,
+        spaRegel: spaRij ? spaRij.omschrijving : null,
+        warmtepomp: regels.some(x => x.warmtepomp),
         besteldDoor: adres(o.AccountAddress) || adres(o.InvoiceAddress),
         leverenAan: adres(o.DeliveryAddress) || adres(o.AccountAddress),
         adviseur: mw.naam || "", adviseurMail: mw.mail || "",
@@ -7482,6 +7495,7 @@ function bonSchoon(b, wie) {
     telefoon: s(b.telefoon, 40), klantMail: s(b.klantMail, 120).toLowerCase(), ordernr: s(b.ordernr, 20), itsId: b.itsId ? s(b.itsId, 12) : null,
     monteur: s(b.monteur, 80), monteur2: s(b.monteur2, 80), kenteken: s(b.kenteken, 12), soort: ["levering", "nalevering", "service"].includes(b.soort) ? b.soort : "levering",
     spaType: s(b.spaType, 120), serienr: s(b.serienr, 60), adviseur: s(b.adviseur, 80),
+    alleenLeveren: !!b.alleenLeveren,    // Kevin (5 okt 2026): geen checklist, alleen pakbon en handtekeningen
     checklist: check,
     betaling: {
       orderbedrag: Number(bt.orderbedrag) || 0, reedsBetaald: Number(bt.reedsBetaald) || 0,
@@ -7613,7 +7627,9 @@ function bonHtml(bon, vragen) {
   const geld = (v) => "€ " + (Number(v) || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const tekst = {}; for (const v of vragen) if (v && v.k) tekst[v.k] = v.t;
   const antwoord = { ja: "Ja", nee: "Nee", nvt: "n.v.t." };
-  const rijen = Object.entries(bon.checklist || {}).map(([k, v]) =>
+  const rijen = bon.alleenLeveren && !Object.keys(bon.checklist || {}).length
+    ? "<tr><td style='padding:4px 8px;border-bottom:1px solid #eee' colspan='3'><b>Alleen leveren</b></td></tr>"
+    : Object.entries(bon.checklist || {}).map(([k, v]) =>
     "<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>" + e(tekst[k] || k) + "</td>" +
     "<td style='padding:4px 8px;border-bottom:1px solid #eee;font-weight:600;color:" + (v.a === "ja" ? "#15803d" : v.a === "nee" ? "#b91c1c" : "#6b7280") + "'>" + e(antwoord[v.a] || "-") + "</td>" +
     "<td style='padding:4px 8px;border-bottom:1px solid #eee;color:#374151'>" + e(v.opm || "") + "</td></tr>").join("");
@@ -17566,6 +17582,42 @@ const FP_WORKER = {
     if (url.pathname === "/planning/betaalstatus" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
       return planningBetaalstatusMetIts(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    /* POST /planning/klantmail { ordernr, naar, onderwerp, tekst, regelId }
+       Kevin (5 okt 2026): vanuit Voorraadbeheer met één knop de klant mailen,
+       met de vaste teksten van de planning. Afzender "Fonteyn Spa planning";
+       antwoorden gaan naar spaplanning@fonteyn.nl, en die krijgt een kopie
+       (bcc). Zodra send.fonteyn.nl is goedgekeurd (MAIL_FROM_FONTEYN) gaat hij
+       ook echt van een Fonteyn-adres. */
+    if (url.pathname === "/planning/klantmail" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
+      const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+      if (!(await toegangMag(env, "planning-bewerk", wie)) && !(await toegangMag(env, "voorraad-beheer", wie))) return reply(403, { ok: false, error: "alleen de planning mag klanten mailen" });
+      let b = {}; try { b = await request.json(); } catch {}
+      const naar = [...new Set(String(b.naar || "").split(/[,;:\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean))];
+      if (!naar.length || naar.some(x => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) return reply(400, { ok: false, error: "vul een geldig mailadres van de klant in" });
+      const onderwerp = String(b.onderwerp || "").trim().slice(0, 160), tekst = String(b.tekst || "").trim().slice(0, 6000);
+      if (!onderwerp || !tekst) return reply(400, { ok: false, error: "onderwerp en tekst zijn nodig" });
+      if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
+      const bron = env.MAIL_FROM_FONTEYN || env.MAIL_FROM;
+      const adres = (String(bron).match(/<([^>]+)>/) || [])[1] || String(bron);
+      const SPAPLANNING = "spaplanning@fonteyn.nl";
+      const rr = await fetch("https://api.resend.com/emails", {
+        method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "Fonteyn Spa planning <" + adres + ">", to: naar, bcc: [SPAPLANNING], reply_to: [SPAPLANNING],
+                               subject: onderwerp, html: pcMailHtml(tekst, "") }),
+      });
+      const antw = await rr.text();
+      if (!rr.ok) return reply(502, { ok: false, error: "Resend: HTTP " + rr.status + " " + antw.slice(0, 160) });
+      const nr = String(b.ordernr || "").replace(/\D/g, "").slice(0, 12);
+      const log = (await env.FONTEYN_DATA.get("planning-klantmails", { type: "json" })) || {};
+      if (nr) { log[nr] = (log[nr] || []).concat([{ ts: new Date().toISOString(), door: wie, naar: naar.join(", "), onderwerp: onderwerp.slice(0, 120) }]).slice(-20);
+                await env.FONTEYN_DATA.put("planning-klantmails", JSON.stringify(log)); }
+      return reply(200, { ok: true, naar, log: nr ? log[nr] : [] });
+    }
+    if (url.pathname === "/planning/klantmail" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return reply(200, { ok: true, log: (await env.FONTEYN_DATA.get("planning-klantmails", { type: "json" })) || {} });
     }
     if (url.pathname === "/planning/route-print" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });

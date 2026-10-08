@@ -181,7 +181,8 @@ async function laad(){
   regels = alle.filter(function(x){
     if (wp.extra[String(x.ordernr)]) return true;
     var n = notities[x.regelId] || (x.regelIdOud && notities[x.regelIdOud]) || {};
-    return n.gepland && !n.verwijderd;
+    // Geannuleerd hoort niet getest te worden (Kevin, 8 okt 2026).
+    return n.gepland && !n.verwijderd && !n.geannuleerd;
   }).map(function(x){
     var n = notities[x.regelId] || (x.regelIdOud && notities[x.regelIdOud]) || {};
     var w = wp.regels[x.regelId] || {};

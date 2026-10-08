@@ -418,6 +418,9 @@
    regel met de kolomnaam ervoor (data-label, gezet door tabelLabels()).
    Uitklapregels (colspan) blijven één blok. Het Overzicht krijgt een
    compacte rij: model bovenaan, de zes getallen naast elkaar. */
+/* Particulier: geen scrollvak in een scrollvak (Kevin, 6 okt 2026); de pagina
+   zelf scrollt. */
+#tab-particulier .tablewrap{max-height:none!important;overflow:visible!important}
 @media (max-width:700px){
   table.grid thead{display:none}
   table.grid,table.grid tbody,table.grid tr{display:block;width:100%}
@@ -710,6 +713,21 @@
   <!-- Particulier / Partner / Partner containers — platte lijsten per soort klant.
        Adviseurs zien alléén deze drie tabs (alleen-lezen). -->
   <div id="tab-particulier" class="hidden">
+    <!-- Kevin (6 okt 2026): "Op afroep" en "Binnengekomen spa's" bovenaan de
+         pagina, en geen scrollvak in een scrollvak: alles onder elkaar. -->
+    <!-- Afroep en binnengekomen spa's (Chantal, 5 aug 2026). Zelfde gedachte als
+         'Binnen per adviseur' bij Partner, maar particulieren hebben geen
+         adviseur-indeling: hier splitst het op wát er met de spa moet gebeuren.
+         Wat je bovenin aanvinkt zakt naar dit blok; wat hier op Gepland gaat
+         verdwijnt, en is alleen terug te halen met 'geplande spa's tonen'. -->
+    <div class="card">
+      <h3>Afroep en binnengekomen - <span id="partBlokTotaal">0</span> spa's</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Alles wat je hierboven op <b>Afroep</b> of <b>Inplannen</b> hebt gezet staat hier. Vink <b>Gepland</b> aan zodra de afspraak met de klant staat; de regel verdwijnt dan uit beide lijsten.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin:0 0 8px"><input id="partBlokSearch" placeholder="zoek op ordernummer, model of klant…" style="min-width:260px;padding:7px"></div>
+      <div id="partBlokTabs" class="tabs" style="margin-bottom:10px"></div>
+      <div id="partBlokLijst"></div>
+    </div>
+
     <div class="card">
       <h3>Particulier - reserveringen van particuliere klanten</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Alle openstaande spa-reserveringen van <b>particuliere</b> klanten, met de verwachte levering. Deze staan óók in het tabblad Reserveringen.</p>
@@ -726,19 +744,6 @@
       <div id="partList" style="margin-top:12px"></div>
     </div>
 
-    <!-- Afroep en binnengekomen spa's (Chantal, 5 aug 2026). Zelfde gedachte als
-         'Binnen per adviseur' bij Partner, maar particulieren hebben geen
-         adviseur-indeling: hier splitst het op wát er met de spa moet gebeuren.
-         Wat je bovenin aanvinkt zakt naar dit blok; wat hier op Gepland gaat
-         verdwijnt, en is alleen terug te halen met 'geplande spa's tonen'. -->
-    <div class="card">
-      <h3>Afroep en binnengekomen - <span id="partBlokTotaal">0</span> spa's</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Alles wat je hierboven op <b>Afroep</b> of <b>Inplannen</b> hebt gezet staat hier. Vink <b>Gepland</b> aan zodra de afspraak met de klant staat; de regel verdwijnt dan uit beide lijsten.</p>
-      <div class="actions" style="gap:10px;align-items:center;margin:0 0 8px"><input id="partBlokSearch" placeholder="zoek op ordernummer, model of klant…" style="min-width:260px;padding:7px"></div>
-      <div id="partBlokTabs" class="tabs" style="margin-bottom:10px"></div>
-      <div id="partBlokLijst"></div>
-    </div>
-
     <!-- Gepland. Chantal (video, 19 aug 2026): "ik wil hier een derde tabblad
          bij hebben, dat heet Gepland. Op het moment dat ik dat vinkje aanklik
          verdwijnt hij uit deze lijst en uit de lijst hierboven en gaat hij
@@ -751,6 +756,13 @@
       <p class="lead" style="font-size:12px;margin-bottom:10px">De spa's waarvan de afspraak met de klant staat. Ze zijn uit beide lijsten hierboven verdwenen. Zodra de order in Logic4 op <b>Afgehandeld</b> staat, verdwijnt de regel hier ook vanzelf. Vink <b>Gepland</b> uit om hem terug te halen.</p>
       <div class="actions" style="gap:10px;align-items:center;margin:0 0 8px"><input id="partGeplandSearch" placeholder="zoek op ordernummer, model of klant…" style="min-width:260px;padding:7px"></div>
       <div id="partGeplandLijst"></div>
+    </div>
+    <!-- Geannuleerd (Kevin, 8 okt 2026): een geannuleerde order kun je
+         wegzetten zonder dat hij bij de werkplaats komt om getest te worden. -->
+    <div class="card">
+      <h3>Geannuleerd - <span id="partGeannuleerdTel">0</span></h3>
+      <div class="actions" style="gap:10px;align-items:center;margin:0 0 8px"><input id="partGeannuleerdSearch" placeholder="zoek op ordernummer, model of klant…" style="min-width:260px;padding:7px"></div>
+      <div id="partGeannuleerdLijst"></div>
     </div>
   </div>
 
@@ -3053,7 +3065,7 @@ function sorteerWaarde(r,kolom){
   if(kolom==="naam")     return String(r.naam||"");
   if(kolom==="adviseur") return String(r.adviseur||"zzz");
   if(kolom==="datum")    return String(r.datum||"");
-  if(kolom==="transport") return String(r.transport||"zzz");
+  if(kolom==="transport") return String(transportVan(r)||"zzz");
   if(kolom==="postcode") return String(r.postcode||"zzz");
   if(kolom==="ordernr")  return String(r.ordernr||"");
   if(kolom==="qty")      return String(1000000+(Number(r.qty)||0));
@@ -3249,7 +3261,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
   if(!box) return;
   const q=((inp&&inp.value)||"").trim().toLowerCase();
   const particulier=soort==="particulier";
-  const alleenGepland = modus==="gepland";
+  const alleenGepland = modus==="gepland", alleenGeannuleerd = modus==="geannuleerd";
   let rijen=resvVoorSoort(soort).filter(r=>resvMatch(r,r.model,q));
   const gekozenKleur=vulKleurKeuze(particulier?"partKleur":"ptnKleur",rijen);
   rijen=rijen.filter(r=>kleurMatch(r,gekozenKleur));
@@ -3263,13 +3275,17 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
   // partnerregel met een oud afroep-vinkje nergens meer staan.
   rijen=rijen.filter(function(r){
     const n=notitie(r);
+    if(alleenGeannuleerd) return !!n.geannuleerd;
+    if(n.geannuleerd) return false;
     if(alleenGepland) return !!n.gepland;
     if(n.gepland) return false;
     return !n.inplannen && !(particulier && n.afroep);
   });
   const s=resvSort[soort]||{kolom:"model",op:1};
   rijen.sort(function(a,b){
-    // Ingeplande regels altijd bovenaan — die moet de planning als eerste zien.
+    // Spoed eerst (Kevin, 5 okt 2026), dan ingeplande regels - die moet de planning als eerste zien.
+    const sa=notitie(a).spoed?0:1, sb=notitie(b).spoed?0:1;
+    if(sa!==sb) return sa-sb;
     const ia=notitie(a).inplannen?0:1, ib=notitie(b).inplannen?0:1;
     if(ia!==ib) return ia-ib;
     const va=sorteerWaarde(a,s.kolom), vb=sorteerWaarde(b,s.kolom);
@@ -3277,11 +3293,11 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
   });
   const totaal=rijen.reduce((n,r)=>n+(Number(r.qty)||0),0);
   const tel=document.getElementById(telId);
-  if(tel) tel.textContent=alleenGepland
+  if(tel) tel.textContent=(alleenGepland||alleenGeannuleerd)
     ? (rijen.length+" regel(s) · "+totaal+" spa's")
     : (rijen.length+" reservering(en) · "+totaal+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):""));
   if(!rijen.length){
-    box.innerHTML="<p class='lead'>"+(alleenGepland
+    box.innerHTML="<p class='lead'>"+(alleenGeannuleerd ? "Hier komen de regels die je op geannuleerd zet." : alleenGepland
       ? "Hier komen de regels die je op gepland zet."
       : ("0 reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+"."))+"</p>";
     return;
@@ -3308,6 +3324,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
       let stijl="";
       if(n.inplannen) stijl="background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"");
       else if(n.afroep) stijl="background:#f3e8ff;border-left:4px solid #7c3aed";
+      if(n.spoed) stijl=(stijl?stijl+";":"")+"border-left:5px solid #c8102e";
       /* Om en om een zachte tint, per ORDER en niet per tabelregel: een order
          is een hoofdregel plus een subregel, en die twee horen zichtbaar bij
          elkaar. Gerrit (10 sep 2026): "het mag iets duidelijker worden welke
@@ -3349,7 +3366,10 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
             "<span class='acties'>"+
             (particulier?vink("afroep","afroep",n.afroep):"")+
             vink("inplannen","inplannen",n.inplannen)+
+            (particulier?vink("spoed","<b style='color:#c8102e'>inplannen spoed</b>",n.spoed):"")+
             vink("gepland","gepland",n.gepland)+
+            (particulier?vink("geannuleerd","geannuleerd",n.geannuleerd):"")+
+            (particulier?"<button type='button' class='notMail' data-id='"+id+"' title='de klant mailen vanaf de spa planning'"+uit+">mail klant</button>":"")+
             (particulier?"":"<button type='button' class='notAgenda' data-id='"+id+"' title='er tóch een afspraak in Planning bij zetten'"+uit+">agenda</button>")+
             /* Naar de andere kant. Chantal (14 sep 2026): "Ik moet deze
                mogelijkheid zelf ook hebben in het systeem om een reservering
@@ -3378,12 +3398,102 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
 /* "Fonteyn Bezorgservice - Spa's" en "Transport distributie - Spas" zijn de
    namen zoals Logic4 ze levert. Ze zijn te lang voor de kolom en het deel dat
    telt staat vooraan; de hele naam blijft in de tip staan. */
+/* De vervoerder zoals de planning hem heeft gezet, anders die uit Logic4. */
+function transportVan(r){ const n=notitie(r); return (n&&n.transport)||r.transport||""; }
+const VERVOERDERS=["Transport distributie","Afhalen","Bekker","Inter","Beers","Van Heugten","Van den Heuvel","FBS","Hijsen"];
+function transportOpties(r,n){
+  const lijst=[...new Set(VERVOERDERS.concat(r.transport?[kortTransport(r.transport)]:[]))];
+  const nu=n.transport||"";
+  return "<option value=''"+(nu?"":" selected")+">"+esc(r.transport?kortTransport(r.transport):"-")+(r.transport?" (Logic4)":"")+"</option>"+
+    lijst.map(v=>"<option value='"+esc(v)+"'"+(nu===v?" selected":"")+">"+esc(v)+"</option>").join("");
+}
 function kortTransport(t){
   var s = String(t||"").trim();
   s = s.replace(/^Fonteyn\s+/i, "").replace(/\s*-\s*Spa'?s$/i, "");
   return s;
 }
 
+/* ── De klant mailen vanaf de spa planning (Kevin, 5 okt 2026) ────────────
+   Een venster in de pagina (geen confirm/alert: op Windows blokkeert dat het
+   typen). De vaste teksten van de planning (planning-teksten.json) per
+   vervoerder; het mailadres van de klant komt uit Logic4. Afzender is "Fonteyn
+   Spa planning", antwoorden gaan naar spaplanning@fonteyn.nl. */
+let planTekstenCache=null;
+async function planTeksten(){
+  if(planTekstenCache) return planTekstenCache;
+  try{ const r=await fetch("planning-teksten.json"); planTekstenCache=(await r.json()).teksten||[]; }
+  catch(e){ try{ const r2=await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/planning-teksten.json"); planTekstenCache=(await r2.json()).teksten||[]; }catch(e2){ planTekstenCache=[]; } }
+  return planTekstenCache;
+}
+const MAIL_AANHEF={nl:"Beste {naam},",de:"Sehr geehrte Damen und Herren,",en:"Dear {naam},"};
+const MAIL_GROET={
+  nl:"Met vriendelijke groet,\n\nSpa planning\nFonteyn Outdoor Living Mall\nMeervelderweg 52, 3888 NK Uddel\nT +31 577 456040",
+  de:"Mit freundlichen Grüßen,\n\nSpa Planung\nFonteyn Outdoor Living Mall\nMeervelderweg 52, 3888 NK Uddel, Niederlande\nT +31 577 456040",
+  en:"Kind regards,\n\nSpa planning\nFonteyn Outdoor Living Mall\nMeervelderweg 52, 3888 NK Uddel, The Netherlands\nT +31 577 456040"};
+const MAIL_ONDERWERP={nl:"Levering van uw spa - order {ordernr}",de:"Lieferung Ihres Spas - Auftrag {ordernr}",en:"Delivery of your spa - order {ordernr}"};
+async function mailKlant(r){
+  const n=notitie(r);
+  const laag=document.createElement("div");
+  laag.style.cssText="position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto";
+  laag.innerHTML="<div style='background:#fff;border-radius:12px;max-width:680px;width:100%;padding:18px 20px;box-shadow:0 18px 50px rgba(0,0,0,.3)'>"+
+    "<h3 style='margin:0 0 4px'>Klant mailen - order "+esc(r.ordernr)+"</h3>"+
+    "<div style='font-size:12.5px;color:var(--muted);margin-bottom:10px'>"+esc(r.naam||"")+" · "+esc(kortTransport(transportVan(r))||"vervoerder onbekend")+" · verstuurd als Fonteyn Spa planning, antwoorden naar spaplanning@fonteyn.nl</div>"+
+    "<div id='mkBezig' style='font-size:13px;color:var(--muted)'>Mailadres en teksten ophalen…</div><div id='mkForm'></div></div>";
+  document.body.appendChild(laag);
+  const sluit=()=>laag.remove();
+  laag.addEventListener("click",e=>{ if(e.target===laag) sluit(); });
+  let mail="";
+  try{
+    const rr=await fetch("https://fonteyn-data-store.g-mulder.workers.dev/planning/route-print?orders="+encodeURIComponent(r.ordernr),{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    const j=await rr.json(); const o=(j.orders||[])[0]||{};
+    // In Logic4 staan soms twee adressen met " : " of ";" ertussen.
+    mail=((o.leverenAan||{}).mail||(o.besteldDoor||{}).mail||"").trim().split(/\s*[:;,]\s*|\s+/).filter(x=>/@/.test(x)).join(", ");
+  }catch(e){}
+  const teksten=(await planTeksten()).filter(x=>x.soort!=="ordermemo");
+  const vv=String(kortTransport(transportVan(r))||"").toLowerCase();
+  const standaard=teksten.find(x=>x.vervoerder&&vv.indexOf(String(x.vervoerder).toLowerCase().split(" ")[0])>=0&&x.soort==="inplannen")
+    ||teksten.find(x=>x.vervoerder&&vv.indexOf(String(x.vervoerder).toLowerCase().split(" ")[0])>=0)||teksten[0]||{id:"",taal:"nl",tekst:""};
+  const opbouw=function(tk){
+    const taal=tk.taal||"nl";
+    const tekst=(MAIL_AANHEF[taal]||MAIL_AANHEF.nl)+"\n\n"+(tk.tekst||"")+"\n\n"+(MAIL_GROET[taal]||MAIL_GROET.nl);
+    return { onderwerp:(MAIL_ONDERWERP[taal]||MAIL_ONDERWERP.nl).replace("{ordernr}",r.ordernr),
+             tekst:tekst.replace(/\{naam\}/g,r.naam||"").replace(/\{ordernr\}/g,r.ordernr) };
+  };
+  const eerste=opbouw(standaard);
+  document.getElementById("mkBezig").remove();
+  const vorige=(n.gemaild?"<div style='font-size:12px;color:#15803d;margin-bottom:8px'>Eerder gemaild op "+esc(new Date(n.gemaild).toLocaleString("nl-NL"))+"</div>":"");
+  document.getElementById("mkForm").innerHTML=vorige+
+    "<label style='font-size:12px;color:var(--muted)'>Tekst</label><select id='mkTekst' style='width:100%;padding:7px;margin-bottom:8px'>"+
+      teksten.map(x=>"<option value='"+esc(x.id)+"'"+(x.id===standaard.id?" selected":"")+">"+esc((x.vervoerder?x.vervoerder+" - ":"")+x.titel)+"</option>").join("")+"</select>"+
+    "<label style='font-size:12px;color:var(--muted)'>Aan</label><input id='mkNaar' value='"+esc(mail)+"' placeholder='mailadres van de klant' style='width:100%;padding:7px;margin-bottom:8px'>"+
+    "<label style='font-size:12px;color:var(--muted)'>Onderwerp</label><input id='mkOnd' value='"+esc(eerste.onderwerp)+"' style='width:100%;padding:7px;margin-bottom:8px'>"+
+    "<label style='font-size:12px;color:var(--muted)'>Tekst <span style='color:#c8102e'>(vul de velden tussen {haakjes} in)</span></label><textarea id='mkTxt' rows='14' style='width:100%;padding:8px;font:inherit;font-size:13px;line-height:1.45'>"+esc(eerste.tekst)+"</textarea>"+
+    "<div id='mkMeld' style='font-size:12.5px;margin-top:6px'></div>"+
+    "<div style='display:flex;gap:8px;justify-content:flex-end;margin-top:10px'><button class='btn' type='button' id='mkAnnuleer'>Annuleren</button><button class='btn solid' type='button' id='mkStuur'>Versturen</button></div>";
+  document.getElementById("mkAnnuleer").addEventListener("click",sluit);
+  document.getElementById("mkTekst").addEventListener("change",function(){
+    const tk=teksten.find(x=>x.id===this.value); if(!tk) return;
+    const o=opbouw(tk); document.getElementById("mkOnd").value=o.onderwerp; document.getElementById("mkTxt").value=o.tekst;
+  });
+  document.getElementById("mkStuur").addEventListener("click",async function(){
+    const knop=this, meld=document.getElementById("mkMeld");
+    const tekst=document.getElementById("mkTxt").value;
+    const leeg=(tekst.match(/\{[a-z]+\}/gi)||[]);
+    if(leeg.length){ meld.style.color="#b91c1c"; meld.textContent="Vul eerst in: "+[...new Set(leeg)].join(", "); return; }
+    knop.disabled=true; knop.textContent="Versturen…";
+    try{
+      const res=await fetch("https://fonteyn-data-store.g-mulder.workers.dev/planning/klantmail",{method:"POST",
+        headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH,"X-Fonteyn-User":(localStorage.getItem(EMAIL_KEY)||"").toLowerCase()},
+        body:JSON.stringify({ordernr:r.ordernr,regelId:r.regelId||"",naar:document.getElementById("mkNaar").value,onderwerp:document.getElementById("mkOnd").value,tekst})});
+      const j=await res.json().catch(()=>({}));
+      if(!res.ok||!j.ok) throw new Error(j.error||("HTTP "+res.status));
+      zetNotitie(r,"gemaild",new Date().toISOString());
+      try{ if(window.fpLog) window.fpLog("klant-gemaild","order "+r.ordernr); }catch(e){}
+      meld.style.color="#15803d"; meld.textContent="Verstuurd naar "+j.naar.join(", ")+". Een kopie staat bij spaplanning@fonteyn.nl.";
+      setTimeout(sluit,1800);
+    }catch(e){ meld.style.color="#b91c1c"; meld.textContent="Versturen vraagt nog een poging: "+e.message; knop.disabled=false; knop.textContent="Versturen"; }
+  });
+}
 function koppelNotitieVelden(box,rijen){
   const perId={}; (rijen||[]).forEach(function(r){ if(r.regelId) perId[r.regelId]=r; });
   /* Het veld in de rij is te smal om een echte notitie te lezen (Gerrit,
@@ -3457,6 +3567,17 @@ function koppelNotitieVelden(box,rijen){
       planAfspraak(r);
     });
   });
+  box.querySelectorAll(".notTransport").forEach(function(sel){
+    sel.addEventListener("change",function(){
+      const r=perId[sel.dataset.id]; if(!r) return;
+      zetNotitie(r,"transport",sel.value||null);
+      try{ if(window.fpLog) window.fpLog("vervoerder-aangepast",r.ordernr+" -> "+(sel.value||"zoals in Logic4")); }catch(e){}
+      const y=window.scrollY; renderSoortTabs(); window.scrollTo(0,y);
+    });
+  });
+  box.querySelectorAll(".notMail").forEach(function(b){
+    b.addEventListener("click",function(){ const r=perId[b.dataset.id]; if(r) mailKlant(r); });
+  });
   box.querySelectorAll(".notVink").forEach(function(cb){
     cb.addEventListener("change",function(){
       const r=perId[cb.dataset.id]; if(!r) return;
@@ -3468,7 +3589,9 @@ function koppelNotitieVelden(box,rijen){
          direct te plannen, en dat ie dan ook in Planning de echte afspraak
          plant." Uitvinken doet niets met de agenda: een afspraak die al met
          de klant is gemaakt haal je niet weg omdat hier een vinkje uitgaat. */
-      if(veld==="gepland" && cb.checked && !isZakelijk(r)) planAfspraak(r);
+      /* Kevin (6 okt 2026): het venster "afspraak inplannen" bij het vinkje
+         gepland gebruikt de planning niet; het is weg. De afspraak zetten ze
+         zelf in Planning. */
       try{ if(window.fpLog) window.fpLog(veld+(cb.checked?"-aangevinkt":"-uitgevinkt"),r.ordernr+" "+r.model+" ("+r.naam+")"); }catch(e){}
       /* De regel verhuist bij het aanvinken naar een ander blok. Dat is de
          bedoeling (Chantal, 5 aug), maar zonder uitleg leest het als "reset
@@ -3478,7 +3601,9 @@ function koppelNotitieVelden(box,rijen){
       renderSoortTabs();   // kleur, volgorde en het verdwijnen van 'gepland'
       window.scrollTo(0,y);
       if(cb.checked){
-        const waarheen = veld==="gepland" ? "het blok 'Gepland' onderaan dit tabblad"
+        const waarheen = veld==="geannuleerd" ? "het blok 'Geannuleerd' onderaan dit tabblad"
+          : veld==="spoed" ? "bovenaan de lijst (spoed)"
+          : veld==="gepland" ? "het blok 'Gepland' onderaan dit tabblad"
           : veld==="afroep" ? "'Op afroep' in het blok hieronder"
           : "'Binnengekomen spa's' in het blok hieronder";
         setStatus("ok","Order "+r.ordernr+" ("+r.model+") staat nu in "+waarheen+".");
@@ -3502,6 +3627,7 @@ function renderSoortTabs(){
   renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
   renderResvSoort("particulier","partGeplandSearch","partGeplandLijst","partGeplandTel","gepland");
   renderResvSoort("partner","ptnGeplandSearch","ptnGeplandLijst","ptnGeplandTel","gepland");
+  renderResvSoort("particulier","partGeannuleerdSearch","partGeannuleerdLijst","partGeannuleerdTel","geannuleerd");
   try{ liveVerfFocus(); }catch(e){}
   renderAdviseurTabs();
   renderParticulierBlok();
@@ -3533,7 +3659,7 @@ function renderParticulierBlok(){
      vraag komt, dan kan je makkelijk op ordernummer daar zoeken." */
   const bq=((document.getElementById("partBlokSearch")||{}).value||"").trim().toLowerCase();
   const alle=resvVoorSoort("particulier").filter(function(r){
-    const n=notitie(r); return !n.gepland && (n.inplannen || n.afroep);
+    const n=notitie(r); return !n.gepland && !n.geannuleerd && (n.inplannen || n.afroep);
   }).filter(function(r){ return resvMatch(r,r.model,bq); });
   const groepen={
     inplannen:alle.filter(r=>notitie(r).inplannen),
@@ -3550,7 +3676,7 @@ function renderParticulierBlok(){
      zet het weer uit. */
   const alleRijen=groepen[partBlokActief]||[];
   const vervoerders={};
-  alleRijen.forEach(function(r){ const t=kortTransport(r.transport||"")||"(geen)"; vervoerders[t]=(vervoerders[t]||0)+1; });
+  alleRijen.forEach(function(r){ const t=kortTransport(transportVan(r)||"")||"(geen)"; vervoerders[t]=(vervoerders[t]||0)+1; });
   if(partBlokTransport&&!vervoerders[partBlokTransport]) partBlokTransport="";
   const filterHtml=Object.keys(vervoerders).length>1
     ? "<span class='partTransFilter' style='display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:14px;font-size:12px'><span style='color:var(--muted)'>Transport:</span>"+
@@ -3559,12 +3685,15 @@ function renderParticulierBlok(){
         return "<button type='button' class='partTransKnop' data-t='"+esc(t)+"' style='font:inherit;font-size:12px;padding:3px 10px;border-radius:999px;cursor:pointer;border:1px solid "+(aan?"#144734":"var(--border)")+";background:"+(aan?"#144734":"#fff")+";color:"+(aan?"#fff":"var(--ink)")+"'>"+esc(t)+" ("+vervoerders[t]+")</button>";
       }).join("")+"</span>"
     : "";
-  const rijen=partBlokTransport?alleRijen.filter(function(r){ return (kortTransport(r.transport||"")||"(geen)")===partBlokTransport; }):alleRijen;
+  const rijen=partBlokTransport?alleRijen.filter(function(r){ return (kortTransport(transportVan(r)||"")||"(geen)")===partBlokTransport; }):alleRijen;
   if(!rijen.length){
     lijst.innerHTML=filterHtml+"<p class='lead'>Deze lijst is nog leeg. Vink hierboven <b>"+
       (partBlokActief==="afroep"?"Afroep":"Inplannen")+"</b> aan bij een reservering.</p>";
   }else{
     rijen.sort(function(a,b){
+      // Inplannen spoed altijd bovenaan (Kevin, 5 okt 2026).
+      const sa=notitie(a).spoed?0:1, sb=notitie(b).spoed?0:1;
+      if(sa!==sb) return sa-sb;
       const va=sorteerWaarde(a,partBlokSort.kolom), vb=sorteerWaarde(b,partBlokSort.kolom);
       return (va.localeCompare(vb,"nl",{numeric:true})||String(a.ordernr).localeCompare(String(b.ordernr)))*(partBlokSort.op||1);
     });
@@ -3603,11 +3732,15 @@ function renderParticulierBlok(){
       "</tr></thead><tbody>"+
       rijen.map(function(r){
         const n=notitie(r), id=esc(r.regelId||"");
-        const stijl=n.inplannen?"background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"")
-                               :"background:#f3e8ff;border-left:4px solid #7c3aed";
+        const stijl=(n.inplannen?"background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"")
+                               :"background:#f3e8ff;border-left:4px solid #7c3aed")+(n.spoed?";border-left:5px solid #c8102e":"");
         return "<tr class='hoofdrij gemerkt' style='"+stijl+"'>"+
           "<td>"+esc(r.ordernr)+"</td>"+
-          "<td style='font-size:12px' title='"+esc(r.transport||"")+"'>"+(r.transport?esc(kortTransport(r.transport)):"<span style='color:var(--muted)'>-</span>")+"</td>"+
+          /* Kevin (8 okt 2026): de vervoerder hier zelf kunnen aanpassen, als
+             hij in Logic4 verkeerd stond of nog niet is bijgewerkt. */
+          "<td style='font-size:12px'><select class='notTransport' data-id='"+id+"' title='vervoerder - in Logic4: "+esc(r.transport||"leeg")+"'"+uit+
+            " style='font:inherit;font-size:12px;padding:2px 4px;max-width:100%;border:1px solid "+(n.transport?"#c8102e":"transparent")+";border-radius:5px;background:transparent'>"+
+            transportOpties(r,n)+"</select></td>"+
           "<td>"+spaCel(r)+"</td><td>"+kleurCel(r.kleur,r,true)+"</td>"+
           "<td class='mid'>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px' title='"+esc(r.plaats||"")+"'>"+(r.postcode?esc(r.postcode)+(r.plaats?" <span style='color:var(--muted)'>"+esc(r.plaats)+"</span>":""):"<span style='color:var(--muted)'>-</span>")+"</td>"+
@@ -3620,7 +3753,10 @@ function renderParticulierBlok(){
               "<span class='acties'>"+
               vinkP("afroep","afroep",n.afroep,id)+
               vinkP("inplannen","inplannen",n.inplannen,id)+
+              vinkP("spoed","inplannen spoed",n.spoed,id)+
               vinkP("gepland","gepland",n.gepland,id)+
+              vinkP("geannuleerd","geannuleerd",n.geannuleerd,id)+
+              "<button type='button' class='notMail' data-id='"+id+"' title='de klant mailen vanaf de spa planning'"+uit+">mail klant</button>"+
               "</span>"+
             "</div>"+
           "</td></tr>";

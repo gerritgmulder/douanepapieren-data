@@ -1,5 +1,5 @@
 {
-  "version": "0.35.49",
+  "version": "0.35.50",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -227,6 +227,10 @@
     {
       "name": "voorraad-mobiel.html",
       "note": "Voorraadbeheer op de telefoon: beginscherm met Overzicht, Stock, Onderweg (containers + binnen melden) en een order opzoeken. Zelfde toegangsgroep als voorraad.html."
+    },
+    {
+      "name": "planning-teksten.json",
+      "note": "De vaste klantmails van de spa planning per vervoerder; gebruikt door 'mail klant' in Voorraadbeheer"
     },
     {
       "name": "voorraad-reken.js",

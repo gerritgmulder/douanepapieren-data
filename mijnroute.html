@@ -361,7 +361,8 @@ function bonVan(a, o){
     id: id, datum: a.datum, tijd: a.tijd||"", klant: a.klant||"", plaats: a.plaats||"", telefoon: a.telefoon||"",
     klantMail: (lever.mail || (o && o.ok && (o.besteldDoor||{}).mail) || ""), ordernr: nr, itsId: a.itsId||null,
     monteur: mijnNaam(), monteur2: "", kenteken: "", soort: a.soort==="service" ? "service" : "levering",
-    spaType: eerste ? eerste.omschrijving.split(/[|,]/)[0].trim() : "", serienr: "", adviseur: (o && o.ok && o.adviseur) || "",
+    spaType: ((o && o.ok && o.spaRegel) || (eerste ? eerste.omschrijving : "")).split(/[|,]/)[0].trim(), serienr: "", adviseur: (o && o.ok && o.adviseur) || "",
+    alleenLeveren: !!a.alleenLeveren,
     checklist: {}, betaling: { orderbedrag: b ? b.bedrag : 0, reedsBetaald: b ? b.betaald : 0,
       openstaand: b ? Math.round((b.bedrag - b.betaald)*100)/100 : null, methode: "", bedrag: 0, contantAan: "" },
     opmerking: "", handtekeningMonteur: "", handtekeningKlant: "", status: "concept",
@@ -398,7 +399,11 @@ function bonBlok(a, o){
   var slot = st === "akkoord" || st === "gemaild";
   var dis = slot ? " disabled" : "";
   var isService = bon.soort === "service" || !!bon.itsId;
-  var vragen = isService ? "" : (window.OPLEVERBON_VRAGEN||[]).map(function(v){
+  // Alleen leveren (Kevin, 5 okt 2026): geen checklist, alleen pakbon en handtekeningen.
+  if (a.alleenLeveren && !bon.alleenLeveren && st === "concept") bon.alleenLeveren = true;
+  var vragen = isService ? "" : bon.alleenLeveren
+    ? '<p class="wacht"><b>Alleen leveren.</b> De checklist hoeft niet: laat de pakbon aftekenen en zet de handtekeningen van de klant en de monteur.</p>'
+    : (window.OPLEVERBON_VRAGEN||[]).map(function(v){
     var ant = (bon.checklist[v.k]||{}).a || "", opm = (bon.checklist[v.k]||{}).opm || "";
     return '<div class="vraag"><span class="t">'+esc(v.t)+'</span><span class="keus">'+
       ["ja","nee","nvt"].map(function(x){ return '<button type="button" class="'+x+(ant===x?" aan":"")+'" data-vraag="'+v.k+'" data-a="'+x+'"'+dis+'>'+esc(OPLEVERBON_ANTWOORD[x])+'</button>'; }).join("")+'</span>'+
@@ -570,7 +575,7 @@ async function bonAfronden(id){
     if (!String((bon.service||{}).gedaan||"").trim()){ bonMelding(id, "Vul in wat je bij de klant hebt gedaan (vak 2).", "bad"); return; }
     var leeg = (bon.service.materialen||[]).filter(function(r){ return !String(r.oms||"").trim(); });
     if (leeg.length){ bonMelding(id, "Er staat een materiaalregel zonder omschrijving; vul die in of haal hem weg.", "bad"); return; }
-  } else {
+  } else if (!bon.alleenLeveren) {
     var open = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ return !(bon.checklist[v.k]||{}).a; });
     if (open.length){ bonMelding(id, open.length+" vraag(en) staan nog open: "+open.slice(0,3).map(function(v){ return v.t; }).join(", ")+(open.length>3?" ...":""), "bad"); return; }
     var zonder = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ var c = bon.checklist[v.k]||{}; return c.a !== "ja" && !String(c.opm||"").trim(); });
