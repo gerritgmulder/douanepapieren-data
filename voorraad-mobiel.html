@@ -104,8 +104,8 @@ main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom));
 /* Vier getallen naast elkaar passen op 375 breed met 317 van de 319 pixels,
    en dat is te krap voor een smallere Android. Vandaar minder marge per
    getal; wat dan nog niet past valt netjes naar de tweede regel. */
-.getallen{display:flex;gap:12px;flex-wrap:wrap}
-.getal{min-width:58px}
+.getallen{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.getal{min-width:0}
 .getal b{display:block;font-size:19px;line-height:1.15}
 .getal span{font-size:11px;color:var(--grijs)}
 .getal.op b{color:var(--groen)}

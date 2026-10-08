@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Voorraadbeheer op de telefoon is nu dezelfde als op de pc",
+      wat:   "Op de telefoon opent Voorraadbeheer nu dezelfde pagina als op de pc, met alle tabbladen. Tabellen worden op het kleine scherm kaartjes, en elk model klap je open voor de kleuren. Container binnen melden staat als knop bij de schepen. De zoekbalk is breder, en inkooporders die nog besteld moeten worden tellen weer mee als productie."
+    },
+    {
+      datum: "2026-10-08", bestand: "voorraad.html", soort: "beter",
       titel: "Overzicht: pc, telefoon en uitgeklapt laten hetzelfde zien",
       wat:   "Het tekort wordt nu per kleur geteld: zit een reservering in een kleur die nergens ligt, vaart of gemaakt wordt, dan is dat tekort, ook als er van een andere kleur genoeg is. Ingeklapt, uitgeklapt, op de telefoon en in Voorraadbepaling staat daardoor hetzelfde getal. Op de telefoon tellen de partnercontainers niet meer mee als gereserveerd en staat productie erbij."
     },

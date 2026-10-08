@@ -327,17 +327,43 @@ function dpLogoResponse() {
 
 /* De buitenkant van elke mail aan een partner. Alles met inline stijlen en
    zonder moderne opmaak: mailprogramma's gooien een <style>-blok weg. */
+/* De jas om elke mail van Passion Partners.
+   Gerrit (8 okt 2026, mail bij Arno: "ziet er niet uit"). Outlook op de pc
+   tekent mail met de opmaak van Word: een div met max-width wordt schermbreed,
+   afgeronde hoeken verdwijnen, het logo als plaatje wordt geblokkeerd (een
+   grijs kader met "klik hier om afbeeldingen te downloaden"), en een knop die
+   een link met opvulling is, wordt een rood gemarkeerd woordje. Daarom:
+   tabellen in plaats van divs, het logo als tekst, en elke knop als een tabel
+   met een gekleurde cel (zie dpMailKnoppen). */
+function dpMailKnop(href, tekst, kleur) {
+  kleur = kleur || "#c8102e";
+  return '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:22px auto;border-collapse:separate;">' +
+    '<tr><td align="center" bgcolor="' + kleur + '" style="background:' + kleur + ';border-radius:10px;padding:14px 32px;mso-padding-alt:14px 32px;">' +
+    '<a href="' + href + '" style="color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,Helvetica,sans-serif;display:inline-block;">' + tekst + '</a>' +
+    '</td></tr></table>';
+}
+// Elke link die als knop is opgemaakt (met een achtergrondkleur) wordt een echte knop.
+function dpMailKnoppen(html) {
+  const knop = /<a\s+href="([^"]+)"\s+style="([^"]*background:\s*(#[0-9a-fA-F]{3,6})[^"]*)"\s*>([\s\S]*?)<\/a>/g;
+  return String(html || "")
+    .replace(/<p[^>]*>\s*(<a\s+href="[^"]+"\s+style="[^"]*background:\s*#[0-9a-fA-F]{3,6}[^"]*"\s*>[\s\S]*?<\/a>)\s*<\/p>/g, "$1")
+    .replace(knop, (m, href, stijl, kleur, tekst) => dpMailKnop(href, tekst, kleur));
+}
 function dpMailShell(env, url, binnen) {
   const site = dpOrigin(env, url).replace(/^https?:\/\//, "");
-  return '<div style="background:#f4f4f2;padding:28px 12px;font-family:Arial,Helvetica,sans-serif;">' +
-    '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e6e6e3;border-radius:14px;overflow:hidden;">' +
-    '<div style="padding:26px 30px 20px;text-align:center;border-bottom:3px solid #c8102e;">' +
-    '<img src="' + dpLogoUrl(env, url) + '" alt="Passion Spas" width="230" ' +
-    'style="width:230px;max-width:72%;height:auto;display:inline-block;border:0;"></div>' +
-    '<div style="padding:28px 30px;color:#1f2937;font-size:15px;line-height:1.65;">' + binnen + '</div>' +
-    '<div style="padding:16px 30px 24px;border-top:1px solid #eeeeec;color:#9ca3af;font-size:12px;line-height:1.7;text-align:center;">' +
+  const lettertype = "font-family:Arial,Helvetica,sans-serif;";
+  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f2" style="background:#f4f4f2;">' +
+    '<tr><td align="center" style="padding:28px 12px;">' +
+    '<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:560px;max-width:100%;background:#ffffff;border:1px solid #e6e6e3;border-radius:14px;">' +
+    // Het logo als tekst: in Outlook wordt een plaatje standaard geblokkeerd.
+    '<tr><td align="center" style="padding:24px 30px 18px;border-bottom:3px solid #c8102e;' + lettertype + '">' +
+    '<span style="font-size:30px;font-weight:bold;letter-spacing:3px;color:#111111;">passion</span>' +
+    '<br><span style="font-size:13px;color:#c8102e;font-weight:bold;letter-spacing:2px;">SPAS</span>' +
+    '<span style="font-size:13px;color:#9ca3af;"> &nbsp;|&nbsp; love your senses</span></td></tr>' +
+    '<tr><td style="padding:26px 30px;color:#1f2937;font-size:15px;line-height:24px;' + lettertype + '">' + dpMailKnoppen(binnen) + '</td></tr>' +
+    '<tr><td align="center" style="padding:16px 30px 24px;border-top:1px solid #eeeeec;color:#9ca3af;font-size:12px;line-height:20px;' + lettertype + '">' +
     'Passion Partners<br><a href="' + dpPad(env, url) + '" style="color:#c8102e;text-decoration:none;">' + site + '</a>' +
-    '<br>Questions? Just reply to this email.</div></div></div>';
+    '<br>Questions? Just reply to this email.</td></tr></table></td></tr></table>';
 }
 
 /* Dezelfde jas voor de losse pagina's die de worker zelf tekent: de
@@ -5356,12 +5382,12 @@ async function dpRefreshProductie(env) {
     const rows = Array.isArray(rowsResp) ? rowsResp : ((rowsResp && rowsResp.Records) || []);
     for (const r of rows) {
       const model = codeToModel[String(r.ProductCode || "")]; if (!model) continue;
-      /* Nog te leveren, en alleen als dat veld ontbreekt het bestelde aantal.
-         Hier stond "QtyToDeliver || QtyToOrder": een regel die al helemaal
-         geleverd was (0 te leveren) telde dan met zijn volle bestelaantal mee
-         als productie (Gerrit, 7 okt 2026: 965 in productie tegen 620 besteld). */
-      const qty = r.QtyToDeliver != null && r.QtyToDeliver !== "" ? Number(r.QtyToDeliver) || 0 : Number(r.QtyToOrder) || 0;
-      if (qty <= 0) continue;
+      /* Nog te leveren, en anders nog te bestellen. Een regel zonder
+         besteldatum staat in Logic4 altijd op 0 te leveren (zie BESTELD BIJ
+         LEVERANCIER hierboven). Op 7 okt 2026 stond hier even alleen
+         QtyToDeliver; toen viel inkooporder 37983 (22 Believe) eruit
+         (Chantal, 8 okt 2026). Niet meer aan komen. */
+      const qty = Number(r.QtyToDeliver) || Number(r.QtyToOrder) || 0; if (qty <= 0) continue;
       const code = String(r.ProductCode || "");
       (byModel[model] = byModel[model] || []).push({
         iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 80) || null,
@@ -8396,7 +8422,8 @@ async function voorraadbepalingBereken(env) {
     const rr = await post("/v3/BuyOrders/GetBuyOrderRowsByFilter", { BuyOrderId: o.Id, TakeRecords: 200 }).catch(() => []);
     for (const r of (Array.isArray(rr) ? rr : [])) {
       const m = codeToModel[String(r.ProductCode || "")]; if (!m) continue;
-      const q = Number(r.QtyToDeliver) || 0; if (q <= 0) continue;
+      // Zelfde telling als de productie in Voorraadbeheer: ook regels zonder besteldatum.
+      const q = Number(r.QtyToDeliver) || Number(r.QtyToOrder) || 0; if (q <= 0) continue;
       besteld[m] = (besteld[m] || 0) + q;
       (ikosPerModel[m] = ikosPerModel[m] || []).push({ iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 90), qty: q, eta: String(r.ExpectedDeliveryDate || "").slice(0, 10) || null });
     }

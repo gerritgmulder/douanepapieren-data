@@ -410,6 +410,58 @@
 .so-fkop h3{margin:0 0 4px;font-size:15px;color:#144734}
 .so-fkop p{margin:0;font-size:12.5px;color:#6b7280;line-height:1.5}
 .so-tabel tr.los{background:#fffbeb}
+
+/* ── Telefoon: dezelfde pagina, tabellen worden kaartjes ─────────────────
+   Gerrit (8 okt 2026): "Zorg dat ik de telefoonversie van Voorraadbeheer
+   echt altijd letterlijk hetzelfde kan gebruiken als de desktop versie."
+   Op een smal scherm wordt elke tabelrij een kaartje: elke cel op een eigen
+   regel met de kolomnaam ervoor (data-label, gezet door tabelLabels()).
+   Uitklapregels (colspan) blijven één blok. Het Overzicht krijgt een
+   compacte rij: model bovenaan, de zes getallen naast elkaar. */
+@media (max-width:700px){
+  table.grid thead{display:none}
+  table.grid,table.grid tbody,table.grid tr{display:block;width:100%}
+  table.grid tr{border-bottom:1px solid var(--border,#e5e7eb);padding:6px 0}
+  table.grid td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0!important;padding:3px 8px!important;text-align:right;white-space:normal!important}
+  table.grid td::before{content:attr(data-label);flex:0 0 auto;max-width:48%;text-align:left;color:var(--muted,#6b7280);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+  table.grid td:not([data-label])::before,table.grid td[data-label=""]::before{content:none}
+  table.grid td:not([data-label]),table.grid td[data-label=""]{justify-content:flex-start;text-align:left}
+  table.grid td[colspan]{display:block;text-align:left;padding:6px 4px!important}
+  table.grid td[colspan]::before{content:none}
+  .tablewrap{max-height:none!important;overflow:visible!important}
+  #ovBacklog tr.ovBackRow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:8px;row-gap:6px;padding:10px 4px}
+  #ovBacklog tr.ovBackRow td{display:block;padding:2px 2px!important;text-align:left;font-size:15px;font-weight:600}
+  #ovBacklog tr.ovBackRow td:first-child{grid-column:1/-1;font-size:16px;padding-bottom:6px!important}
+  #ovBacklog tr.ovBackRow td::before,table.kleurGrid tr:not(.voet) td::before{display:block;max-width:none;font-size:11px;letter-spacing:0;margin-bottom:1px;white-space:nowrap;text-transform:none;font-weight:500}
+  #ovBacklog tr.ovBackRow td:first-child::before{content:none}
+  #ovBacklog tr.ovBackRow td:nth-child(2)::before{content:"gereserveerd"}
+  #ovBacklog tr.ovBackRow td:nth-child(3)::before{content:"op voorraad"}
+  #ovBacklog tr.ovBackRow td:nth-child(4)::before{content:"op zee"}
+  #ovBacklog tr.ovBackRow td:nth-child(5)::before{content:"in productie"}
+  #ovBacklog tr.ovBackRow td:nth-child(6)::before{content:"dekking"}
+  #ovBacklog tr.ovBackRow td:nth-child(7)::before{content:"tekort"}
+  #ovBacklog tr.ovBackRow td:nth-child(2) span{display:block;font-size:10.5px;font-weight:400;white-space:normal}
+  /* De kleuren van een uitgeklapt model: de kleur bovenaan, vier getallen eronder. */
+  table.kleurGrid tr:not(.voet){display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:6px;padding:8px 2px}
+  table.kleurGrid tr:not(.voet) td{display:block;padding:1px 2px!important;text-align:left;font-weight:600}
+  table.kleurGrid tr:not(.voet) td:first-child{grid-column:1/-1;font-weight:600;padding-bottom:4px!important}
+  table.kleurGrid tr:not(.voet) td:first-child::before{content:none}
+  table.kleurGrid tr:not(.voet) td::before{font-size:10px!important;letter-spacing:-.01em!important}
+  table.kleurGrid tr:not(.voet) td:nth-child(2)::before{content:"gereserveerd"}
+  table.kleurGrid tr:not(.voet) td:nth-child(3)::before{content:"voorraad"}
+  table.kleurGrid tr:not(.voet) td:nth-child(4)::before{content:"zee/productie"}
+  table.kleurGrid tr:not(.voet) td:nth-child(5)::before{content:"dekking"}
+  table.kleurGrid tr.voet{display:flex;justify-content:space-between;padding:8px 6px}
+  table.kleurGrid tr.voet td{display:inline;padding:0!important}
+  table.kleurGrid tr.voet td::before{content:none}
+  .alleenTelefoon{display:inline-flex!important}
+  /* Zoekbalk over de hele breedte, de knop eronder. */
+  #zoekAlles{flex:1 1 100%!important}
+  #zoekAlles+button{flex:0 0 auto}
+  .card .actions:has(#zoekAlles){flex-wrap:wrap!important}
+  #ovBestelZoek,#ovShipSearch{flex:1 1 100%!important;max-width:none!important;min-width:0!important}
+}
+.alleenTelefoon{display:none}
 </style>
 </head>
 <body>
@@ -443,9 +495,9 @@
        blijven gewoon werken; die zijn handig als je binnen een lijst filtert.
        Dit is voor de vraag "waar is deze order en wat is de stand". -->
   <div class="card" style="margin:0 0 14px;padding:13px 15px">
-    <div class="actions" style="gap:10px;align-items:center;margin:0">
+    <div class="actions" style="display:flex;flex-wrap:nowrap;gap:10px;align-items:center;margin:0;width:100%">
       <input id="zoekAlles" placeholder="zoek een ordernummer, klant of model - overal tegelijk"
-             style="flex:1 1 auto;min-width:0;padding:9px 12px;font-size:14px" autocomplete="off">
+             style="flex:1 1 auto;width:100%;max-width:none;min-width:0;padding:10px 12px;font-size:15px" autocomplete="off">
       <button class="btn" type="button" id="zoekAllesLeeg" style="flex:0 0 auto">wissen</button>
     </div>
     <div id="zoekAllesUit" style="margin-top:11px"></div>
@@ -582,7 +634,7 @@
            spa. Nu moet ik continu heen en weer scrollen en zelf op zoek naar
            een spa. Dat kost veel te veel tijd." -->
       <div style="display:flex;gap:10px;align-items:center;margin:0 0 8px;flex-wrap:wrap">
-        <input id="ovBestelZoek" placeholder="zoek een spa-model…" style="min-width:240px;padding:8px">
+        <input id="ovBestelZoek" placeholder="zoek een spa-model…" style="flex:1 1 320px;width:100%;max-width:520px;min-width:0;padding:9px 12px;font-size:15px">
         <span id="ovBestelTel" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> is wat er bij de fabriek besteld staat; dat telt mee en gaat dus van het tekort af. <b>Dekking</b>: <span style="color:#15803d;font-weight:700">✓</span> = alle reserveringen van dit model zijn gedekt door wat er ligt, vaart en gemaakt wordt; <span style="color:#b91c1c;font-weight:700">✗</span> = er moet nog iets bij. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
@@ -594,9 +646,12 @@
     </div>
     <div class="card">
       <h3>Binnenkomende schepen</h3>
+      <!-- Op de telefoon opent Voorraadbeheer deze pagina (Gerrit, 8 okt 2026);
+           een container binnen melden staat nog op het telefoonscherm. -->
+      <a class="btn alleenTelefoon" href="voorraad-mobiel.html#onderweg" style="margin:4px 0 8px;text-decoration:none">Container binnen melden</a>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Klik een schip open om te zien welke spa's aan boord zijn. De trackingreferentie + ETA komen uit de tab Schepen.</p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0;margin-bottom:10px">
-        <input id="ovShipSearch" placeholder="zoek op spa-model, schip, referentie of ordernummer…" style="min-width:320px;padding:8px">
+        <input id="ovShipSearch" placeholder="zoek op spa-model, schip, referentie of ordernummer…" style="flex:1 1 320px;width:100%;max-width:520px;min-width:0;padding:9px 12px;font-size:15px">
         <span id="ovShipCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div class="tablewrap"><table class="grid">
@@ -2077,8 +2132,8 @@ function kleurTabel(r){
   if(!rijen.length) return "<p class='lead' style='margin:0'>Kleurgegevens zijn nog leeg.</p>";
   const vink=(x)=>!x.gereserveerd?"<span style='color:var(--muted)'>-</span>"
     :(x.open?"<span style='color:#b91c1c;font-weight:700'>✗ "+x.open+"</span>":"<span style='color:#15803d;font-weight:700'>✓</span>");
-  const voet=(tekst,waarde,kleur)=>"<tr><td colspan='4' style='text-align:right;font-weight:700;color:"+kleur+"'>"+tekst+"</td><td style='font-weight:700;color:"+kleur+"'>"+waarde+"</td></tr>";
-  return "<div class='tablewrap'><table class='grid' style='margin:0'><thead><tr>"+
+  const voet=(tekst,waarde,kleur)=>"<tr class='voet'><td colspan='4' style='text-align:right;font-weight:700;color:"+kleur+"'>"+tekst+"</td><td style='font-weight:700;color:"+kleur+"'>"+waarde+"</td></tr>";
+  return "<div class='tablewrap'><table class='grid kleurGrid' style='margin:0'><thead><tr>"+
     "<th>Kleur</th><th>Gereserveerd</th><th>Op voorraad</th><th>Op zee of in productie</th><th>Dekking</th></tr></thead><tbody>"+
     rijen.map(function(x){
       return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gereserveerd||"-")+"</td>"+
@@ -6264,5 +6319,28 @@ function loadVoorraadDemo(){
 })();
 </script>
 
+<script>
+/* Kolomnamen op elke cel zetten, voor de kaartjes op de telefoon (zie de CSS
+   onder "Telefoon"). Loopt mee met elke tabel die later getekend wordt. */
+(function(){
+  function labels(){
+    document.querySelectorAll("table.grid").forEach(function(tab){
+      var kop=tab.tHead&&tab.tHead.rows[0]; if(!kop) return;
+      var namen=[].map.call(kop.cells,function(c){ return (c.innerText||c.textContent||"").replace(/\s+/g," ").trim(); });
+      [].forEach.call(tab.tBodies,function(tb){ [].forEach.call(tb.rows,function(tr){
+        var i=0;
+        [].forEach.call(tr.cells,function(td){
+          if(td.colSpan>1){ i+=td.colSpan; return; }
+          if(!td.hasAttribute("data-label")) td.setAttribute("data-label",namen[i]||"");
+          i++;
+        });
+      }); });
+    });
+  }
+  var wacht=null;
+  new MutationObserver(function(){ clearTimeout(wacht); wacht=setTimeout(labels,60); }).observe(document.body,{childList:true,subtree:true});
+  labels();
+})();
+</script>
 </body>
 </html>

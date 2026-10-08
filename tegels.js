@@ -115,13 +115,13 @@
       uit:"Houston: facturen, voorraad en QuickBooks",             mobiel:"pc", tile:"tileAmerika" },
     { bestand:"douane.html",         groep:"papieren",         ic:"📄",  naam:"Douanepapieren",
       uit:"Douanedocumenten maken",                                mobiel:"pc", tile:"tileDouane" },
-    /* Op de telefoon een eigen, smalle weergave met de drie dingen die je
-       aan de lijn nodig hebt. Zelfde groep, dus exact dezelfde rechten; alleen
-       de weergave verschilt (Gerrit, 19 aug 2026). */
+    /* Op de telefoon dezelfde pagina als op de pc (Gerrit, 8 okt 2026: "Zorg
+       dat ik de telefoonversie van Voorraadbeheer echt altijd letterlijk
+       hetzelfde kan gebruiken als de desktop versie"). voorraad.html zet zijn
+       tabellen op een smal scherm om in kaartjes. voorraad-mobiel.html blijft
+       bestaan voor "container binnen melden" (knop bij de schepen). */
     { telefoon:true, bestand:"voorraad.html",       groep:"voorraad",         ic:"📦",  naam:"Voorraadbeheer",
-      uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad",
-      mobielBestand:"voorraad-mobiel.html",
-      mobielUit:"Voorraad, containers onderweg en een order opzoeken" },
+      uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad" },
     { bestand:"voorraadbepaling.html", groep:"voorraadbepaling", ic:"📊", naam:"Voorraadbepaling",
       uit:"Bestellen in de verhouding van de verkoop: wat moet er nog bij", mobiel:"goed", tile:"tileVoorraadbepaling" },
     /* Vertalen is een tekstvak met een knop: dat werkt op een telefoon net
