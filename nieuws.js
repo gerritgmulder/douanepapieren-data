@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Overzicht: pc, telefoon en uitgeklapt laten hetzelfde zien",
+      wat:   "Het tekort wordt nu per kleur geteld: zit een reservering in een kleur die nergens ligt, vaart of gemaakt wordt, dan is dat tekort, ook als er van een andere kleur genoeg is. Ingeklapt, uitgeklapt, op de telefoon en in Voorraadbepaling staat daardoor hetzelfde getal. Op de telefoon tellen de partnercontainers niet meer mee als gereserveerd en staat productie erbij."
+    },
+    {
       datum: "2026-10-07", bestand: "amerika.html", soort: "nieuw",
       titel: "Amerika loopt vanzelf",
       wat: "Zodra er op een QuickBooks-factuur iets is betaald, staat de order vanzelf in Logic4 en wordt elke betaling meteen op die order geboekt. Wat het systeem niet zeker weet, staat voor Chantal klaar in Berichten, net als een creditcardbetaling zonder toeslag, een minbedrag op een regel en een prijs onder de bekende prijs. Een regel in het overzicht van Audrey die al vanzelf geboekt is, staat er als 'al automatisch geboekt'."

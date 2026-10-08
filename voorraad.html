@@ -10,6 +10,7 @@
 <!-- SheetJS — voor het inlezen van het Passion-bestellingen-document (pipeline) -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="spa-codes.js"></script>
+<script src="voorraad-reken.js"></script>
 <script src="spa-fabrikanten.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="ci-pdf.js"></script>
@@ -587,7 +588,7 @@
       <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> is wat er bij de fabriek besteld staat; dat telt mee en gaat dus van het tekort af. <b>Dekking</b>: <span style="color:#15803d;font-weight:700">✓</span> = alle reserveringen van dit model zijn gedekt door wat er ligt, vaart en gemaakt wordt; <span style="color:#b91c1c;font-weight:700">✗</span> = er moet nog iets bij. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
       <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
-        <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>In productie</th><th title="✓ = alle reserveringen zijn gedekt door voorraad, schepen en productie; ✗ = er moet nog iets bij">Dekking</th><th>Tekort</th></tr></thead>
+        <thead><tr><th>Model</th><th>Gereserveerd</th><th>Op voorraad</th><th>Op zee</th><th>In productie</th><th title="✓ = alle reserveringen zijn gedekt door voorraad, schepen en productie; ✗ = er moet nog iets bij">Dekking</th><th>Tekort</th></tr></thead>
         <tbody id="ovBacklog"></tbody>
       </table></div>
     </div>
@@ -1817,7 +1818,7 @@ async function loadOverzicht(){
          in de leverprognose, maar stond nergens in dit scherm. */
       fetch(PRODUCTIE_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}}))
     ]);
-    ovCodeKleur=bouwCodeKleur(cat);
+    ovCodeKleur=bouwCodeKleur(cat); window.ovCat=cat;
     /* Productie voor Houston (Amerika) dekt geen reservering in Nederland
        (Gerrit, 7 okt 2026): die inkooporders gaan eruit, net als in
        Voorraadbepaling. Herkend aan de opmerking van de inkooporder. */
@@ -1932,6 +1933,7 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
   const prodM=(prodData&&prodData.models)||{};
   const zeePerProforma=proformaZee(ship);
   const rows=[];
+  const ovReken=fpVoorraadReken.overzicht(resv,hal,ship,prodData,window.ovCat||{});
   const models=new Set([...Object.keys(byModel),...Object.keys(prices),...Object.keys(prodM)]);
   for(const m of models){
     const list=byModel[m]||[];
@@ -1940,27 +1942,18 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
     const conQty=con.reduce((a,r)=>a+r.qty,0);              // containerorders
     const betQty=fon.filter(r=>r.betaald).reduce((a,r)=>a+r.qty,0);
     actief+=actQty; betaald+=betQty; wacht+=actQty-betQty; containers+=conQty;
-    const voorraad=(halM[m]||{}).available||0; halTotal+=voorraad;
-    const zee=shipByModel[m]||0;
-    // Zie de toelichting hierboven: wat bij de fabriek in productie staat
-    // dekt de vraag af en gaat dus van het tekort af.
-    const prodVoor=productieTelt(prodM[m]||[],m,zeePerProforma);
-    const gedekt=Math.min(actQty,voorraad+zee+prodVoor);
-    const tekort=Math.max(0,actQty-voorraad-zee-prodVoor);
+    /* Eén rekenwijze voor pc en telefoon (voorraad-reken.js, Gerrit 8 okt
+       2026). Het tekort is per kleur: ingeklapt hetzelfde getal als
+       uitgeklapt. */
+    const ov=ovReken[m]||fpVoorraadReken.model(list,halM[m],prodM[m],0,{},ovCodeKleur);
+    const voorraad=ov.voorraad; halTotal+=voorraad;
+    const zee=ov.zee, prodQty=ov.productie, tekort=ov.tekort;
     const p=prices[m]; if(p&&p.usd) orderwaarde+=actQty*Math.round(Number(p.usd)/rate);
-    /* In productie telt NIET mee in gedekt en tekort. Een inkooporder bij de
-       fabriek is nog geen spa: hij is niet geladen en heeft vaak geen ETA.
-       Zou hij meetellen, dan zou het tekort verdwijnen terwijl er nog niets
-       vaart. Hij staat er als eigen kolom naast, zodat je ziet dat er al iets
-       op besteld is voordat je nog een keer bestelt. */
     const prodRegels=prodM[m]||[];
-    const prodRuw=prodRegels.reduce((a,x)=>a+(Number(x.qty)||0),0);
-    const prodQty=productieTelt(prodRegels,m,zeePerProforma);
     prodTotal+=prodQty;
-    if(actQty>0||voorraad>0||zee>0||conQty>0||prodQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort,
-      prodQty, prodRuw, prodRegels,
-      kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con),
-      perKleur:tekortPerKleur(fon,(halM[m]||{}).variants||{},prodRegels)});
+    if(actQty>0||voorraad>0||zee>0||conQty>0||prodQty>0) rows.push({m,actQty,conQty,voorraad,zee,tekort,
+      prodQty, prodRegels, ov,
+      kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con)});
   }
   const eur=n=>"€ "+Number(n).toLocaleString("nl-NL");
   document.getElementById("ovKpis").innerHTML=
@@ -2077,53 +2070,25 @@ function kleurNormaal(k){
    dekken is, wat er aan komt en wat er overblijft. Die drie regels tellen op
    tot het tekort in de modelregel. */
 function kleurTabel(r){
-  const rijen=(r.perKleur||[]).filter(x=>x.gevraagd>0||x.voorraad>0||x.productie>0);
+  /* Uitgeklapt telt precies op tot de regel erboven (voorraad-reken.js):
+     per kleur wat open is, min wat er vaart zonder bekende kleur = het tekort. */
+  const ov=r.ov||{kleuren:[]};
+  const rijen=ov.kleuren||[];
   if(!rijen.length) return "<p class='lead' style='margin:0'>Kleurgegevens zijn nog leeg.</p>";
-  /* Wat in productie staat telt nu PER KLEUR mee, niet alleen onderaan.
-     ═══════════════════════════════════════════════════════════════════════
-     Chantal (video, 14 sep 2026): "Mystic Mountain met Grey: er worden er 11
-     gevraagd, ik heb er 27 in productie, dus waarom moet ik er dan nog 11
-     dekken? Dat hoort op nul te staan. Datzelfde geldt voor de Sterling White
-     met Dark Grey: 1 gevraagd, 10 in productie, en dan zegt hij alsnog nog te
-     dekken 1."
-
-     Ze heeft gelijk. De inkooporder bij de fabriek noemt de artikelcode en die
-     ís de kleur, dus per kleur is precies bekend wat er komt. De kolom liet
-     dat buiten beschouwing en trok de productie pas onderaan van het totaal
-     af; per kleur stond er dan een tekort dat er niet is. De reden daarvoor -
-     een container die al vaart terwijl de inkooporder nog openstaat - is
-     echt, maar die gaat over 'op zee', en dat staat nog steeds onderaan
-     omdat een schip zijn kleuren niet noemt. */
-  const teDekken=rijen.reduce(function(n,x){ return n+Math.max(0,x.gevraagd-x.voorraad-x.productie); },0);
-  const zee=Number(r.zee)||0;
-  const rest=Math.max(0,teDekken-zee);
-  const regel=function(tekst,waarde,kleur,dik){
-    return "<tr><td colspan='4' style='text-align:right;color:"+(kleur||"var(--muted)")+
-      (dik?";font-weight:700":"")+"'>"+tekst+"</td><td style='color:"+(kleur||"var(--muted)")+
-      (dik?";font-weight:700":"")+"'>"+waarde+"</td></tr>";
-  };
+  const vink=(x)=>!x.gereserveerd?"<span style='color:var(--muted)'>-</span>"
+    :(x.open?"<span style='color:#b91c1c;font-weight:700'>✗ "+x.open+"</span>":"<span style='color:#15803d;font-weight:700'>✓</span>");
+  const voet=(tekst,waarde,kleur)=>"<tr><td colspan='4' style='text-align:right;font-weight:700;color:"+kleur+"'>"+tekst+"</td><td style='font-weight:700;color:"+kleur+"'>"+waarde+"</td></tr>";
   return "<div class='tablewrap'><table class='grid' style='margin:0'><thead><tr>"+
-    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad NL</th><th>In productie</th><th>Dekking</th></tr></thead><tbody>"+
+    "<th>Kleur</th><th>Gereserveerd</th><th>Op voorraad</th><th>Op zee of in productie</th><th>Dekking</th></tr></thead><tbody>"+
     rijen.map(function(x){
-      const open=Math.max(0,x.gevraagd-x.voorraad-x.productie);
-      return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gevraagd||"-")+"</td>"+
+      return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gereserveerd||"-")+"</td>"+
         "<td style='color:#2563eb'>"+(x.voorraad||"-")+"</td>"+
-        "<td style='color:"+(x.productie?"#7c3aed":"var(--muted)")+"'>"+(x.productie||"-")+"</td>"+
-        "<td style='font-weight:700;color:"+(open?"#b91c1c":"#15803d")+"' title='"+(open?(open+" nog open in deze kleur"):"gedekt")+"'>"+(open?("✗ <span style='font-weight:400;font-size:12px'>"+open+" open</span>"):"✓")+"</td></tr>";
+        "<td style='color:"+(x.komt?"#7c3aed":"var(--muted)")+"'>"+(x.komt||"-")+"</td>"+
+        "<td>"+vink(x)+"</td></tr>";
     }).join("")+
-    regel("samen nog open (na voorraad en productie)",teDekken,null,true)+
-    (zee?regel("af: op zee, kleur volgt","-"+zee,"#2563eb"):"")+
-    regel("blijft over - dit is het tekort",rest,rest>0?"#b91c1c":"#15803d",true)+
-    "</tbody></table></div>"+
-    (zee?("<p class='lead' style='font-size:11.5px;margin:6px 0 0'>De "+zee+" stuks op zee staan in de "+
-      "commercial invoices zonder kleur, dus welke kleuren daarmee gedekt zijn blijkt later. Bestel pas bij als je weet "+
-      "welke kleuren er aan boord zitten.</p>"):"")+
-    (function(){
-      const verdeeld=rijen.reduce((n,x)=>n+x.voorraad,0);
-      const over=Math.max(0,(Number(r.voorraad)||0)-verdeeld);
-      return over?("<p class='lead' style='font-size:11.5px;margin:6px 0 0;color:#92400e'><b>"+over+"</b> stuks op voorraad "+
-        "waarvan de kleur nog onbekend is; die staan los van de kleuren hierboven.</p>"):"";
-    })();
+    (ov.vanZee?voet("op zee, kleur nog onbekend","-"+ov.vanZee,"#2563eb"):"")+
+    voet("Tekort", r.tekort>0?("✗ "+r.tekort):"✓", r.tekort>0?"#b91c1c":"#15803d")+
+    "</tbody></table></div>";
 }
 function kleurChips(list){
   if(!list||!list.length) return "<span style='color:var(--muted)'>-</span>";
@@ -2186,7 +2151,7 @@ function renderBacklog(){
          kruis: zijn de reserveringen gedekt door wat er besteld is, ja of nee. */
       (r.actQty>0
         ? (r.tekort>0
-            ? "<td style='color:#b91c1c;font-weight:700;font-size:15px' title='"+r.gedekt+" van "+r.actQty+" reserveringen gedekt; er moeten er nog "+r.tekort+" bij'>✗</td>"
+            ? "<td style='color:#b91c1c;font-weight:700;font-size:15px'>✗</td>"
             : "<td style='color:#15803d;font-weight:700;font-size:15px' title='alle "+r.actQty+" reserveringen zijn gedekt'>✓</td>")
         : "<td style='color:var(--muted)'>-</td>")+
       "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"-")+"</td></tr>";

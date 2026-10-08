@@ -2,6 +2,7 @@
 <html lang="nl">
 <head>
 <script src="toegang.js"></script>
+<script src="voorraad-reken.js"></script>
 <script>
 /* Dezelfde deur als de pc-versie. Gerrit (14 aug 2026): "ik wil dat de
    rechten hetzelfde zijn als op de desktop, dat mag sowieso nooit
@@ -257,9 +258,10 @@ async function laad(){
   try{
     var r = await Promise.all([
       haal("/data/voorraad-hallen"), haal("/data/reserveringen-live"),
-      haal("/data/voorraad-schepen"), haal("/data/spa-catalog").catch(function(){ return {models:{}}; })
+      haal("/data/voorraad-schepen"), haal("/data/spa-catalog").catch(function(){ return {models:{}}; }),
+      haal("/data/voorraad-productie").catch(function(){ return {models:{}}; })
     ]);
-    data.hallen=r[0]||{}; data.resv=r[1]||{}; data.schepen=r[2]||{}; data.cat=r[3]||{};
+    data.hallen=r[0]||{}; data.resv=r[1]||{}; data.schepen=r[2]||{}; data.cat=r[3]||{}; data.productie=r[4]||{models:{}};
     data.codeKleur={};
     var modellen=(data.cat&&data.cat.models)||{};
     for(var m in modellen) (modellen[m]||[]).forEach(function(v){
@@ -291,6 +293,8 @@ function eersteSchip(model){
   var beste=null, vandaag=new Date().toISOString().slice(0,10);
   ((data.schepen&&data.schepen.ships)||[]).forEach(function(s){
     if(s.alleenDocumenten||!s.eta||s.eta<vandaag) return;
+    // Dealercontainers en binnengemelde schepen tellen niet (zelfde regel als het overzicht).
+    if(!fpVoorraadReken.schipOnderweg(s, vandaag)) return;
     if(!(s.models&&s.models[model])) return;
     if(!beste||s.eta<beste.eta) beste={eta:s.eta, ref:s.ref||s.trackRef||""};
   });
@@ -299,19 +303,13 @@ function eersteSchip(model){
 
 /* ── Overzicht: per model wat er vrij is, wat er vaart en wat er vast zit ── */
 function overzichtRijen(){
-  var hal=(data.hallen&&data.hallen.models)||{};
-  var byModel=(data.resv&&data.resv.byModel)||{};
-  var zee=opZee();
-  var namen={};
-  Object.keys(hal).forEach(function(m){ namen[m]=1; });
-  Object.keys(byModel).forEach(function(m){ namen[m]=1; });
-  Object.keys(zee).forEach(function(m){ namen[m]=1; });
-  return Object.keys(namen).map(function(m){
-    var vrij=Number((hal[m]||{}).available)||0;
-    var res=(byModel[m]||[]).reduce(function(n,r){ return n+(Number(r.qty)||0); },0);
-    var vaart=Number(zee[m])||0;
-    return { model:m, vrij:vrij, res:res, zee:vaart, tekort:Math.max(0,res-vrij-vaart) };
-  }).filter(function(r){ return r.vrij||r.res||r.zee; });
+  /* Dezelfde rekenwijze als de pc (voorraad-reken.js, 8 okt 2026): zonder
+     partnercontainers, met productie, en het tekort per kleur. */
+  var ov=fpVoorraadReken.overzicht(data.resv,data.hallen,data.schepen,data.productie,data.cat);
+  return Object.keys(ov).map(function(m){
+    var r=ov[m];
+    return { model:m, vrij:r.voorraad, res:r.gereserveerd, zee:r.zee, prod:r.productie, tekort:r.tekort };
+  }).filter(function(r){ return r.vrij||r.res||r.zee||r.prod; });
 }
 function tekenOverzicht(){
   var q=($("ovZoek").value||"").trim().toLowerCase();
@@ -325,10 +323,12 @@ function tekenOverzicht(){
   $("ovLijst").innerHTML = rijen.map(function(r){
     var schip=r.zee?eersteSchip(r.model):null;
     return '<div class="rij"><h3>'+esc(r.model)+'</h3><div class="getallen">'+
-      '<div class="getal op"><b>'+r.vrij+'</b><span>vrij in NL</span></div>'+
-      '<div class="getal zee"><b>'+r.zee+'</b><span>op zee</span></div>'+
       '<div class="getal res"><b>'+r.res+'</b><span>gereserveerd</span></div>'+
-      (r.tekort?'<div class="getal kort"><b>'+r.tekort+'</b><span>tekort</span></div>':'')+
+      '<div class="getal op"><b>'+r.vrij+'</b><span>op voorraad</span></div>'+
+      '<div class="getal zee"><b>'+r.zee+'</b><span>op zee</span></div>'+
+      '<div class="getal" style="color:#7c3aed"><b>'+r.prod+'</b><span>in productie</span></div>'+
+      (r.res?(r.tekort?'<div class="getal kort"><b>✗ '+r.tekort+'</b><span>tekort</span></div>'
+                      :'<div class="getal" style="color:#15803d"><b>✓</b><span>gedekt</span></div>'):'')+
       '</div>'+
       (schip?'<div class="kleuren">Eerstvolgende aankomst <b>'+esc(nlDatum(schip.eta))+'</b>'+
         (schip.ref?' &middot; '+esc(schip.ref):'')+'</div>':'')+
