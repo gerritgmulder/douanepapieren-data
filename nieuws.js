@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-08", iedereen: true, soort: "beter",
+      titel: "Op de telefoon: tabbladen als menu, tabellen als kaartjes",
+      wat:   "Op de telefoon zie je bij een tegel met veel tabbladen één grote knop met het onderdeel waar je bent. Tik erop en kies uit grote knoppen. Twee of drie tabbladen zijn een schakelaar. Tabellen worden kaartjes, invoervelden zoomen niet meer in, en lange uitleg klapt in met 'meer'. Alles werkt hetzelfde als op de pc."
+    },
+    {
       datum: "2026-10-08", bestand: "planning.html", soort: "beter",
       titel: "Planning: spa in plaats van cover, warmtepomp, alleen leveren, daglijnen",
       wat:   "Haal je een order op, dan staat bij Wat altijd de spa, ook als er een cover bovenaan de order staat, en '+ warmtepomp' als die erbij hoort. Nieuw vakje 'Alleen leveren': de monteur vult op de opleverbon dan geen checklist in, alleen pakbon en handtekeningen. Tussen de dagen staan dikke lijnen."

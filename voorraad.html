@@ -459,9 +459,8 @@
   table.kleurGrid tr.voet td::before{content:none}
   .alleenTelefoon{display:inline-flex!important}
   /* Zoekbalk over de hele breedte, de knop eronder. */
-  #zoekAlles{flex:1 1 100%!important}
+  #zoekAlles{flex:1 1 auto!important;min-width:0!important}
   #zoekAlles+button{flex:0 0 auto}
-  .card .actions:has(#zoekAlles){flex-wrap:wrap!important}
   #ovBestelZoek,#ovShipSearch{flex:1 1 100%!important;max-width:none!important;min-width:0!important}
 }
 .alleenTelefoon{display:none}

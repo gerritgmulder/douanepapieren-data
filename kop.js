@@ -268,6 +268,13 @@
       sl.src = hier.replace(/kop\.js(\?.*)?$/, "slepen.js");
       (doc.head || doc.documentElement).appendChild(sl);
     }
+    /* Op de telefoon een eigen weergave: tabbladen als menu, tabellen als
+       kaartjes (Gerrit, 8 okt 2026). Zie telefoon.js. */
+    if (hier && !global.__fpTelefoon) {
+      var tf = doc.createElement("script");
+      tf.src = hier.replace(/kop\.js(\?.*)?$/, "telefoon.js");
+      (doc.head || doc.documentElement).appendChild(tf);
+    }
     /* Ctrl+F / Cmd+F op elke tegel (Osman, 27 sep 2026). */
     if (hier && !global.__fpZoeken) {
       var zk = doc.createElement("script");
