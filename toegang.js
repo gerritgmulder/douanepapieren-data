@@ -302,6 +302,8 @@
        regelt planning.html zelf (OP_TELEFOON). */
     "planning-bewerk": [
       "bart.vdb", "bertjan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
+      // Het service-spa-account (servicespa@fonteyn.nl) mag ook plannen (Chantal, 8 okt 2026).
+      "mike",
     ],
     /* Urencontrole: het weekoverzicht van Gerwin. Gerrit (10 sep 2026): "ik
        wil dat je enkel voor Gerwin een tegel maakt waar hij dat overzicht in
@@ -383,6 +385,8 @@
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
       "dali", "dolf", "don", "edwin", "fonteynbot", "gerrit", "gerwin",
       "kevin", "luis", "manon", "nomi", "patrick", "yves",
+      // Service spa: alleen Particulier, met plannen (Chantal, 8 okt 2026).
+      "mike",
     ],
   };
 

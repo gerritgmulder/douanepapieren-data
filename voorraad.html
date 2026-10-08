@@ -1112,6 +1112,8 @@ const KLANT_WIJZIG = new Set([
   // niet. Zie ook 'fonteyn.bert' hieronder: dat is Bert van de Berg, een ander
   // mens dan Bart van den Brink.
   "bart.vdb","bart.vdb@fonteyn.nl",
+  // Het service-spa-account: alleen Particulier, en ook plannen (Chantal, 8 okt 2026).
+  "servicespa@fonteyn.nl","servicespa","fonteyn.servicespa",
 ]);
 // Dezelfde twee tabs, maar alleen kijken. Inlognamen komen uit de Logic4-
 // gebruikerslijst (/v3/User/GetAllUsers), niet uit een gok op de voornaam:
@@ -4452,6 +4454,10 @@ async function loadSchepen(){
    Zonder force: de worker bewaart het antwoord, dus twee keer openen kost
    niets extra. Lukt het niet, dan blijft alles staan zoals het stond - er
    verdwijnt nooit een datum door deze stap. */
+/* Een ETA die al ruim voorbij is terwijl de container nog onderweg is, hoort
+   bij een oude reis met hetzelfde containernummer (VDK 3386 kreeg 2019).
+   Die nemen we niet over. */
+function etaVerdacht(eta){ const grens=new Date(Date.now()-60*86400000).toISOString().slice(0,10); return !!eta&&String(eta).slice(0,10)<grens; }
 let etaAlGeprobeerd=false;
 async function etaAanvullen(){
   if(etaAlGeprobeerd) return;
@@ -4467,12 +4473,15 @@ async function etaAanvullen(){
       s.track=rec;
       if(!rec.eta) continue;
       if(s.etaHand){ if(s.eta!==rec.eta) afwijkend++; continue; }   // eigen invulling blijft staan
+      if(etaVerdacht(rec.eta)) continue;                             // oude reis met hetzelfde nummer
       if(!s.eta){ s.eta=rec.eta; nieuw++; }
       else if(s.eta!==rec.eta){ s.eta=rec.eta; gewijzigd++; }
     }
     if(nieuw||gewijzigd||afwijkend){
       if(nieuw||gewijzigd){
-        await saveSchepen();
+        /* Alleen tonen, niet wegschrijven: de worker haalt de ETA's elk uur
+           op en schrijft ze per schip weg. Wegschrijven vanaf elk scherm dat
+           opengaat, overschreef de ETA's die iemand anders net invulde. */
         // Partner containers en de reserveringenlijst lezen dezelfde schepen.
         try{ renderPartnerContainers(); }catch(e){}
         try{ renderSoortTabs(); }catch(e){}
@@ -4565,7 +4574,23 @@ function zetSchipDocument(rec,doc){
   rec.documenten.push(doc);
   return rec;
 }
+/* Iemand anders kan intussen een ETA met de hand hebben gezet of een
+   container binnen gemeld. Chantal (8 okt 2026): "Bij deze verdwijnen elke
+   keer de eta's. Ook als ik handmatig aanpas." Dat kwam doordat elk open
+   scherm de hele lijst terugschreef met zijn eigen, oudere stand. Nu eerst
+   de stand van de server lezen en per schip het nieuwste daarvan houden. */
+function schipSleutel(s){ return String((s&&(s.ref||s.trackRef||s.file))||"").replace(/\s+/g," ").trim(); }
 async function saveSchepen(){
+  try{
+    const r0=await fetch(SHIPS_URL+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    const server=r0.ok?await r0.json():null;
+    const perSleutel={}; ((server&&server.ships)||[]).forEach(s=>{ perSleutel[schipSleutel(s)]=s; });
+    for(const s of (shipsData.ships||[])){
+      const v=perSleutel[schipSleutel(s)]; if(!v) continue;
+      if(v.etaHandTs&&(!s.etaHandTs||v.etaHandTs>s.etaHandTs)){ s.eta=v.eta; s.etaHand=v.etaHand; s.etaHandTs=v.etaHandTs; }
+      if(v.binnenGemeld&&!s.binnenGemeld) s.binnenGemeld=v.binnenGemeld;
+    }
+  }catch(e){ /* dan zoals voorheen */ }
   shipsData.updated=new Date().toISOString();
   const r=await fetch(SHIPS_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
     body:JSON.stringify(shipsData)});
@@ -4618,7 +4643,8 @@ async function trackShip(i, force){
   try{
     const j=await trackRefs([ref],force);
     const rec=j.results&&j.results[ref];
-    if(rec){ s.track=rec; if(rec.eta) s.eta=rec.eta; await saveSchepen(); renderSchepen();
+    // Een ETA die je zelf invulde blijft staan; de vervoerder staat er dan als "volgens vervoerder" bij.
+    if(rec){ s.track=rec; if(rec.eta&&!s.etaHand&&!etaVerdacht(rec.eta)) s.eta=rec.eta; await saveSchepen(); renderSchepen();
       setStatus("ok","ETA opgehaald: "+(rec.eta?datumNL(rec.eta):"onbekend")+(rec.vessel?(" · "+rec.vessel):"")); }
     else { s.track={notFound:true}; await saveSchepen(); renderSchepen();
       setStatus("bad","'"+ref+"' is nog onbekend bij de vervoerder."+(j.error?(" ("+j.error+")"):"")); }
@@ -4746,6 +4772,7 @@ function renderSchepen(){
     /* Zelf ingevuld: dat wint van wat de vervoerder zegt. Leeggemaakt betekent
        "doe maar automatisch", dan pakt de vervoerder het weer over. */
     sch.etaHand=!!inp.value;
+    sch.etaHandTs=new Date().toISOString();
     try{ await saveSchepen(); renderSchepen();
       meldSchip("ok",inp.value?"ETA opgeslagen - die blijft nu staan, ook als de vervoerder iets anders zegt."
                               :"ETA leeggemaakt - hij wordt weer bij de vervoerder opgehaald."); }

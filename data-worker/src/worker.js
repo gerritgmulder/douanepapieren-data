@@ -7181,6 +7181,10 @@ async function dpRefreshShipEtas(env) {
     s.track = rec;
     if (!rec.eta) continue;
     if (s.etaHand) { if (s.eta !== rec.eta) afwijkend++; continue; }
+    /* Een ETA van ruim twee maanden terug bij een container die nog onderweg
+       is, is een oude reis met hetzelfde nummer (Chantal, 8 okt 2026: VDK 3386
+       kreeg 2019). Niet overnemen. */
+    if (rec.eta < new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)) continue;
     if (!s.eta) { s.eta = rec.eta; nieuw++; }
     else if (s.eta !== rec.eta) { s.eta = rec.eta; gewijzigd++; }
   }

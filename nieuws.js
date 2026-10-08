@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Een ETA die je zelf invult, blijft staan",
+      wat:   "Vul je bij een schip zelf een ETA in, dan blijft die staan, ook als iemand anders tegelijk Voorraadbeheer open heeft of de vervoerder iets anders zegt. Een datum van de vervoerder die al maanden voorbij is (een oude reis met hetzelfde containernummer) wordt niet meer overgenomen."
+    },
+    {
+      datum: "2026-10-08", bestand: "voorraad.html", soort: "beter",
       titel: "Voorraadbeheer op de telefoon is nu dezelfde als op de pc",
       wat:   "Op de telefoon opent Voorraadbeheer nu dezelfde pagina als op de pc, met alle tabbladen. Tabellen worden op het kleine scherm kaartjes, en elk model klap je open voor de kleuren. Container binnen melden staat als knop bij de schepen. De zoekbalk is breder, en inkooporders die nog besteld moeten worden tellen weer mee als productie."
     },
