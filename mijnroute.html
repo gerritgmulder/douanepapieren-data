@@ -81,6 +81,7 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .stop .sub{font-size:12.5px;color:var(--grijs);margin-top:2px;line-height:1.45}
 .stop .sub a{color:var(--groen)}
 .stop .soort{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle}
+.stop .bel{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0 2px;padding:11px 14px;border-radius:10px;background:var(--groen);color:#fff;font-weight:700;font-size:15px;text-decoration:none}
 .stop .betaal{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:6px;vertical-align:middle}
 .stop .let{background:#fee2e2;border-left:4px solid var(--rood);padding:6px 10px;border-radius:8px;font-size:12.5px;margin-top:8px;font-weight:600}
 .paklijst{margin-top:10px;border:1px solid var(--rand);border-radius:10px;overflow:hidden}
@@ -113,6 +114,14 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .bon{margin-top:8px;border:2px solid var(--groen);border-radius:12px;padding:12px;background:#fff}
 .bon h4{margin:12px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--groen);border-bottom:1px solid var(--rand);padding-bottom:4px}
 .bon h4:first-child{margin-top:0}
+.bon .gel{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0ea;font-size:13px}
+.bon .gel .om{flex:1;min-width:0;overflow-wrap:break-word;word-break:break-word}
+.bon .gel .om small{display:block;color:var(--grijs);font-size:11px}
+.bon .gel .stap{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.bon .gel .stap button{width:36px;height:36px;border-radius:9px;border:1px solid var(--rand);background:#fff;font-size:18px;font-weight:700;color:var(--groen)}
+.bon .gel .stap b{min-width:22px;text-align:center;font-size:15px}
+.bon .gel .van{color:var(--grijs);font-size:11.5px;min-width:44px}
+.bon .gel.minder{background:#fef3c7}
 .bon label{display:block;font-size:11.5px;color:var(--grijs);margin:6px 0 2px}
 .bon input[type=text],.bon input[type=number],.bon textarea{width:100%;padding:8px 10px;border:1px solid var(--rand);border-radius:8px;font:inherit;font-size:14px;background:#fff}
 .bon .rij2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -182,7 +191,20 @@ function datumNL(s){ if(!s) return ""; var p=String(s).slice(0,10).split("-"); r
 var PLANNERS = { "servicespa":"Mike", "spaservice":"Mike", "mike.deboer":"Mike de Boer",
                  "bertjan":"Bert-Jan", "bertjan.kok":"Bert-Jan Kok", "bart.vdb":"Bart",
                  "tim.geerestein":"Tim", "hans.vanputten":"Hans van Putten", "thieme":"Thieme",
-                 "joeri":"Joeri", "dylan":"Dylan", "joey":"Joey", "patrick":"Patrick" };
+                 "joeri":"Joeri", "dylan":"Dylan", "joey":"Joey", "patrick":"Patrick",
+                 "joey.mosterd":"Joey", "joeri.rijkenberg":"Joeri", "dylan.possemis":"Dylan",
+                 "mike.de.boer":"Mike de Boer" };
+/* Het spatype op de bon: het model, niet het merk ("Grizzly Spas | Vancouver
+   Swimspa" is een Vancouver Swimspa), met "+ warmtepomp" als die op de order
+   staat (Kevin, 9 okt 2026). */
+var PL_MERK = /^(passion|devine|melpool|bestway|balboa|[\w\s&-]*\bspas)$/i;
+function spaTypeVan(o, eerste, a){
+  var s = (o && o.ok && o.spaRegel) || (a && a.spaRegel) || (eerste ? eerste.omschrijving : "");
+  var d = String(s||"").split("|").map(function(x){ return x.trim(); }).filter(Boolean);
+  var m = d.length ? ((d.length > 1 && PL_MERK.test(d[0])) ? d[1] : d[0]).split(",")[0].trim() : "";
+  if (m && ((o && o.ok && o.warmtepomp) || (a && a.warmtepomp)) && !/warmtepomp|heat\s*pump/i.test(m)) m += " + warmtepomp";
+  return m;
+}
 function voornaam(wie){
   var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"");
   return lokaal.split(/[.\-_]/).filter(Boolean).map(function(d){ return d.charAt(0).toUpperCase()+d.slice(1).toLowerCase(); }).join(" ");
@@ -192,8 +214,12 @@ function voornaam(wie){
    beheerlaag krijgt bovenin een keuze: alle routes, of de route zoals één
    monteur hem ziet. De keuze wordt onthouden op deze telefoon. */
 var BEHEER = ["dolf", "gerrit", "fonteynbot"].indexOf(ik.split("@")[0].replace(/^fonteyn\./,"")) >= 0;
+/* Plaatsing is een algemeen account waar nieuwe jongens op werken (Kevin,
+   9 okt 2026). Dat account rijdt zelf geen route, dus kiest het bovenin met
+   welke collega het meerijdt, net als de beheerlaag. */
+var KIEZER = BEHEER || ik.split("@")[0].replace(/^fonteyn\./,"").toLowerCase() === "plaatsing";
 var kijkAls = "";     // "" = ikzelf, "*" = alle routes, anders de naam van een monteur
-try { kijkAls = BEHEER ? (localStorage.getItem("fp.route.kijkals") || "*") : ""; } catch(e){}
+try { kijkAls = KIEZER ? (localStorage.getItem("fp.route.kijkals") || "*") : ""; } catch(e){}
 function mijnNaam(){
   if (kijkAls && kijkAls !== "*") return kijkAls;
   var lokaal = ik.split("@")[0].replace(/^fonteyn\./,"");
@@ -204,6 +230,8 @@ function isIk(naam){
   var n = String(naam||"").trim().toLowerCase(), m = mijnNaam().toLowerCase();
   if (!n) return false;
   if (n === m) return true;
+  // "Mike" op het bord is Mike van het service-account; Mike de Boer is een ander.
+  if ((n === "mike") !== (m === "mike")) return false;
   var kort = function(x){ return x.replace(/[\s\-]/g,"").split(/\s/)[0]; };
   return n.split(/\s+/)[0] === m.split(/\s+/)[0] || kort(n) === kort(m);
 }
@@ -283,6 +311,31 @@ function pakRegels(o){
   return uit;
 }
 
+/* Bellen met één tik (Kevin, 9 okt 2026): het nummer van de afspraak, anders
+   dat van de order in Logic4, en bij een ITS-melding dat van de debiteur. */
+var itsKlant = {};
+function telVan(a, o){
+  var t = String(a.telefoon||"").trim();
+  if (!t && o && o.ok) t = String((o.leverenAan||{}).telefoon || (o.besteldDoor||{}).telefoon || "").trim();
+  if (!t && a.itsId && meldingen){
+    var m = meldingen.find(function(x){ return Number(x.id)===Number(a.itsId); });
+    var d = m && m.debiteur ? String(m.debiteur) : "";
+    if (d && itsKlant[d] === undefined){
+      itsKlant[d] = null;
+      lees("/planning/its/klant?debiteur="+encodeURIComponent(d))
+        .then(function(j){ itsKlant[d] = (j && j.klant) || {}; if (itsKlant[d].telefoon) teken(); })
+        .catch(function(){ itsKlant[d] = {}; });
+    }
+    if (d && itsKlant[d]) t = String(itsKlant[d].telefoon||"").trim();
+  }
+  return t;
+}
+function belKnop(t){
+  if (!t) return "";
+  var nr = t.replace(/[^\d+]/g,"");
+  return '<a class="bel" href="tel:'+esc(nr)+'">&#128222; Bel '+esc(t)+'</a>';
+}
+
 function stopHtml(a){
   var c = CATS[a.soort] || CATS.intern;
   var nr = String(a.ordernr||"").trim();
@@ -295,11 +348,11 @@ function stopHtml(a){
       (b && BETAALD[b.stand] ? '<span class="betaal" style="background:'+BETAALD[b.stand]+'" title="'+esc(b.stand)+'"></span>' : '')+'</div>'+
     '<div class="sub">'+
       (a.plaats ? '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a.plaats)+'" target="_blank" rel="noopener">'+esc(a.plaats)+'</a>' : '')+
-      (a.telefoon ? ' &middot; <a href="tel:'+esc(String(a.telefoon).replace(/\s/g,""))+'">'+esc(a.telefoon)+'</a>' : '')+
       (nr ? ' &middot; order '+esc(nr) : '')+(a.itsId ? ' &middot; ITS '+esc(a.itsId) : '')+
     '</div>'+
     (a.wat && !a.itsId ? '<div class="sub">'+esc(a.wat)+'</div>' : '')+
     '</div></div>'+
+    belKnop(telVan(a, o))+
     (a.letop ? '<div class="let">Let op: hier is iets bijzonders nodig (twee man, hijsen, karretje)</div>' : '');
 
   if (nr){
@@ -361,7 +414,7 @@ function bonVan(a, o){
     id: id, datum: a.datum, tijd: a.tijd||"", klant: a.klant||"", plaats: a.plaats||"", telefoon: a.telefoon||"",
     klantMail: (lever.mail || (o && o.ok && (o.besteldDoor||{}).mail) || ""), ordernr: nr, itsId: a.itsId||null,
     monteur: mijnNaam(), monteur2: "", kenteken: "", soort: a.soort==="service" ? "service" : "levering",
-    spaType: ((o && o.ok && o.spaRegel) || (eerste ? eerste.omschrijving : "")).split(/[|,]/)[0].trim(), serienr: "", adviseur: (o && o.ok && o.adviseur) || "",
+    spaType: spaTypeVan(o, eerste, a), serienr: "", adviseur: (o && o.ok && o.adviseur) || "",
     alleenLeveren: !!a.alleenLeveren,
     checklist: {}, betaling: { orderbedrag: b ? b.bedrag : 0, reedsBetaald: b ? b.betaald : 0,
       openstaand: b ? Math.round((b.bedrag - b.betaald)*100)/100 : null, methode: "", bedrag: 0, contantAan: "" },
@@ -409,6 +462,18 @@ function bonBlok(a, o){
       ["ja","nee","nvt"].map(function(x){ return '<button type="button" class="'+x+(ant===x?" aan":"")+'" data-vraag="'+v.k+'" data-a="'+x+'"'+dis+'>'+esc(OPLEVERBON_ANTWOORD[x])+'</button>'; }).join("")+'</span>'+
       (ant && ant!=="ja" ? '<input type="text" class="reden" data-reden="'+v.k+'" placeholder="Reden / extra info (verplicht)" value="'+esc(opm)+'" maxlength="300"'+dis+'>' : '')+'</div>';
   }).join("");
+  /* Wat er echt geleverd is (Kevin, 9 okt 2026): "anders weet ik niet wat er
+     geleverd is en kan ik niet de order afboeken in Logic". Standaard alles
+     wat nog open stond; de monteur zet lager wat er niet is meegegaan. */
+  if (!isService && !bon.geleverd && !slot && o && o.ok)
+    bon.geleverd = pakRegels(o).map(function(x){ return { i: x.i, code: String(x.r.code||""), oms: x.r.omschrijving, besteld: x.aantal, aantal: x.aantal }; });
+  var geleverd = isService ? "" : '<h4>Geleverd</h4>' + (!bon.geleverd
+    ? '<p class="wacht">Orderregels worden opgehaald&hellip;</p>'
+    : bon.geleverd.map(function(g, k){
+        return '<div class="gel'+(g.aantal < g.besteld ? " minder" : "")+'"><span class="om">'+esc(g.oms)+(g.code?'<small>'+esc(g.code)+'</small>':'')+'</span>'+
+          '<span class="stap"><button type="button" data-gel="'+k+'" data-d="-1"'+dis+'>&minus;</button><b>'+esc(g.aantal)+'</b>'+
+          '<button type="button" data-gel="'+k+'" data-d="1"'+dis+'>+</button></span><span class="van">van '+esc(g.besteld)+'</span></div>';
+      }).join(""));
   var bt = bon.betaling;
   var betaling = isService
     ? '<p class="wacht">Het totaal van deze servicebon staat hierboven. Vul in of de klant ter plekke heeft betaald.</p>'
@@ -426,6 +491,7 @@ function bonBlok(a, o){
     '<h4>Spa</h4>'+
     '<div class="rij2"><div><label>Type spa</label><input type="text" data-veld="spaType" value="'+esc(bon.spaType)+'" maxlength="120"'+dis+'></div>'+
     '<div><label>Serienummer</label><input type="text" data-veld="serienr" value="'+esc(bon.serienr)+'" maxlength="60"'+dis+'></div></div>'+
+    geleverd+
     (isService ? serviceVakken(bon, dis) : '<h4>Te doen bij klant</h4>'+vragen)+
     '<h4>Betaling</h4>'+betaling+
     '<label>Bij de klant voldaan</label><div class="segment">'+
@@ -507,6 +573,13 @@ function koppelBon(box){
     if (plus) plus.addEventListener("click", function(){ bon.service.materialen.push({ oms:"", aantal:1, prijs:0 }); wijzig(); teken();
       var l = document.querySelectorAll('[data-bonvak="'+id+'"] [data-mv="oms"]'); if (l.length) l[l.length-1].focus(); });
     vak.querySelectorAll("[data-matweg]").forEach(function(b){ b.addEventListener("click", function(){ bon.service.materialen.splice(+b.dataset.matweg, 1); wijzig(); teken(); }); });
+    vak.querySelectorAll("[data-gel]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var g = (bon.geleverd||[])[+b.dataset.gel]; if (!g) return;
+        g.aantal = Math.max(0, Math.min(g.besteld * 5 || 99, (Number(g.aantal)||0) + Number(b.dataset.d)));
+        wijzig(); teken();
+      });
+    });
     vak.querySelectorAll("[data-vraag]").forEach(function(b){
       b.addEventListener("click", function(){
         var k = b.dataset.vraag; bon.checklist[k] = bon.checklist[k] || { a:"", opm:"" };
@@ -689,7 +762,7 @@ async function start(){
   }catch(e){
     $("fout").innerHTML = '<div class="fout">De planning kon niet worden opgehaald: '+esc(e.message)+'</div>';
   }
-  if (BEHEER){
+  if (KIEZER){
     var sel = $("kijkAls"), namen = {};
     var vandaagK = new Date(); vandaagK.setDate(vandaagK.getDate()-1);
     var vanK = iso(vandaagK);

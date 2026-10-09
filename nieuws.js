@@ -51,6 +51,31 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-09", bestand: "mijnroute.html", soort: "nieuw",
+      titel: "Klant bellen met één tik",
+      wat:   "Bij elke stop staat een grote groene knop om de klant meteen te bellen, ook bij servicemeldingen. In de opleverbon zet je bij Geleverd met min en plus hoeveel er echt is geleverd."
+    },
+    {
+      datum: "2026-10-09", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Zien wat er geleverd is",
+      wat:   "Op de opleverbon staat per regel hoeveel de monteur heeft geleverd, zodat je de order in Logic4 kunt afboeken. Dat staat ook op de bon die de klant krijgt, en de handtekeningen staan nu onderaan in die mail."
+    },
+    {
+      datum: "2026-10-09", bestand: "planning.html", soort: "beter",
+      titel: "Rijtijd per route en de juiste spa",
+      wat:   "In het tijdraster staat onder elke route hoe lang die rijden is, vanuit Uddel en weer terug. Op de kaartjes staat de spa zelf, bijvoorbeeld Vancouver Swimspa, met '+ warmtepomp' als die op de order staat."
+    },
+    {
+      datum: "2026-10-09", bestand: "voorraad.html", soort: "beter",
+      titel: "Op afroep per maand",
+      wat:   "Bij Particulier, Op afroep kies je een of meer maanden. De lijst staat op volgorde van afroep, de vroegste bovenaan."
+    },
+    {
+      datum: "2026-10-09", iedereen: true, soort: "hersteld",
+      titel: "Terug naar het Dashboard op de iPhone",
+      wat:   "Op een iPhone zat de knop Dashboard soms onder de camerarand. Die staat nu altijd binnen bereik."
+    },
+    {
       datum: "2026-10-08", iedereen: true, soort: "beter",
       titel: "Op de telefoon: velden en knoppen passen op het scherm",
       wat:   "Op de telefoon zijn zoek- en filtervelden overal even breed, knoppen die niet naast elkaar passen gaan naar de volgende regel, en in kaartjes krijgen keuzelijsten de volle breedte. Bovenin staat alleen nog wat je nodig hebt. Specificatiesheets past nu ook op het scherm."

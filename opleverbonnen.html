@@ -196,6 +196,9 @@ async function bonDetail(id){
     '<div><span>Monteur</span> '+esc([bon.monteur,bon.monteur2].filter(Boolean).join(" & "))+'</div><div><span>Kenteken</span> '+esc(bon.kenteken||"-")+'</div>'+
     '<div><span>Spa</span> '+esc(bon.spaType||"-")+'</div><div><span>Serienummer</span> '+esc(bon.serienr||"-")+'</div>'+
     '<div><span>Adviseur</span> '+esc(bon.adviseur||"-")+'</div><div><span>Laatst gewijzigd</span> '+esc(String(bon.gewijzigd||"").replace("T"," ").slice(0,16))+' door '+esc(planNaam(bon.door||""))+'</div></div>'+
+    (!isService && (bon.geleverd||[]).length ? '<h4>Geleverd</h4><table class="vr">'+bon.geleverd.map(function(g){
+      return '<tr'+(g.aantal<g.besteld?' style="background:#fef3c7"':'')+'><td style="width:70px"><b>'+esc(g.aantal)+'</b> van '+esc(g.besteld)+'</td><td>'+esc(g.oms)+'</td><td style="width:90px;color:var(--grijs)">'+esc(g.code||"")+'</td></tr>'; }).join("")+'</table>'
+      : !isService && bon.ordernr ? '<h4>Geleverd - volgens de paklijst</h4><div id="bonPak"><p style="font-size:13px;margin:0;color:var(--grijs)">Orderregels worden opgehaald&hellip;</p></div>' : '')+
     (isService ? serviceHtml : bon.alleenLeveren ? '<h4>Te doen bij klant</h4><p><b>Alleen leveren</b> - geen checklist, alleen pakbon en handtekeningen.</p>' : '<h4>Te doen bij klant</h4><table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
       return '<tr><td style="width:45%">'+esc(v.t)+'</td><td class="'+esc(c.a||"")+'" style="width:70px">'+esc(A[c.a]||"-")+'</td><td>'+esc(c.opm||"")+'</td></tr>'; }).join("")+'</table>')+
     '<h4>Betaling</h4><table class="vr">'+
@@ -212,6 +215,22 @@ async function bonDetail(id){
       (bon.status!=="concept"?'<button type="button" id="bonTerugConcept" title="De monteur kan de bon dan weer aanpassen">Terug naar de monteur</button>':'')+
     '</div><div class="bonmelding" id="bonMelding">'+(bon.gemaildTs?'Gemaild op '+esc(String(bon.gemaildTs).replace("T"," ").slice(0,16))+' naar '+esc(bon.gemaildNaar||"")+'.':'')+(bon.akkoordDoor?' Akkoord door '+esc(planNaam(bon.akkoordDoor))+'.':'')+'</div></div>';
   $("bonTerug").addEventListener("click", bonOverzicht);
+  /* Oudere bonnen hebben nog geen lijst Geleverd. Dan het beste wat er is:
+     de orderregels die nog open stonden, met wat er in de loods is gepakt. */
+  if (!isService && !(bon.geleverd||[]).length && bon.ordernr) (async function(){
+    try{
+      var h = { headers:{ "X-Fonteyn-Auth": teamKey() } };
+      var o = ((await (await fetch(W+"/planning/route-print?orders="+encodeURIComponent(bon.ordernr), h)).json()).orders||[])[0];
+      var pk = ((await (await fetch(W+"/data/planning-paklijst", h)).json()) || {}).regels || {};
+      var vak = $("bonPak"); if (!vak) return;
+      if (!o || !o.ok){ vak.innerHTML = '<p style="font-size:13px;margin:0">Order '+esc(bon.ordernr)+' staat even buiten bereik van Logic4.</p>'; return; }
+      vak.innerHTML = '<table class="vr">'+(o.regels||[]).map(function(r, i){
+        if (!r.omschrijving || /^\s*\*\*/.test(r.omschrijving)) return "";
+        var p = pk[bon.ordernr+"|"+i], af = !!(p && p.af);
+        return '<tr><td style="width:70px">'+esc(r.aantal)+'x</td><td>'+esc(r.omschrijving)+'</td><td style="width:90px;color:'+(af?"#15803d":"var(--grijs)")+'">'+(af?"✓ gepakt":"")+'</td></tr>';
+      }).join("")+'</table>';
+    }catch(e){ var v = $("bonPak"); if (v) v.innerHTML = ""; }
+  })();
   var meld = function(t, bad){ var m = $("bonMelding"); m.textContent = t; m.style.color = bad ? "var(--rood)" : "#15803d"; };
   var ak = $("bonAkkoord"); if (ak) ak.addEventListener("click", async function(){ ak.disabled = true; try{ await bonApi("/planning/bon/status", { id: id, status: "akkoord" }); bonDetail(id); }catch(e){ meld(e.message, true); ak.disabled = false; } });
   var tc = $("bonTerugConcept"); if (tc) tc.addEventListener("click", async function(){ if (!confirm("De bon teruggeven aan de monteur? Hij kan hem dan weer aanpassen en moet hem opnieuw afronden.")) return; try{ await bonApi("/planning/bon/status", { id: id, status: "concept" }); bonDetail(id); }catch(e){ meld(e.message, true); } });

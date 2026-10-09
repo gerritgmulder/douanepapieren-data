@@ -3064,6 +3064,7 @@ function sorteerWaarde(r,kolom){
   if(kolom==="naam")     return String(r.naam||"");
   if(kolom==="adviseur") return String(r.adviseur||"zzz");
   if(kolom==="datum")    return String(r.datum||"");
+  if(kolom==="afroep")   return afroepMaand(r)||"9999";
   if(kolom==="transport") return String(transportVan(r)||"zzz");
   if(kolom==="postcode") return String(r.postcode||"zzz");
   if(kolom==="ordernr")  return String(r.ordernr||"");
@@ -3651,6 +3652,27 @@ let partBlokActief="inplannen";
    de tabel wordt elk uur opnieuw opgebouwd en dan wil je niet steeds opnieuw
    klikken. */
 let partBlokSort={kolom:"model",op:1}, partBlokTransport="";
+/* Op afroep: per maand kiezen, vroegste afroep bovenaan (Kevin, video 9 okt
+   2026: "selecteren van welke maandjes we willen hebben en dat die dan op
+   volgorde komt te staan"). De maand staat als vrije tekst in de opmerking
+   ("okt 2026", "afroep maart 2027", "December afroep"); zonder jaartal is het
+   de eerstvolgende keer dat die maand langskomt. Staat er niets, dan telt de
+   leverdatum uit Logic4. */
+let partBlokSortAf={kolom:"afroep",op:1}, partBlokMaanden=new Set();
+const AF_MAAND={jan:1,feb:2,maa:3,mrt:3,apr:4,mei:5,jun:6,jul:7,aug:8,sep:9,okt:10,oct:10,nov:11,dec:12};
+const AF_NAAM=["","jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+function afroepMaand(r){
+  const s=String(notitie(r).opmerking||"").toLowerCase();
+  const m=/\b(jan|feb|maart|mrt|apr|mei|jun|jul|aug|sep|okt|oct|nov|dec)[a-z]*/.exec(s);
+  if(m){
+    const mnd=AF_MAAND[m[1].slice(0,3)]||AF_MAAND[m[1]];
+    const j=/\b(20\d\d)\b/.exec(s.slice(m.index));
+    const nu=new Date(), jaar=j?Number(j[1]):(mnd>=nu.getMonth()+1?nu.getFullYear():nu.getFullYear()+1);
+    return jaar+"-"+String(mnd).padStart(2,"0");
+  }
+  return r.leverdatum?String(r.leverdatum).slice(0,7):"";
+}
+function afroepLabel(ym){ return ym?AF_NAAM[Number(ym.slice(5,7))]+" "+ym.slice(0,4):"geen maand"; }
 function renderParticulierBlok(){
   const tabs=document.getElementById("partBlokTabs"), lijst=document.getElementById("partBlokLijst");
   if(!tabs||!lijst) return;
@@ -3684,17 +3706,33 @@ function renderParticulierBlok(){
         return "<button type='button' class='partTransKnop' data-t='"+esc(t)+"' style='font:inherit;font-size:12px;padding:3px 10px;border-radius:999px;cursor:pointer;border:1px solid "+(aan?"#144734":"var(--border)")+";background:"+(aan?"#144734":"#fff")+";color:"+(aan?"#fff":"var(--ink)")+"'>"+esc(t)+" ("+vervoerders[t]+")</button>";
       }).join("")+"</span>"
     : "";
-  const rijen=partBlokTransport?alleRijen.filter(function(r){ return (kortTransport(transportVan(r)||"")||"(geen)")===partBlokTransport; }):alleRijen;
+  let maandHtml="";
+  if(partBlokActief==="afroep"){
+    const telM={};
+    alleRijen.forEach(function(r){ const ym=afroepMaand(r); telM[ym]=(telM[ym]||0)+1; });
+    partBlokMaanden.forEach(function(ym){ if(!telM[ym]) partBlokMaanden.delete(ym); });
+    const knop=function(ym,tekst,aan){
+      return "<button type='button' class='partMaandKnop' data-m='"+esc(ym)+"' style='font:inherit;font-size:12px;padding:4px 11px;border-radius:999px;cursor:pointer;border:1px solid "+(aan?"#6d28d9":"var(--border)")+";background:"+(aan?"#6d28d9":"#fff")+";color:"+(aan?"#fff":"var(--ink)")+"'>"+esc(tekst)+"</button>";
+    };
+    maandHtml="<div class='partMaanden' style='display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;font-size:12px'><span style='color:var(--muted)'>Maand:</span>"+
+      knop("*","Alle ("+alleRijen.length+")",!partBlokMaanden.size)+
+      Object.keys(telM).sort(function(a,b){ return (a||"9999").localeCompare(b||"9999"); }).map(function(ym){
+        return knop(ym,afroepLabel(ym)+" ("+telM[ym]+")",partBlokMaanden.has(ym));
+      }).join("")+"</div>";
+  }
+  const rijen=(partBlokTransport?alleRijen.filter(function(r){ return (kortTransport(transportVan(r)||"")||"(geen)")===partBlokTransport; }):alleRijen)
+    .filter(function(r){ return partBlokActief!=="afroep"||!partBlokMaanden.size||partBlokMaanden.has(afroepMaand(r)); });
   if(!rijen.length){
-    lijst.innerHTML=filterHtml+"<p class='lead'>Deze lijst is nog leeg. Vink hierboven <b>"+
+    lijst.innerHTML=maandHtml+filterHtml+"<p class='lead'>Deze lijst is nog leeg. Vink hierboven <b>"+
       (partBlokActief==="afroep"?"Afroep":"Inplannen")+"</b> aan bij een reservering.</p>";
   }else{
+    const srt=partBlokActief==="afroep"?partBlokSortAf:partBlokSort;
     rijen.sort(function(a,b){
       // Inplannen spoed altijd bovenaan (Kevin, 5 okt 2026).
       const sa=notitie(a).spoed?0:1, sb=notitie(b).spoed?0:1;
       if(sa!==sb) return sa-sb;
-      const va=sorteerWaarde(a,partBlokSort.kolom), vb=sorteerWaarde(b,partBlokSort.kolom);
-      return (va.localeCompare(vb,"nl",{numeric:true})||String(a.ordernr).localeCompare(String(b.ordernr)))*(partBlokSort.op||1);
+      const va=sorteerWaarde(a,srt.kolom), vb=sorteerWaarde(b,srt.kolom);
+      return (va.localeCompare(vb,"nl",{numeric:true})||String(a.ordernr).localeCompare(String(b.ordernr)))*(srt.op||1);
     });
     const uit=!MAG_WIJZIGEN?" disabled":"";
     /* Kolom Transport tussen Order en Spa. Chantal (video, 25 aug 2026):
@@ -3718,16 +3756,16 @@ function renderParticulierBlok(){
     };
     const KOL=8;
     const kop=function(kolom,tekst){
-      const actief=partBlokSort.kolom===kolom;
+      const actief=srt.kolom===kolom;
       return "<th class='partBlokKop' data-kolom='"+kolom+"' style='cursor:pointer;white-space:nowrap' title='Klik om te sorteren'>"+esc(tekst)+
-        (actief?(partBlokSort.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
+        (actief?(srt.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
     };
     // Zelfde vaste kolommen als de lijst erboven, zodat kleur en klant ook
     // hier helemaal te lezen zijn en de twee lijsten hetzelfde ogen.
-    lijst.innerHTML=filterHtml+"<div class='tablewrap'><table class='grid resv'><colgroup>"+
+    lijst.innerHTML=maandHtml+filterHtml+"<div class='tablewrap'><table class='grid resv'><colgroup>"+
       "<col style='width:78px'><col style='width:11%'><col style='width:14%'><col style='width:22%'><col style='width:46px'>"+
       "<col style='width:18%'><col style='width:15%'><col style='width:84px'></colgroup><thead><tr>"+
-      kop("ordernr","Order")+kop("transport","Transport")+kop("model","Spa")+kop("kleur","Kleur")+kop("qty","Aantal")+kop("naam","Klant")+kop("postcode","Postcode")+kop("datum","Datum")+
+      kop("ordernr","Order")+kop("transport","Transport")+kop("model","Spa")+kop("kleur","Kleur")+kop("qty","Aantal")+kop("naam","Klant")+kop("postcode","Postcode")+(partBlokActief==="afroep"?kop("afroep","Afroep"):kop("datum","Datum"))+
       "</tr></thead><tbody>"+
       rijen.map(function(r){
         const n=notitie(r), id=esc(r.regelId||"");
@@ -3743,7 +3781,9 @@ function renderParticulierBlok(){
           "<td>"+spaCel(r)+"</td><td>"+kleurCel(r.kleur,r,true)+"</td>"+
           "<td class='mid'>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px' title='"+esc(r.plaats||"")+"'>"+(r.postcode?esc(r.postcode)+(r.plaats?" <span style='color:var(--muted)'>"+esc(r.plaats)+"</span>":""):"<span style='color:var(--muted)'>-</span>")+"</td>"+
-          "<td class='dat'>"+esc(datumNL(r.datum))+"</td>"+
+          (partBlokActief==="afroep"
+            ? "<td class='dat' style='font-weight:700;color:#6d28d9'>"+esc(afroepMaand(r)?afroepLabel(afroepMaand(r)):"-")+"</td>"
+            : "<td class='dat'>"+esc(datumNL(r.datum))+"</td>")+
           "</tr>"+
           "<tr class='subrij' style='"+stijl+"'><td colspan='"+KOL+"'>"+
             "<div class='subwerk'>"+
@@ -3764,11 +3804,20 @@ function renderParticulierBlok(){
     lijst.querySelectorAll(".partBlokKop").forEach(function(th){
       th.addEventListener("click",function(){
         const k=th.dataset.kolom;
-        if(partBlokSort.kolom===k) partBlokSort.op=-partBlokSort.op; else partBlokSort={kolom:k,op:1};
+        if(partBlokActief==="afroep"){ if(partBlokSortAf.kolom===k) partBlokSortAf.op=-partBlokSortAf.op; else partBlokSortAf={kolom:k,op:1}; }
+        else if(partBlokSort.kolom===k) partBlokSort.op=-partBlokSort.op; else partBlokSort={kolom:k,op:1};
         renderParticulierBlok();
       });
     });
   }
+  lijst.querySelectorAll(".partMaandKnop").forEach(function(b){
+    b.addEventListener("click",function(){
+      const ym=b.dataset.m;
+      if(ym==="*") partBlokMaanden.clear();
+      else if(partBlokMaanden.has(ym)) partBlokMaanden.delete(ym); else partBlokMaanden.add(ym);
+      renderParticulierBlok();
+    });
+  });
   lijst.querySelectorAll(".partTransKnop").forEach(function(b){
     b.addEventListener("click",function(){ partBlokTransport=(partBlokTransport===b.dataset.t)?"":b.dataset.t; renderParticulierBlok(); });
   });

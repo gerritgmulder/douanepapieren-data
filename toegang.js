@@ -284,11 +284,13 @@
       // Extern, alleen kijken: Christiaan (Duitse vestiging, 27 sep 2026)
       "christiaan",
       // Service (alleen kijken)
-      "patrick", "hans.vanputten", "thieme", 
-      // Plaatsing (alleen kijken)
+      "patrick",
+      // Plaatsing (alleen kijken). Nieuwe Logic4-accounts (Kevin, 9 okt 2026):
+      // Joey.Mosterd, Joeri.Rijkenberg, Dylan.Possemis, Mike.de.Boer en het
+      // algemene account Plaatsing, waar nieuwe jongens op werken. Thieme
+      // Wennink, Patrick Kroes en Hans van Putten bewust niet (Kevin).
       // bertjan.kok is dezelfde persoon als bertjan (Gerrit, 12 sep 2026).
-      // Michael Berghorst, Mike de Boer en Wouter Vedder eruit (Gerrit, 14 sep 2026).
-      "joeri", "dylan", "joey",
+      "dylan.possemis", "joeri.rijkenberg", "joey.mosterd", "mike.de.boer", "plaatsing",
     ],
     /* Wijzigen doen Kevin en Gerwin (Gerrit, 7 sep 2026: "alleen Kevin en
        Gerwin moeten bewerkingsrechten hebben"). De rest van de afdeling -

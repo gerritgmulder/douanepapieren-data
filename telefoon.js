@@ -35,8 +35,15 @@
      verkleint alles (Amerika had er geen). Dan zetten we hem er zelf in. */
   if (!doc.querySelector("meta[name=viewport]")) {
     var vp = doc.createElement("meta");
-    vp.name = "viewport"; vp.content = "width=device-width, initial-scale=1";
+    vp.name = "viewport"; vp.content = "width=device-width, initial-scale=1, viewport-fit=cover";
     (doc.head || doc.documentElement).appendChild(vp);
+  } else {
+    /* Het telefoondashboard draait als app op het beginscherm, met de
+       statusbalk over de pagina heen. Zonder viewport-fit=cover weet de
+       pagina niet hoe hoog de camerarand is (Kevin, 9 okt 2026: de knop
+       Dashboard zat eronder en was onbereikbaar). */
+    var vpb = doc.querySelector("meta[name=viewport]");
+    if (!/viewport-fit/.test(vpb.content || "")) vpb.content = (vpb.content ? vpb.content + ", " : "") + "viewport-fit=cover";
   }
   var SMAL = global.matchMedia ? global.matchMedia("(max-width: 700px)") : { matches: false, addListener: function(){} };
   function zetStand() { doc.documentElement.classList.toggle("fp-tel", !!SMAL.matches); }
@@ -212,9 +219,27 @@
 
   /* De kop: wie er is ingelogd staat al op het telefoondashboard, en Demo is
      voor een presentatie op de pc. */
+  /* Hoe hoog de camerarand en statusbalk zijn (0 op een gewone browser). */
+  var randHoogte = null;
+  function rand() {
+    if (randHoogte !== null) return randHoogte;
+    var p = doc.createElement("div");
+    p.style.cssText = "position:fixed;top:0;left:0;height:0;visibility:hidden;padding-top:env(safe-area-inset-top)";
+    doc.body.appendChild(p);
+    randHoogte = parseFloat(getComputedStyle(p).paddingTop) || 0;
+    p.remove();
+    return randHoogte;
+  }
   function regelKop() {
     var kop = doc.querySelector("header");
     if (!kop) return;
+    // De kop onder de camerarand vandaan, tenzij de tegel dat zelf al regelt.
+    var r = rand();
+    if (r > 0 && !kop.dataset.fpRand && kop.getBoundingClientRect().top < r) {
+      var pt = parseFloat(getComputedStyle(kop).paddingTop) || 0;
+      if (pt < r) kop.style.paddingTop = (pt + r) + "px";
+      kop.dataset.fpRand = "1";
+    }
     kop.querySelectorAll("#userEmail, .user-chip, .fp-kop-wie, #wie, #gebruiker").forEach(function (e) {
       var doel = e.id === "userEmail" && e.parentElement && e.parentElement !== kop && !e.parentElement.querySelector("button") ? e.parentElement : e;
       if (!doel.classList.contains("fp-tel-weg")) doel.classList.add("fp-tel-weg");

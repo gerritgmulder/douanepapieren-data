@@ -7327,6 +7327,140 @@ async function dpControleerGeannuleerd(env, ledgerOrders) {
      routenummer. Gerrit: "2 staat voor route 2. Ze doen vaak 3 routes op een
      dag, dus ze noemen ze gewoon 1, 2 en 3." De naam van wie er rijdt komt
      uit de planning en staat er automatisch bij. */
+/* Rijtijd per route (Kevin, 9 okt 2026): "onder de routes moet komen te
+   staan hoelang de route rijden is", zodat de planners zien of er nog een
+   stop bij past. Vanuit Uddel langs de stops in volgorde van tijd en weer
+   terug. Adressen zoeken via OpenStreetMap (Nominatim), de rijtijd via OSRM;
+   allebei gratis. Alles wordt bewaard (D1: geo_cache en rijtijd_cache), zodat
+   een adres en een route maar één keer worden opgezocht. Nominatim wil
+   hooguit één vraag per seconde, dus per aanroep maximaal 8 nieuwe adressen;
+   wat dan nog open is komt bij de volgende aanroep. */
+const RIJ_START = "Meervelderweg 52, 3888 NK Uddel, Nederland";
+function rijNorm(a) { return String(a || "").toLowerCase().replace(/\s+/g, " ").replace(/\s*,\s*/g, ", ").trim().slice(0, 200); }
+async function rijtijdHandle(request, env) {
+  const b = await request.json().catch(() => ({}));
+  const routes = (Array.isArray(b.routes) ? b.routes : []).slice(0, 60)
+    .map(r => ({ k: String(r && r.k || "").slice(0, 40), adressen: (Array.isArray(r && r.adressen) ? r.adressen : []).map(String).filter(x => x.trim()).slice(0, 14) }))
+    .filter(r => r.k && r.adressen.length);
+  /* Bewaard in D1 (tabellen geo_cache en rijtijd_cache), niet in KV: KV laat
+     een net geschreven waarde soms een minuut op zich wachten, en dan zochten
+     twee rondes vlak na elkaar dezelfde adressen opnieuw op. */
+  const db = env.ACTIVITEIT;
+  const geo = {};
+  const alle = [RIJ_START, ...new Set(routes.flatMap(r => r.adressen))].map(rijNorm);
+  for (let i = 0; i < alle.length; i += 90) {
+    const stuk = alle.slice(i, i + 90);
+    const rs = await db.prepare("SELECT adres, lat, lon FROM geo_cache WHERE adres IN (" + stuk.map((_, j) => "?" + (j + 1)).join(",") + ")").bind(...stuk).all();
+    for (const x of (rs.results || [])) geo[x.adres] = x.lat == null ? null : [x.lat, x.lon];
+  }
+  let nieuweGeo = 0;
+  const zoek = async (q) => {
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=nl,be,de,lu,fr&q=" + encodeURIComponent(q),
+      { headers: { "User-Agent": "Fonteyn-Dashboard/1.0 (planning rijtijd)" } });
+    const l = r.ok ? await r.json().catch(() => []) : [];
+    return (Array.isArray(l) && l[0]) ? [Number(l[0].lat), Number(l[0].lon)] : null;
+  };
+  const plek = async (adres) => {
+    const k = rijNorm(adres);
+    if (geo[k] !== undefined) return geo[k];
+    if (nieuweGeo >= 8) return undefined;          // volgende keer
+    const delen = adres.split(",").map(x => x.trim()).filter(Boolean);
+    const pogingen = [adres, delen.slice(1).join(", "), delen[delen.length - 1]].filter((x, i, a) => x && a.indexOf(x) === i);
+    let p = null;
+    for (const q of pogingen) {
+      if (nieuweGeo) await new Promise(r => setTimeout(r, 1100));
+      nieuweGeo++;
+      p = await zoek(q).catch(() => null);
+      if (p || nieuweGeo >= 8) break;
+    }
+    geo[k] = p;
+    await db.prepare("INSERT OR REPLACE INTO geo_cache (adres, lat, lon, ts) VALUES (?1, ?2, ?3, ?4)")
+      .bind(k, p ? p[0] : null, p ? p[1] : null, Date.now()).run();
+    return p;
+  };
+  const uit = {};
+  const start = await plek(RIJ_START);
+  for (const r of routes) {
+    if (!start) { uit[r.k] = { bezig: true }; continue; }
+    const punten = [start];
+    let wacht = false, onbekend = 0;
+    for (const a of r.adressen) {
+      const p = await plek(a);
+      if (p === undefined) { wacht = true; break; }
+      if (p) punten.push(p); else onbekend++;
+    }
+    if (wacht) { uit[r.k] = { bezig: true }; continue; }
+    if (punten.length < 2) { uit[r.k] = { onbekend }; continue; }
+    punten.push(start);
+    const sleutel = punten.map(p => p[1].toFixed(4) + "," + p[0].toFixed(4)).join(";");
+    let res = await db.prepare("SELECT min, km FROM rijtijd_cache WHERE sleutel = ?1").bind(sleutel).first();
+    if (!res) {
+      const o = await fetch("https://router.project-osrm.org/route/v1/driving/" + sleutel + "?overview=false",
+        { headers: { "User-Agent": "Fonteyn-Dashboard/1.0" } }).then(x => x.ok ? x.json() : null).catch(() => null);
+      const route = o && o.routes && o.routes[0];
+      if (!route) { uit[r.k] = { bezig: true }; continue; }
+      res = { min: Math.round(route.duration / 60), km: Math.round(route.distance / 1000) };
+      await db.prepare("INSERT OR REPLACE INTO rijtijd_cache (sleutel, min, km, ts) VALUES (?1, ?2, ?3, ?4)").bind(sleutel, res.min, res.km, Date.now()).run();
+    }
+    uit[r.k] = { min: res.min, km: res.km, onbekend };
+  }
+  return reply(200, { ok: true, routes: uit });
+}
+
+/* Planning aanvullen uit Logic4 (Kevin, 9 okt 2026). Op de kaartjes in het
+   tijdraster stond alleen het merk ("Grizzly Spas") en de warmtepomp ontbrak,
+   ook bij afspraken die al lang voor de "+ warmtepomp" waren gemaakt. Per
+   ingeplande order halen we daarom het spamodel en of er een warmtepomp op de
+   order staat, en zetten dat bij de afspraak: spaModel, warmtepomp, verrijkt.
+   Een handvol orders per keer (de cron op :15 en POST /planning/verrijk), en
+   pas op het laatst de verse planning lezen en wegschrijven, zodat een
+   wijziging van de afdeling in de tussentijd blijft staan. */
+const PL_MERK = /^(passion|devine|melpool|bestway|balboa|[\w\s&-]*\bspas)$/i;
+function plModelUitRegel(s) {
+  const d = String(s || "").split("|").map(x => x.trim()).filter(Boolean);
+  if (!d.length) return "";
+  return (d.length > 1 && PL_MERK.test(d[0])) ? d[1] : d[0];
+}
+async function planningVerrijk(env, max) {
+  const plan0 = (await env.FONTEYN_DATA.get("planning", { type: "json" })) || {};
+  const gisteren = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const oud = Date.now() - 2 * 86400000;
+  const nrs = [];
+  for (const a of (plan0.afspraken || [])) {
+    const nr = String(a.ordernr || "").trim();
+    if (!/^\d{5,9}$/.test(nr) || String(a.datum || "") < gisteren) continue;
+    if (a.verrijkt && Date.parse(a.verrijkt) > oud) continue;
+    if (!nrs.includes(nr)) nrs.push(nr);
+    if (nrs.length >= (max || 12)) break;
+  }
+  if (!nrs.length) return { ok: true, bijgewerkt: 0, open: 0 };
+  const res = await planningRoutePrint(env, new URL("https://x/?orders=" + nrs.join(",")));
+  const j = await res.json().catch(() => ({}));
+  const info = {};
+  for (const o of (j.orders || [])) if (o && o.ok) info[String(o.nr)] = {
+    spaModel: plModelUitRegel(o.spaRegel), spaRegel: o.spaRegel || "", warmtepomp: !!o.warmtepomp,
+  };
+  const plan = (await env.FONTEYN_DATA.get("planning", { type: "json" })) || {};
+  const nu = new Date().toISOString();
+  let n = 0;
+  for (const a of (plan.afspraken || [])) {
+    const nr = String(a.ordernr || "").trim();
+    if (!nrs.includes(nr)) continue;
+    const i = info[nr];
+    a.verrijkt = nu;
+    if (!i) continue;
+    a.spaModel = i.spaModel || "";
+    a.spaRegel = i.spaRegel;
+    a.warmtepomp = i.warmtepomp;
+    n++;
+  }
+  // Alleen schrijven als er echt iets bij is gekomen: elke schrijfbeurt is
+  // een kans om een wijziging van de afdeling van net te overschrijven.
+  if (n || nrs.length) await env.FONTEYN_DATA.put("planning", JSON.stringify(plan));
+  const open = (plan.afspraken || []).filter(a => /^\d{5,9}$/.test(String(a.ordernr || "").trim()) && String(a.datum || "") >= gisteren && !a.verrijkt).length;
+  return { ok: true, bijgewerkt: n, orders: nrs.length, open };
+}
+
 async function planningRoutePrint(env, url) {
   const nrs = String(url.searchParams.get("orders") || "")
     .split(",").map(x => x.trim()).filter(x => /^\d{3,12}$/.test(x));
@@ -7504,6 +7638,11 @@ function bonSchoon(b, wie) {
       bedrag: Number(bt.bedrag) || 0, contantAan: ["monteur", "kantoor"].includes(bt.contantAan) ? bt.contantAan : "",
     },
     opmerking: s(b.opmerking, 1000),
+    /* Wat de monteur echt heeft geleverd (Kevin, 9 okt 2026), om de order in
+       Logic4 te kunnen afboeken en voor de klant op de bon. */
+    geleverd: Array.isArray(b.geleverd) ? b.geleverd.slice(0, 80).map(g => ({
+      code: s(g && g.code, 30), oms: s(g && g.oms, 160),
+      besteld: Math.max(0, Number(g && g.besteld) || 0), aantal: Math.max(0, Number(g && g.aantal) || 0) })) : null,
     /* Servicebon (Kevin, 18 sep 2026): vier vakken in plaats van de checklist. */
     service: (() => {
       const sv = b.service || {};
@@ -7589,9 +7728,12 @@ async function bonHandle(request, env, url) {
     if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
     const html = bonHtml(bon, Array.isArray(b.vragen) ? b.vragen : []);
     const adres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
+    /* De handtekeningen onderaan in de mail zelf, niet als losse bijlage
+       (Kevin, 9 okt 2026). Ingebed via content_id; de mail verwijst er met
+       cid: naar. */
     const bijlagen = [];
-    for (const [naam, d] of [["handtekening-monteur.png", bon.handtekeningMonteur], ["handtekening-klant.png", bon.handtekeningKlant]])
-      if (d) bijlagen.push({ filename: naam, content: d.split(",")[1] });
+    for (const [naam, cid, d] of [["handtekening-monteur.png", "hand-monteur", bon.handtekeningMonteur], ["handtekening-klant.png", "hand-klant", bon.handtekeningKlant]])
+      if (d) bijlagen.push({ filename: naam, content: d.split(",")[1], content_id: cid, content_type: "image/png" });
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -7662,11 +7804,18 @@ function bonHtml(bon, vragen) {
     (bon.serienr ? "<tr><td style='padding:3px 8px;color:#6b7280'>Serienummer</td><td style='padding:3px 8px'>" + e(bon.serienr) + "</td></tr>" : "") +
     (bon.plaats ? "<tr><td style='padding:3px 8px;color:#6b7280'>Adres</td><td style='padding:3px 8px'>" + e(bon.plaats) + "</td></tr>" : "") +
     "</table>" +
+    (!isService && (bon.geleverd || []).length ? "<h3 style='color:#144734;margin:18px 0 6px'>Geleverd</h3><table style='border-collapse:collapse;font-size:13px;width:100%'>" +
+      bon.geleverd.map(g => "<tr><td " + td + " width='48'><b>" + e(g.aantal) + "x</b></td><td " + td + ">" + e(g.oms) +
+        (g.aantal < g.besteld ? " <span style='color:#b45309'>(besteld " + e(g.besteld) + ", rest volgt)</span>" : "") + "</td></tr>").join("") + "</table>" : "") +
     (isService ? serviceBlok : "<h3 style='color:#144734;margin:18px 0 6px'>Gedaan bij u thuis</h3>" +
     "<table style='border-collapse:collapse;font-size:13px;width:100%'>" + rijen + "</table>") +
     betaling +
     (bon.opmerking ? "<h3 style='color:#144734;margin:18px 0 6px'>Opmerkingen</h3><p style='font-size:13px;white-space:pre-line'>" + e(bon.opmerking) + "</p>" : "") +
-    "<p style='font-size:12px;color:#6b7280;margin-top:18px'>De handtekeningen van de monteur en van u zitten als bijlage bij deze mail.</p>" +
+    ((bon.handtekeningMonteur && !isService) || bon.handtekeningKlant
+      ? "<h3 style='color:#144734;margin:18px 0 6px'>Handtekeningen</h3><table style='border-collapse:collapse;font-size:12px'><tr>" +
+        (bon.handtekeningMonteur && !isService ? "<td style='padding:4px 18px 4px 0;vertical-align:top'><div style='color:#6b7280'>Monteur" + (bon.monteur ? " (" + e(bon.monteur) + ")" : "") + "</div><img src='cid:hand-monteur' alt='handtekening monteur' width='220' style='display:block;border:1px solid #e5e7eb;border-radius:6px;max-width:220px'></td>" : "") +
+        (bon.handtekeningKlant ? "<td style='padding:4px 0;vertical-align:top'><div style='color:#6b7280'>Klant" + (bon.klantNaamHandtekening ? " (" + e(bon.klantNaamHandtekening) + ")" : "") + "</div><img src='cid:hand-klant' alt='handtekening klant' width='220' style='display:block;border:1px solid #e5e7eb;border-radius:6px;max-width:220px'></td>" : "") +
+        "</tr></table>" : "") +
     "<p style='font-size:14px'>Veel plezier met uw spa!<br>Fonteyn Bezorgservice</p></div>";
 }
 
@@ -8967,6 +9116,7 @@ async function berichtenHandle(request, env, url) {
 
 /* De ronde: elk uur, na de reserveringen (die leveren de partnercontainers). */
 async function berichtenRonde(env) {
+  await planningVerrijk(env, 12).catch(() => null);
   const d = await berichtenLees(env);
   let nieuw = 0;
   const vandaag = pcVandaag();
@@ -17626,6 +17776,14 @@ const FP_WORKER = {
       return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     /* DHL stuurt hierheen (Push API v2); geen teamsleutel maar de push-sleutel. */
+  if (url.pathname === "/planning/rijtijd" && request.method === "POST") {
+    if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+    return rijtijdHandle(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+  }
+  if (url.pathname === "/planning/verrijk" && request.method === "POST") {
+    if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+    return reply(200, await planningVerrijk(env, 12).catch(e => ({ ok: false, error: String(e.message || e) })));
+  }
   if (url.pathname === "/dhl/push" && request.method === "POST") return dhlPushOntvang(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
   if (url.pathname === "/dhl/push" && request.method === "GET") {
     if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });

@@ -117,6 +117,7 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .routekop:first-child{border-left:0}
 .routekop .rnr{display:inline-block;background:var(--groen);color:#fff;border-radius:4px;padding:0 4px;font-weight:700;font-size:9.5px;margin-right:3px}
 .routekop .rwie{color:var(--grijs);white-space:nowrap}
+.routekop .rtijd{display:block;color:var(--groen);font-weight:700;white-space:nowrap}
 .routekol{position:absolute;top:0;bottom:0}
 /* De balken van hele dagen. Zelfde kolomindeling als het raster eronder,
    zodat een balk precies boven zijn dagen staat; een balk over drie dagen
@@ -711,13 +712,15 @@ var PLANNERS = { "servicespa":"Mike", "spaservice":"Mike", "mike.deboer":"Mike d
                  "bart.vdb":"Bart", "tim.geerestein":"Tim", "fonteynbot":"Fonteynbot",
                  "hans.vanputten":"Hans van Putten", "michael.berghorst":"Michael Berghorst",
                  "wouter.vedder":"Wouter Vedder", "thieme":"Thieme", "joeri":"Joeri",
-                 "dylan":"Dylan", "joey":"Joey", "patrick":"Patrick" };
+                 "dylan":"Dylan", "joey":"Joey", "patrick":"Patrick",
+                 "joey.mosterd":"Joey", "joeri.rijkenberg":"Joeri", "dylan.possemis":"Dylan",
+                 "mike.de.boer":"Mike de Boer" };
 
 /* Wie er niet in de keuzelijst hoort. Ze mogen de planning wél zien - Chantal
    en Arno kijken mee, Dolf en Gerrit zitten overal bij - maar ze rijden geen
    route, en dan hoort hun naam ook niet in dat menu te staan. */
 var NIET_OP_DE_WEG = ["gerrit","dolf","chantal","arno","don","fonteyn.don","maartens",
-                      "fonteynbot","nomi","gretha","osman","manon","reinier.k"];
+                      "fonteynbot","nomi","gretha","osman","manon","reinier.k","plaatsing"];
 function planNaam(wie){
   var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"").toLowerCase();
   return PLANNERS[lokaal] || voornaam(wie);
@@ -763,9 +766,65 @@ function stadUit(plaats){
   if (!laatste && d.length>1) laatste = d[d.length-2].replace(/\b\d{4}\s?[A-Za-z]{2}\b/g,"").trim();
   return laatste;
 }
+/* Logic4 schrijft soms eerst het merk: "Grizzly Spas | Vancouver Swimspa |
+   kleur". Dan is het tweede stuk de spa (Kevin, 9 okt 2026: op het kaartje
+   stond alleen "Grizzly Spas"). De worker zet spaModel en warmtepomp er per
+   order bij uit Logic4; staat er een warmtepomp op de order, dan komt er
+   "+ warmtepomp" achter. */
+var PL_MERK = /^(passion|devine|melpool|bestway|balboa|[\w\s&-]*\bspas)$/i;
+function modelUitRegel(s){
+  var d = String(s||"").split(/[|\n]/).map(function(x){ return x.trim(); }).filter(Boolean);
+  if (!d.length) return "";
+  var m = (d.length > 1 && PL_MERK.test(d[0])) ? d[1] : d[0];
+  return m.split(",")[0].trim();
+}
 function spaNaam(a){
-  if (a.model) return String(a.model).trim();
-  return String(a.wat||"").split(/[,\n|]/)[0].trim();
+  var m = String(a.spaModel || a.model || modelUitRegel(a.wat)).trim();
+  var wp = a.warmtepomp || /warmtepomp|heat\s*pump/i.test(String(a.wat||""));
+  if (m && wp && !/warmtepomp|heat\s*pump/i.test(m)) m += " + warmtepomp";
+  return m;
+}
+
+/* Rijtijd onder elke route in het tijdraster (Kevin, 9 okt 2026): vanuit
+   Uddel langs de stops en terug, berekend door de worker (gratis
+   kaartdiensten, alles bewaard). Een nieuw adres zoekt de worker even op;
+   dan komt de tijd een paar seconden later. */
+var rijCache = {};
+function rijTekst(x){
+  if (!x || x.min == null) return "";
+  var u = Math.floor(x.min/60), m = x.min%60;
+  return "\ud83d\ude97 "+(u ? u+"u"+String(m).padStart(2,"0") : m+" min")+" \u00b7 "+x.km+" km"+(x.onbekend ? " *" : "");
+}
+async function rijtijdVullen(rtAdressen, poging){
+  var vraag = [], sleutelVan = {};
+  Object.keys(rtAdressen).forEach(function(k){
+    var adr = rtAdressen[k]; if (!adr.length) return;
+    var s = adr.join(" > ");
+    sleutelVan[k] = s;
+    if (!rijCache[s]) vraag.push({ k: k, adressen: adr });
+  });
+  var zet = function(){
+    document.querySelectorAll("[data-rt]").forEach(function(el){
+      var x = rijCache[sleutelVan[el.dataset.rt]];
+      var tx = rijTekst(x);
+      if (el.textContent !== tx) el.textContent = tx;
+      el.title = x && x.onbekend ? x.onbekend+" adres(sen) nog zonder plek op de kaart; de tijd is berekend zonder die stops" : (tx ? "Rijtijd vanuit Uddel langs de stops en terug" : "");
+    });
+  };
+  zet();
+  if (!vraag.length) return;
+  try{
+    var r = await fetch(W+"/planning/rijtijd", { method:"POST", headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ routes: vraag }) });
+    var j = await r.json().catch(function(){ return null; });
+    var nogBezig = false;
+    vraag.forEach(function(v){
+      var x = j && j.routes && j.routes[v.k];
+      if (x && x.min != null) rijCache[sleutelVan[v.k]] = x; else if (x && x.bezig) nogBezig = true;
+    });
+    zet();
+    if (nogBezig && poging < 6) setTimeout(function(){ rijtijdVullen(rtAdressen, poging+1); }, 4000);
+  }catch(e){}
 }
 
 /* ── opslag ── */
@@ -1080,7 +1139,8 @@ function teken(){
     var routes = routesVan(w.iso);
     routeHtml += '<div class="routekop-cel'+(di>=5?" weekend":(di%2?" oneven":" even"))+'">'+routes.map(function(r){
       var namen = rijdersVan(r).join(" & ");
-      return '<div class="routekop"><span class="rnr">R'+r.nr+'</span>'+(namen?'<span class="rwie">'+esc(namen)+'</span>':'')+'</div>';
+      return '<div class="routekop"><span class="rnr">R'+r.nr+'</span>'+(namen?'<span class="rwie">'+esc(namen)+'</span>':'')+
+        '<span class="rtijd" data-rt="'+w.iso+'|'+r.nr+'"></span></div>';
     }).join("")+'</div>';
   });
 
@@ -1093,7 +1153,7 @@ function teken(){
     html += '<div class="uur-label" style="position:absolute;right:0;top:'+((u-UUR_VAN)*UUR_PX)+'px;width:100%">'+String(u).padStart(2,"0")+'</div>';
   html += '</div>';
 
-  var maxRoutes = 1;
+  var maxRoutes = 1, rtAdressen = {};
   week.forEach(function(w,di){
     var isWeekend = di>=5;
     var routes = routesVan(w.iso);
@@ -1114,6 +1174,8 @@ function teken(){
         var rn = Number(a.route)||0;
         return rn === r.nr || (!rn && ri===0);
       });
+      rtAdressen[w.iso+"|"+r.nr] = items.filter(function(a){ return a.plaats && a.soort!=="verlof" && a.soort!=="intern"; })
+        .sort(function(a,b){ return minuten(a.tijd)-minuten(b.tijd); }).map(function(a){ return String(a.plaats).trim(); });
       html += '<div class="routekol'+(ri>0?" scheiding":"")+'" data-datum="'+w.iso+'" data-nr="'+r.nr+'" style="left:'+(ri*br)+'%;width:'+br+'%">'+blokken(items)+'</div>';
     });
     html += '</div>';
@@ -1131,6 +1193,7 @@ function teken(){
   $("dagKoppen").innerHTML = kopHtml;
   $("routeKoppen").innerHTML = routeHtml;
   $("rooster").innerHTML = html;
+  rijtijdVullen(rtAdressen, 0);
 
   // telefoonweergave
   $("lijst").innerHTML = week.map(function(w,i){
@@ -2583,6 +2646,8 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
            op de order staat (Kevin, 5 okt 2026). */
         var eerste = (o.regels||[]).find(function(x){ return x.omschrijving && x.totaal; });
         var watTekst = o.spaRegel || (eerste && eerste.omschrijving) || "";
+        if (o.spaRegel){ a.spaModel = modelUitRegel(o.spaRegel); a.spaRegel = o.spaRegel; }
+        a.warmtepomp = !!o.warmtepomp;
         if (watTekst && o.warmtepomp && !/warmtepomp/i.test(watTekst)) watTekst += " + warmtepomp";
         if (watTekst) zet("fWat", watTekst);
         uit.className="zoekuit ok";
@@ -2671,6 +2736,9 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       route: a.route || null,          // bij welke route van die dag hij hoort
       volg: a.volg != null ? a.volg : null,
       model: a.model || null,          // spanaam uit Voorraadbeheer, dik in het tijdraster
+      // Uit Logic4 (worker planningVerrijk of Haal order); bij een ander ordernummer opnieuw.
+      spaModel: a.spaModel || null, spaRegel: a.spaRegel || null, warmtepomp: !!a.warmtepomp,
+      verrijkt: ($("fOrder").value.trim() === String(a.ordernr||"")) ? (a.verrijkt || null) : null,
       uitVoorraad: a.uitVoorraad || null,
       letop: $("fLetop").checked,
       alleenLeveren: $("fAlleenLev").checked,
