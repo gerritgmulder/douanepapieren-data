@@ -51,6 +51,21 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-12", bestand: "opleverbonnen.html", soort: "nieuw",
+      titel: "Opleverbon aanvullen vanaf kantoor",
+      wat:   "Staat een bon nog op 'bezig', dan vul je hem hier aan met Aanvullen: checklist, wat er gedaan is, wat er geleverd is en opmerkingen. Daarna geef je akkoord en mail je hem naar de klant. Het mailadres van de klant staat er vanzelf in. Elke ochtend zie je op het dashboard welke bonnen van de dag ervoor nog open staan."
+    },
+    {
+      datum: "2026-10-12", bestand: "mijnroute.html", soort: "beter",
+      titel: "Mailadres klant staat er vanzelf in",
+      wat:   "In de opleverbon staat het mailadres van de klant nu vanzelf ingevuld, ook bij een servicemelding."
+    },
+    {
+      datum: "2026-10-12", bestand: "tuinconfigurator.html", soort: "nieuw",
+      titel: "Tuinset configurator",
+      wat:   "Een eerste versie van de configurator waarmee klanten hun eigen tuinset samenstellen: set kiezen, afmaken met parasol, kleed en hoes, en zien hoe het op hun terras staat."
+    },
+    {
       datum: "2026-10-12", bestand: "order-status.html", soort: "hersteld",
       titel: "Orderstatus: ook zwembaden en sauna's",
       wat:   "Orders op 'Wachten op aanbetaling' worden nu ook bekeken. Daar staan de orders van zwembaden en sauna's; die schuiven nu net als de spa's door naar '30% aanbetaald' of 'Volledig betaald' zodra de betaling binnen is."

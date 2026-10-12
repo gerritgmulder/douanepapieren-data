@@ -7327,6 +7327,10 @@ async function dpControleerGeannuleerd(env, ledgerOrders) {
      routenummer. Gerrit: "2 staat voor route 2. Ze doen vaak 3 routes op een
      dag, dus ze noemen ze gewoon 1, 2 en 3." De naam van wie er rijdt komt
      uit de planning en staat er automatisch bij. */
+async function sha256Hex(tekst) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(tekst));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
 /* Rijtijd per route (Kevin, 9 okt 2026): "onder de routes moet komen te
    staan hoelang de route rijden is", zodat de planners zien of er nog een
    stop bij past. Vanuit Uddel langs de stops in volgorde van tijd en weer
@@ -7708,7 +7712,10 @@ async function bonHandle(request, env, url) {
     const bon = b.id ? await env.FONTEYN_DATA.get(BON_SLEUTEL(b.id), { type: "json" }) : null;
     if (!bon) return reply(404, { ok: false, error: "bon niet gevonden" });
     if (b.status === "akkoord") {
-      if (bon.status === "concept") return reply(400, { ok: false, error: "de monteur heeft deze bon nog niet afgerond" });
+      /* Kevin (video 12 okt 2026): een bon die nog bezig staat wil hij vanaf
+         kantoor aanvullen en dan zelf bevestigen. Dat mag dus ook vanuit concept;
+         we onthouden dat kantoor hem namens de monteur heeft afgerond. */
+      if (bon.status === "concept") bon.namensMonteur = wie;
       bon.status = "akkoord"; bon.akkoordDoor = wie; bon.akkoordTs = new Date().toISOString();
     } else if (b.status === "concept") {
       bon.status = "concept"; bon.akkoordDoor = null; bon.akkoordTs = null;
@@ -7717,6 +7724,23 @@ async function bonHandle(request, env, url) {
     await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
     await bonIndexBijwerken(env, bon);
     return reply(200, { ok: true, status: bon.status });
+  }
+  /* Kantoor vult een bon aan: checklist, wat er gedaan is, geleverd,
+     opmerking en mailadres. De handtekeningen blijven van de monteur en de klant. */
+  if (p === "/planning/bon/kantoor" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const bon = b.id ? await env.FONTEYN_DATA.get(BON_SLEUTEL(b.id), { type: "json" }) : null;
+    if (!bon) return reply(404, { ok: false, error: "bon niet gevonden" });
+    if (bon.status === "gemaild") return reply(409, { ok: false, error: "deze bon is al naar de klant gemaild" });
+    const nieuw = bonSchoon(Object.assign({}, bon, b.bon || {}, {
+      handtekeningMonteur: bon.handtekeningMonteur, handtekeningKlant: bon.handtekeningKlant, status: bon.status === "akkoord" ? "klaar" : bon.status,
+    }), bon.door || wie);
+    for (const k of ["checklist", "service", "opmerking", "klantMail", "geleverd", "spaType", "serienr"]) if (b.bon && k in b.bon) bon[k] = nieuw[k];
+    bon.kantoor = { door: wie, ts: new Date().toISOString() };
+    bon.gewijzigd = bon.kantoor.ts;
+    await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
+    await bonIndexBijwerken(env, bon);
+    return reply(200, { ok: true, bon });
   }
   if (p === "/planning/bon/mail" && request.method === "POST") {
     let b = {}; try { b = await request.json(); } catch {}
@@ -9114,6 +9138,38 @@ async function berichtenHandle(request, env, url) {
   return reply(200, { ok: true, items: mijn() });
 }
 
+/* Opleverbonnen die niet of niet volledig zijn ingevuld (Kevin, 12 okt 2026):
+   "Deze melding zal ik dan de dag erna willen krijgen. Dit is zodat we zeker
+   weten dat alles wordt ingevuld." Elke ochtend vanaf 7 uur één bericht per
+   dag, voor alle stops met een order of ITS-melding op een route van die dag
+   zonder bon, of met een bon die nog 'bezig' staat. Een week terug, zodat het
+   weekend de maandag meekomt; niets van vóór 12 oktober. */
+const BERICHT_KEVIN = ["kevin@fonteyn.nl", "fonteyn.kevin", "kevin"];
+async function bonOpenRonde(env, d) {
+  const uur = Number(new Date().toLocaleString("sv-SE", { timeZone: "Europe/Amsterdam" }).slice(11, 13));
+  if (uur < 7) return 0;
+  const vandaag = pcVandaag();
+  const plan = (await env.FONTEYN_DATA.get("planning", { type: "json" })) || {};
+  const idx = ((await env.FONTEYN_DATA.get("planning-bonnen", { type: "json" })) || {}).bonnen || {};
+  let nieuw = 0;
+  for (let n = 1; n <= 7; n++) {
+    const dag = pcPlusDagen(vandaag, -n);
+    if (dag < "2026-10-12") break;
+    const id = "bon-open:" + dag;
+    if (d.items.some(x => x.id === id)) continue;
+    const stops = (plan.afspraken || []).filter(a => a.datum === dag && a.tijd && (a.soort === "levering" || a.soort === "service") &&
+                                                     (String(a.ordernr || "").trim() || a.itsId));
+    const open = stops.map(a => ({ a, bon: idx[String(a.id)] })).filter(x => !x.bon || x.bon.status === "concept");
+    if (!open.length) continue;
+    const regel = x => (x.a.klant || "klant") + " (" + (x.a.ordernr ? "order " + x.a.ordernr : "ITS " + x.a.itsId) + (x.a.wie ? ", " + x.a.wie : "") + "): " +
+                       (x.bon ? "nog bezig" : "geen bon");
+    if (berichtErbij(d, { id, aan: BERICHT_KEVIN, soort: "bon-open", ref: { datum: dag },
+        titel: "Opleverbonnen van " + pcDatum(dag) + ": " + open.length + " nog open",
+        tekst: open.map(regel).join(" | ") })) nieuw++;
+  }
+  return nieuw;
+}
+
 /* De ronde: elk uur, na de reserveringen (die leveren de partnercontainers). */
 async function berichtenRonde(env) {
   await planningVerrijk(env, 12).catch(() => null);
@@ -9170,6 +9226,8 @@ async function berichtenRonde(env) {
           tekst: "De ETA was " + pcDatum(eta) + ", twee dagen geleden of langer. Heb je de container vrijgegeven?" })) nieuw++;
     }
   } catch (e) { console.log("[berichten] vrijgave: " + (e.message || e)); }
+  /* 4. Opleverbonnen die de dag erna nog open staan (Kevin, 12 okt 2026). */
+  try { nieuw += await bonOpenRonde(env, d); } catch (e) { console.log("[berichten] opleverbonnen: " + (e.message || e)); }
   /* 3. Passion Partners: containerbestellingen zonder aanbetaling. */
   try { nieuw += await ppAanbetalingRonde(env, d); } catch (e) { console.log("[berichten] passion partners: " + (e.message || e)); }
   berichtenOpruimen(d);
@@ -17776,6 +17834,27 @@ const FP_WORKER = {
       return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     /* DHL stuurt hierheen (Push API v2); geen teamsleutel maar de push-sleutel. */
+  /* Tuinset configurator (Gerrit, 12 okt 2026): eerst alleen als tegel voor
+     Gerrit en Fonteynbot. De bestanden staan in KV (tuinconfig/<pad>), niet in
+     de openbare repo. Het tweede stuk van het adres is een sleutel die van de
+     teamsleutel is afgeleid, zodat ook de bestanden die de pagina zelf laadt
+     (css, js) zonder extra kop goed gaan. */
+  // Het adres van de configurator voor de tegel (alleen met de teamsleutel).
+  if (url.pathname === "/tuinconfigurator-adres" && request.method === "GET") {
+    if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+    return reply(200, { ok: true, pad: "/tuinconfigurator/" + (await sha256Hex(env.SHARED_SECRET + "|tuinconfigurator")).slice(0, 32) + "/" });
+  }
+  if (url.pathname.startsWith("/tuinconfigurator/") && request.method === "GET") {
+    const delen = url.pathname.split("/").filter(Boolean);   // tuinconfigurator, sleutel, pad...
+    const verwacht = env.SHARED_SECRET ? await sha256Hex(env.SHARED_SECRET + "|tuinconfigurator") : "";
+    if (!verwacht || delen[1] !== verwacht.slice(0, 32)) return new Response("Geen toegang", { status: 403 });
+    const pad = delen.slice(2).join("/") || "index.html";
+    if (!/^[\w./-]+$/.test(pad) || pad.includes("..")) return new Response("Niet gevonden", { status: 404 });
+    const inhoud = await env.FONTEYN_DATA.get("tuinconfig/" + pad);
+    if (inhoud == null) return new Response("Niet gevonden", { status: 404 });
+    const soort = { html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8", json: "application/json", svg: "image/svg+xml" }[pad.split(".").pop()] || "text/plain";
+    return new Response(inhoud, { headers: { "Content-Type": soort, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+  }
   if (url.pathname === "/planning/rijtijd" && request.method === "POST") {
     if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
     return rijtijdHandle(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));

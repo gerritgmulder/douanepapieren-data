@@ -323,7 +323,7 @@ function telVan(a, o){
     if (d && itsKlant[d] === undefined){
       itsKlant[d] = null;
       lees("/planning/its/klant?debiteur="+encodeURIComponent(d))
-        .then(function(j){ itsKlant[d] = (j && j.klant) || {}; if (itsKlant[d].telefoon) teken(); })
+        .then(function(j){ itsKlant[d] = (j && j.klant) || {}; if (itsKlant[d].telefoon || itsKlant[d].email) teken(); })
         .catch(function(){ itsKlant[d] = {}; });
     }
     if (d && itsKlant[d]) t = String(itsKlant[d].telefoon||"").trim();
@@ -447,6 +447,19 @@ function bonBlok(a, o){
   }
   var bon = bonVan(a, o);
   var st = bon.status || "concept";
+  /* Mailadres van de klant vanzelf (Kevin, video 10 okt 2026): bij een order
+     uit de order, bij een ITS-melding van de debiteur in Logic4. */
+  if (!bon.klantMail && st === "concept") {
+    var mail = "";
+    if (o && o.ok) mail = (o.leverenAan || {}).mail || (o.besteldDoor || {}).mail || "";
+    if (!mail && a.itsId) {
+      telVan(a, o);   // haalt de debiteur op als die er nog niet is
+      var mi = (meldingen || []).find(function(x){ return Number(x.id) === Number(a.itsId); });
+      var kl = mi && mi.debiteur ? itsKlant[String(mi.debiteur)] : null;
+      if (kl) mail = kl.email || "";
+    }
+    if (mail) bon.klantMail = mail;
+  }
   var stTekst = (window.OPLEVERBON_STATUS||{})[st] || st;
   var knop = '<button type="button" class="bonknop" data-bon="'+id+'"><span>\u25be Opleverbon</span><span class="st '+st+'">'+esc(stTekst)+'</span></button>';
   var slot = st === "akkoord" || st === "gemaild";

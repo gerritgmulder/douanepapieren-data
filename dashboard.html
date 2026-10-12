@@ -538,6 +538,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Containers met tuinmeubelen en sauna's: wat erin zit, de papieren erbij en wat er aan die papieren rammelt. Staat bewust los van de spa-voorraad.</p>
       </a>
 
+      <a href="tuinconfigurator.html" class="tile hidden" id="tileTuinconfigurator">
+        <div class="icon">🛋️</div>
+        <h3>Tuinset configurator</h3>
+        <p>Klanten stellen hun eigen tuinset samen uit het assortiment van de webshop en zien hem op hun eigen terras, met prijs, voorraad en winkelwagen.</p>
+      </a>
+
       <!-- Retouren — Don/Arno/Dolf/Manon + admins. -->
       <a href="retouren.html" class="tile hidden" id="tileRetouren">
         <div class="icon">↩️</div>
@@ -1460,6 +1466,10 @@ async function startBerichten(email){
             } else onder = '<div style="font-size:12px;color:#6b7280;margin-top:4px">Mail klaarzetten&hellip;</div>';
           } else if (m.soort === "vrijgave") {
             acties = knop("brAct", "Ja, vrijgegeven", 'data-id="' + relEsc(m.id) + '" data-a="ja"') + knop2("brAct", "Nog niet", 'data-id="' + relEsc(m.id) + '" data-a="nee"');
+          } else if (m.soort === "bon-open") {
+            // Kevin: welke opleverbonnen van gisteren nog open staan, met een knop erheen.
+            onder = '<ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px;color:#374151">' + String(m.tekst||"").split(" | ").map(r => '<li>' + relEsc(r) + '</li>').join("") + '</ul>';
+            acties = '<a href="opleverbonnen.html" style="background:#144734;color:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap">Naar opleverbonnen</a>' + knop2("brAct", "Gezien", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"');
           } else if (m.soort === "pp-bellen") {
             if (m.telefoon) onder = '<div style="margin-top:4px;font-size:14px"><a href="tel:' + relEsc(String(m.telefoon).replace(/[^0-9+]/g,"")) + '" style="color:#144734;font-weight:700">' + relEsc(m.telefoon) + '</a></div>';
             acties = knop("brAct", "Gebeld", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"') + knop2("brAct", "Morgen weer", 'data-id="' + relEsc(m.id) + '" data-a="later"');
@@ -1468,7 +1478,7 @@ async function startBerichten(email){
           }
           return '<div style="display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid #f3f4f6;flex-wrap:wrap">'
             + '<div style="flex:1;min-width:240px;font-size:13px"><b>' + relEsc(m.titel) + '</b>'
-            + '<div style="font-size:12.5px;color:#374151;margin-top:2px">' + relEsc(m.tekst || "") + '</div>' + onder
+            + (m.soort === "bon-open" ? '' : '<div style="font-size:12.5px;color:#374151;margin-top:2px">' + relEsc(m.tekst || "") + '</div>') + onder
             + '<div style="font-size:11.5px;color:#6b7280;margin-top:3px">' + relEsc(nl(m.sinds)) + '</div></div>'
             + '<div style="display:flex;gap:6px;flex-wrap:wrap">' + acties + '</div></div>';
         }).join("")

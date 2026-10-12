@@ -210,10 +210,11 @@ async function bonDetail(id){
     '<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Klant'+(bon.klantNaamHandtekening?' ('+esc(bon.klantNaamHandtekening)+')':'')+'</div>'+(bon.handtekeningKlant?'<img src="'+bon.handtekeningKlant+'" alt="handtekening klant">':'<div class="leeg">handtekening volgt</div>')+'</div></div>'+
     '<div class="mailrij"><label style="font-size:12.5px;color:var(--grijs)">Mail naar</label><input type="email" id="bonMail" value="'+esc(bon.klantMail||"")+'" placeholder="mailadres van de klant"></div>'+
     '<div class="knoppen" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
-      (bon.status==="klaar"?'<button type="button" class="doe" id="bonAkkoord">Akkoord</button>':'')+
+      (bon.status==="klaar"||bon.status==="concept"?'<button type="button" class="doe" id="bonAkkoord">'+(bon.status==="concept"?"Akkoord namens monteur":"Akkoord")+'</button>':'')+
+      (bon.status!=="gemaild"?'<button type="button" id="bonAanvullen">Aanvullen</button>':'')+
       (bon.status!=="concept"?'<button type="button" class="doe" id="bonMailKnop">'+(bon.status==="gemaild"?"Opnieuw mailen":"Mail naar klant")+'</button>':'')+
       (bon.status!=="concept"?'<button type="button" id="bonTerugConcept" title="De monteur kan de bon dan weer aanpassen">Terug naar de monteur</button>':'')+
-    '</div><div class="bonmelding" id="bonMelding">'+(bon.gemaildTs?'Gemaild op '+esc(String(bon.gemaildTs).replace("T"," ").slice(0,16))+' naar '+esc(bon.gemaildNaar||"")+'.':'')+(bon.akkoordDoor?' Akkoord door '+esc(planNaam(bon.akkoordDoor))+'.':'')+'</div></div>';
+    '</div><div id="bonBewerk"></div><div class="bonmelding" id="bonMelding">'+(bon.gemaildTs?'Gemaild op '+esc(String(bon.gemaildTs).replace("T"," ").slice(0,16))+' naar '+esc(bon.gemaildNaar||"")+'.':'')+(bon.akkoordDoor?' Akkoord door '+esc(planNaam(bon.akkoordDoor))+'.':'')+'</div></div>';
   $("bonTerug").addEventListener("click", bonOverzicht);
   /* Oudere bonnen hebben nog geen lijst Geleverd. Dan het beste wat er is:
      de orderregels die nog open stonden, met wat er in de loods is gepakt. */
@@ -232,16 +233,79 @@ async function bonDetail(id){
     }catch(e){ var v = $("bonPak"); if (v) v.innerHTML = ""; }
   })();
   var meld = function(t, bad){ var m = $("bonMelding"); m.textContent = t; m.style.color = bad ? "var(--rood)" : "#15803d"; };
+  /* Mailadres van de klant uit Logic4 als het nog leeg is (Kevin, video 10 okt
+     2026): bij een order het adres op de order, bij een ITS-melding dat van de
+     debiteur. */
+  if (!$("bonMail").value.trim()) (async function(){
+    try{
+      var h = { headers:{ "X-Fonteyn-Auth": teamKey() } }, mail = "";
+      if (bon.ordernr){
+        var o = ((await (await fetch(W+"/planning/route-print?orders="+encodeURIComponent(bon.ordernr), h)).json()).orders||[])[0];
+        if (o && o.ok) mail = ((o.leverenAan||{}).mail) || ((o.besteldDoor||{}).mail) || "";
+      } else if (bon.itsId){
+        var lijst = ((await (await fetch(W+"/planning/its", h)).json()).meldingen) || [];
+        var m = lijst.find(function(x){ return String(x.id) === String(bon.itsId); });
+        if (m && m.debiteur){ var k = (await (await fetch(W+"/planning/its/klant?debiteur="+encodeURIComponent(m.debiteur), h)).json()).klant || {}; mail = k.email || ""; }
+      }
+      var veld = $("bonMail"); if (mail && veld && !veld.value.trim()) veld.value = mail;
+    }catch(e){}
+  })();
+  /* Aanvullen vanaf kantoor (Kevin, video 12 okt 2026): een bon die nog bezig
+     staat afmaken en daarna zelf bevestigen en mailen. */
+  var av = $("bonAanvullen"); if (av) av.addEventListener("click", function(){ bonAanvullen(bon, isService, vragen, A, meld); av.remove(); });
   var ak = $("bonAkkoord"); if (ak) ak.addEventListener("click", async function(){ ak.disabled = true; try{ await bonApi("/planning/bon/status", { id: id, status: "akkoord" }); bonDetail(id); }catch(e){ meld(e.message, true); ak.disabled = false; } });
-  var tc = $("bonTerugConcept"); if (tc) tc.addEventListener("click", async function(){ if (!confirm("De bon teruggeven aan de monteur? Hij kan hem dan weer aanpassen en moet hem opnieuw afronden.")) return; try{ await bonApi("/planning/bon/status", { id: id, status: "concept" }); bonDetail(id); }catch(e){ meld(e.message, true); } });
+  /* Bevestigen in de pagina zelf: een venster van de browser blokkeert in de
+     app op Windows daarna het typen. Eerste klik vraagt, tweede klik doet het. */
+  var nogmaals = function(k, vraag){ if (k.dataset.zeker) return true; k.dataset.zeker = "1"; k.dataset.oud = k.textContent; k.textContent = vraag; setTimeout(function(){ if (k.dataset.zeker){ delete k.dataset.zeker; k.textContent = k.dataset.oud; } }, 5000); return false; };
+  var tc = $("bonTerugConcept"); if (tc) tc.addEventListener("click", async function(){ if (!nogmaals(tc, "Klik nogmaals: terug naar de monteur")) return; try{ await bonApi("/planning/bon/status", { id: id, status: "concept" }); bonDetail(id); }catch(e){ meld(e.message, true); } });
   var mk = $("bonMailKnop"); if (mk) mk.addEventListener("click", async function(){
     var naar = $("bonMail").value.trim();
     if (!naar){ meld("Vul het mailadres van de klant in.", true); return; }
-    if (!confirm("De opleverbon mailen naar "+naar+"?")) return;
+    if (!nogmaals(mk, "Klik nogmaals om te mailen naar "+naar)) return;
     mk.disabled = true; meld("Versturen\u2026");
     try{ await bonApi("/planning/bon/mail", { id: id, naar: naar, vragen: vragen }); bonDetail(id); }
     catch(e){ meld("Mailen vraagt een nieuwe poging: "+e.message, true); mk.disabled = false; }
   });
+}
+function bonAanvullen(bon, isService, vragen, A, meld){
+  var vak = document.getElementById("bonBewerk"), sv = bon.service || {};
+  var veld = function(label, html){ return '<label style="display:block;font-size:12px;color:var(--grijs);margin:10px 0 4px">'+label+'</label>'+html; };
+  var inv = 'style="width:100%;padding:7px 9px;border:1px solid var(--rand);border-radius:8px;font:inherit;font-size:13px"';
+  var html = '<div style="margin-top:14px;padding:14px;border:1px solid var(--rand);border-radius:10px;background:#fbfbf7"><h4 style="margin-top:0">Aanvullen</h4>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+veld("Type spa",'<input id="avSpa" '+inv+' value="'+esc(bon.spaType||"")+'">')+veld("Serienummer",'<input id="avSerie" '+inv+' value="'+esc(bon.serienr||"")+'">')+'</div>';
+  if (!isService && (bon.geleverd||[]).length)
+    html += veld("Geleverd", '<table class="vr">'+bon.geleverd.map(function(g, i){ return '<tr><td style="width:90px"><input type="number" min="0" data-gel="'+i+'" value="'+esc(g.aantal)+'" style="width:70px;padding:5px;border:1px solid var(--rand);border-radius:6px"> van '+esc(g.besteld)+'</td><td>'+esc(g.oms)+'</td></tr>'; }).join("")+'</table>');
+  if (!isService && !bon.alleenLeveren)
+    html += veld("Te doen bij klant", '<table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
+      return '<tr><td style="width:45%">'+esc(v.t)+'</td><td style="width:110px"><select data-vraag="'+esc(v.k)+'" style="padding:5px;border:1px solid var(--rand);border-radius:6px;font:inherit;font-size:12.5px"><option value=""></option>'+
+        ["ja","nee","nvt"].map(function(a){ return '<option value="'+a+'"'+(c.a===a?" selected":"")+'>'+esc(A[a]||a)+'</option>'; }).join("")+'</select></td>'+
+        '<td><input data-reden="'+esc(v.k)+'" value="'+esc(c.opm||"")+'" placeholder="reden of extra info" style="width:100%;padding:5px 7px;border:1px solid var(--rand);border-radius:6px;font:inherit;font-size:12.5px"></td></tr>'; }).join("")+'</table>');
+  if (isService)
+    html += veld("Wat is er gedaan", '<textarea id="avGedaan" rows="3" '+inv+'>'+esc(sv.gedaan||"")+'</textarea>')+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+veld("Kilometers",'<input id="avKm" type="number" min="0" '+inv+' value="'+esc(sv.km||"")+'">')+veld("Gewerkte uren",'<input id="avUren" type="number" min="0" step="0.25" '+inv+' value="'+esc(sv.uren||"")+'">')+'</div>';
+  html += veld("Opmerkingen", '<textarea id="avOpm" rows="2" '+inv+'>'+esc(bon.opmerking||"")+'</textarea>')+
+    '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button type="button" id="avBewaar">Bewaren</button><button type="button" class="doe" id="avAkkoord">Bewaren en akkoord</button></div></div>';
+  vak.innerHTML = html;
+  var verzamel = function(){
+    var b = { spaType: document.getElementById("avSpa").value.trim(), serienr: document.getElementById("avSerie").value.trim(),
+              opmerking: document.getElementById("avOpm").value, klantMail: (document.getElementById("bonMail").value||"").trim() };
+    if (!isService && (bon.geleverd||[]).length) b.geleverd = bon.geleverd.map(function(g, i){ var el = vak.querySelector('[data-gel="'+i+'"]'); return Object.assign({}, g, { aantal: Math.max(0, Number(el && el.value) || 0) }); });
+    if (!isService && !bon.alleenLeveren){ var c = {}; vak.querySelectorAll("[data-vraag]").forEach(function(s){ var k = s.dataset.vraag, r = vak.querySelector('[data-reden="'+k+'"]'); if (s.value || (r && r.value)) c[k] = { a: s.value, opm: r ? r.value : "" }; }); b.checklist = c; }
+    if (isService) b.service = Object.assign({}, bon.service||{}, { gedaan: document.getElementById("avGedaan").value, km: Number(document.getElementById("avKm").value)||0, uren: Number(document.getElementById("avUren").value)||0 });
+    return b;
+  };
+  var bewaar = async function(akkoord){
+    meld("Bewaren…");
+    try{
+      await bonApi("/planning/bon/kantoor", { id: bon.id, bon: verzamel() });
+      try{ if (window.fpLog) window.fpLog("opleverbon-aangevuld", bon.id); }catch(e){}
+      if (akkoord) await bonApi("/planning/bon/status", { id: bon.id, status: "akkoord" });
+      bonDetail(bon.id);
+    }catch(e){ meld("Bewaren vraagt een nieuwe poging: "+e.message, true); }
+  };
+  document.getElementById("avBewaar").addEventListener("click", function(){ bewaar(false); });
+  document.getElementById("avAkkoord").addEventListener("click", function(){ bewaar(true); });
+  vak.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 /* Rechtstreeks naar één bon, bijvoorbeeld vanuit een melding: ?bon=<id> */
 (async function(){

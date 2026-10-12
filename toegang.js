@@ -198,6 +198,11 @@
     ],
     // Tuinmeubelen: de containers zonder spa's. Chantal en Manon houden ze
     // bij, Arno koopt ze in.
+    /* Tuinset configurator (Gerrit, 12 okt 2026): "zichtbaar enkel voor
+       Fonteynbot en Gerrit". */
+    "tuinconfigurator": [
+      "fonteynbot", "gerrit",
+    ],
     "tuinmeubelen": [
       "arno", "chantal", "dolf", "fonteynbot", "gerrit", "manon",
     ],

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("tuinconfigurator", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Tuinset configurator</h2><p style="color:#6b7280">Deze tegel is nog in voorbereiding.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tuinset configurator - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     TUINSET CONFIGURATOR - klanten stellen hun buitenplek samen
+     Gerrit (12 okt 2026): eerst als tegel bij Tuinmeubelen, alleen voor
+     Fonteynbot en Gerrit. De configurator zelf staat niet in deze repo (die is
+     openbaar) maar in de opslag van de worker; zie de map Tuinconfigurator in
+     Claude/Projects en tools/zet-in-dashboard.sh daar. Deze tegel laat hem
+     alleen zien.
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  html, body { margin: 0; height: 100%; background: #f6f3ea; font-family: "Montserrat", system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  header { background: #144734; color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
+  #venster { flex: 1; width: 100%; border: 0; display: block; background: #dfe7dc; }
+  #melding { padding: 30px; text-align: center; color: #6b7280; }
+</style>
+</head>
+<body>
+<header><h1>🛋️ Tuinset configurator</h1></header>
+<div id="melding">De configurator wordt geladen&hellip;</div>
+<iframe id="venster" title="Tuinset configurator" hidden allow="clipboard-write"></iframe>
+<script>
+(async function(){
+  var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+  var sleutel = "";
+  for (var i = 0; i < 20 && !(sleutel = localStorage.getItem("fp.teamkey") || ""); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  if (!sleutel) { document.getElementById("melding").textContent = "Log opnieuw in op het dashboard, dan verschijnt de configurator."; return; }
+  // Het adres bevat een sleutel die de worker van de teamsleutel afleidt.
+  var pad = "";
+  try { var r = await fetch(W + "/tuinconfigurator-adres", { headers: { "X-Fonteyn-Auth": sleutel } }); var j = await r.json(); pad = j && j.ok ? j.pad : ""; } catch(e) {}
+  if (!pad) { document.getElementById("melding").textContent = "De configurator vraagt een nieuwe poging. Ververs de pagina even."; return; }
+  var v = document.getElementById("venster");
+  v.src = W + pad + (location.hash || "");
+  v.hidden = false;
+  document.getElementById("melding").remove();
+  try { if (window.fpLog) window.fpLog("open", ""); } catch(e) {}
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return;
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"tuinconfigurator",action:action||"open",detail:(detail||"").slice(0,1200)})}).catch(function(){}); };
+})();
+</script>
+</body>
+</html>
