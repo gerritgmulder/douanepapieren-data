@@ -282,6 +282,8 @@
        hier bij. */
     "werkplaats": [
       "arno", "chantal", "christiaan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin", "manon", "nomi",
+      // De computer in de werkplaats logt in met het Logic4-account Werkplaats (Kevin, 12 okt 2026).
+      "werkplaats",
     ],
     "planning": [
       "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",

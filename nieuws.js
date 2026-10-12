@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-12", bestand: "opleverbonnen.html", soort: "hersteld",
+      titel: "Servicebon: alleen het bedrag van het bezoek",
+      wat:   "Op een servicebon staat bij Betaling alleen nog wat dit bezoek kost, nooit meer het bedrag van de oude order van de spa. Antwoordt een klant op de servicebon, dan komt die mail bij servicespa@fonteyn.nl binnen."
+    },
+    {
+      datum: "2026-10-12", bestand: "werkplaats.html", soort: "beter",
+      titel: "Werkplaats op de eigen computer",
+      wat:   "De computer in de werkplaats kan nu inloggen met het account Werkplaats en ziet dan de tegel Werkplaats."
+    },
+    {
       datum: "2026-10-12", bestand: "opleverbonnen.html", soort: "nieuw",
       titel: "Opleverbon aanvullen vanaf kantoor",
       wat:   "Staat een bon nog op 'bezig', dan vul je hem hier aan met Aanvullen: checklist, wat er gedaan is, wat er geleverd is en opmerkingen. Daarna geef je akkoord en mail je hem naar de klant. Het mailadres van de klant staat er vanzelf in. Elke ochtend zie je op het dashboard welke bonnen van de dag ervoor nog open staan."

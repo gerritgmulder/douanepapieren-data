@@ -7599,7 +7599,8 @@ async function bonIndexBijwerken(env, bon) {
     monteur: bon.monteur || "", monteur2: bon.monteur2 || "", status: bon.status || "concept",
     // Voor het zoekvak in de tegel Opleverbonnen (Kevin, 22 sep 2026).
     spaType: bon.spaType || "", serienr: bon.serienr || "", adviseur: bon.adviseur || "",
-    openstaand: bon.betaling && bon.betaling.openstaand != null ? bon.betaling.openstaand : null,
+    // Servicebon: geen orderbedrag, alleen het bezoek zelf (Kevin, 12 okt 2026).
+    openstaand: (bon.soort === "service" || bon.itsId) ? null : (bon.betaling && bon.betaling.openstaand != null ? bon.betaling.openstaand : null),
     methode: (bon.betaling && bon.betaling.methode) || "",
     ontvangen: (bon.betaling && bon.betaling.bedrag) || 0,
     nee: Object.values(bon.checklist || {}).filter(x => x && x.a === "nee").length,
@@ -7762,7 +7763,9 @@ async function bonHandle(request, env, url) {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: "Fonteyn Bezorgservice <" + adres + ">", to: [naar],
-        reply_to: /@/.test(wie) ? [wie] : undefined,
+        /* Een antwoord op een servicebon hoort bij Spa service, niet in de
+           mailbox van wie hem verstuurde (Kevin, 12 okt 2026). */
+        reply_to: (bon.soort === "service" || bon.itsId) ? ["servicespa@fonteyn.nl"] : (/@/.test(wie) ? [wie] : undefined),
         subject: ((bon.soort === "service" || bon.itsId) ? "Servicebon Fonteyn" : "Opleverbon Fonteyn") + (bon.ordernr ? " - order " + bon.ordernr : "") + (bon.itsId ? " - melding " + bon.itsId : "") + (bon.datum ? " - " + bon.datum.split("-").reverse().join("-") : ""),
         html, attachments: bijlagen,
       }),
@@ -7800,7 +7803,14 @@ function bonHtml(bon, vragen) {
     "<td style='padding:4px 8px;border-bottom:1px solid #eee;font-weight:600;color:" + (v.a === "ja" ? "#15803d" : v.a === "nee" ? "#b91c1c" : "#6b7280") + "'>" + e(antwoord[v.a] || "-") + "</td>" +
     "<td style='padding:4px 8px;border-bottom:1px solid #eee;color:#374151'>" + e(v.opm || "") + "</td></tr>").join("");
   const bt = bon.betaling || {};
-  const betaling = bt.openstaand == null ? "" :
+  const isServiceBon = bon.soort === "service" || !!bon.itsId;
+  /* Bij een servicebon telt alleen wat er bij dit bezoek te betalen is. Het
+     bedrag van de oude order van de spa hoort er nooit bij (Kevin, 12 okt 2026:
+     die order is allang betaald, het bedrag staat alleen op de factuur). */
+  const betaling = isServiceBon
+    ? (bt.methode ? "<h3 style='color:#144734;margin:18px 0 6px'>Betaling</h3><table style='border-collapse:collapse;font-size:13px'><tr><td style='padding:3px 8px'>Ter plekke voldaan</td><td style='padding:3px 8px'>" +
+        (bt.methode === "geen" ? "niets" : geld(bt.bedrag) + " " + (bt.methode === "contant" ? "contant" : "per bank")) + "</td></tr></table>" : "")
+    : bt.openstaand == null ? "" :
     "<h3 style='color:#144734;margin:18px 0 6px'>Betaling</h3><table style='border-collapse:collapse;font-size:13px'>" +
     "<tr><td style='padding:3px 8px'>Orderbedrag</td><td style='padding:3px 8px'>" + geld(bt.orderbedrag) + "</td></tr>" +
     "<tr><td style='padding:3px 8px'>Al betaald</td><td style='padding:3px 8px'>" + geld(bt.reedsBetaald) + "</td></tr>" +

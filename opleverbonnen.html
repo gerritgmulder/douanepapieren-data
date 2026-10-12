@@ -202,8 +202,11 @@ async function bonDetail(id){
     (isService ? serviceHtml : bon.alleenLeveren ? '<h4>Te doen bij klant</h4><p><b>Alleen leveren</b> - geen checklist, alleen pakbon en handtekeningen.</p>' : '<h4>Te doen bij klant</h4><table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
       return '<tr><td style="width:45%">'+esc(v.t)+'</td><td class="'+esc(c.a||"")+'" style="width:70px">'+esc(A[c.a]||"-")+'</td><td>'+esc(c.opm||"")+'</td></tr>'; }).join("")+'</table>')+
     '<h4>Betaling</h4><table class="vr">'+
+      /* Servicebon: alleen het bedrag van dit bezoek, nooit de oude order van
+         de spa (Kevin, 12 okt 2026). */
+      (isService ? '<tr><td style="width:45%">Te betalen voor dit bezoek</td><td><b>'+bonGeld(mat+voorrij+arbeid)+'</b></td></tr>' :
       '<tr><td style="width:45%">Orderbedrag</td><td>'+bonGeld(bt.orderbedrag)+'</td></tr><tr><td>Al betaald</td><td>'+bonGeld(bt.reedsBetaald)+'</td></tr>'+
-      '<tr><td>Openstaand bij levering</td><td><b>'+(bt.openstaand!=null?bonGeld(bt.openstaand):"onbekend")+'</b></td></tr>'+
+      '<tr><td>Openstaand bij levering</td><td><b>'+(bt.openstaand!=null?bonGeld(bt.openstaand):"onbekend")+'</b></td></tr>')+
       '<tr><td>Bij de klant voldaan</td><td>'+(bt.methode==="geen"?bonGeld(0):bt.methode?bonGeld(bt.bedrag)+" "+(bt.methode==="contant"?"contant, geld bij "+(bt.contantAan||"?"):"per bank"):"-")+'</td></tr></table>'+
     (bon.opmerking?'<h4>Opmerkingen</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(bon.opmerking)+'</p>':'')+
     '<h4>Handtekeningen</h4><div class="handt">'+(isService?'':'<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Monteur</div>'+(bon.handtekeningMonteur?'<img src="'+bon.handtekeningMonteur+'" alt="handtekening monteur">':'<div class="leeg">handtekening volgt</div>')+'</div>')+

@@ -407,7 +407,9 @@ function bonVan(a, o){
   var id = String(a.id);
   if (bonnen[id]) return bonnen[id];
   var nr = String(a.ordernr||"").trim();
-  var b = nr ? betaald[nr] : (a.itsId ? (betaald["its:"+a.itsId]||{}).info : null);
+  /* Bij een servicemelding nooit het bedrag van de oude order van de spa
+     (Kevin, 12 okt 2026): alleen wat dit bezoek kost. */
+  var b = nr && !a.itsId ? betaald[nr] : null;
   var eerste = o && o.ok ? (o.regels||[]).find(function(r){ return r.omschrijving && r.totaal; }) : null;
   var lever = o && o.ok ? (o.leverenAan || o.besteldDoor || {}) : {};
   bonnen[id] = {
