@@ -98,7 +98,7 @@
         <div><label class="f">Contactpersoon</label><input type="text" id="vContact"></div>
         <div><label class="f">Telefoon</label><input type="text" id="vTel"></div>
         <div><label class="f">E-mail</label><input type="email" id="vMail"></div>
-        <div><label class="f">Offertenummer</label><input type="text" id="vOfferte"></div>
+        <div><label class="f">Voorstelnummer</label><input type="text" id="vOfferte"></div>
         <div><label class="f">Datum op de proforma</label><input type="text" id="vDatum"></div>
         <div><label class="f">Valuta</label><input type="text" id="vValuta"></div>
         <div><label class="f">Levervoorwaarde</label><input type="text" id="vIncoterm"></div>
@@ -642,7 +642,7 @@ function tekenLijst(){
   $("lvTel").textContent=l.length;
   if(!l.length){ $("lvLijst").innerHTML="<p class='lead'>Hier komen de vastgelegde leveranciers.</p>"; return; }
   $("lvLijst").innerHTML="<div class='tabelwrap'><table><thead><tr>"+
-    "<th>Leverancier</th><th>Land</th><th>Offerte</th><th class='num'>Artikelen</th>"+
+    "<th>Leverancier</th><th>Land</th><th>Voorstel</th><th class='num'>Artikelen</th>"+
     "<th>Crediteur in Logic4</th><th>Prijslijst</th><th>Vastgelegd</th></tr></thead><tbody>"+
     l.map(x=>"<tr>"+
       "<td><b>"+esc(x.naam)+"</b>"+(x.contact?"<div style='color:var(--muted);font-size:11.5px'>"+esc(x.contact)+(x.mail?" · "+esc(x.mail):"")+"</div>":"")+"</td>"+

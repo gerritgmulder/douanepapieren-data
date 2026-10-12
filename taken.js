@@ -400,7 +400,7 @@
         if (qty > 0 && np > 0 && bp <= 0 && /maatwerk|op maat/i.test(String(row.Description || ""))) {
           uit.push({
             bron: "vers", titel: "Maatwerk zonder inkoopprijs",
-            actie: "Vul de inkoopprijs in op de orderregel — de offerte van de leverancier ligt er nu nog.",
+            actie: "Vul de inkoopprijs in op de orderregel — het voorstel van de leverancier ligt er nu nog.",
             verwijzing: "Order " + o.Id, detail: String(row.Description || "").slice(0, 60),
             bedrag: qty * np, eenheid: "eur", datum: o.CreationDate, tegel: ""
           });
@@ -411,8 +411,8 @@
       if (/^offerte$/i.test(status)) {
         var oud = Math.abs(num(dagenTot(String(o.CreationDate).slice(0, 10))));
         if (oud >= 14) uit.push({
-          bron: "vers", titel: "Offerte ligt er " + oud + " dagen",
-          actie: "Bel de klant na of sluit de offerte.",
+          bron: "vers", titel: "Voorstel ligt er " + oud + " dagen",
+          actie: "Bel de klant na of sluit het voorstel.",
           verwijzing: "Order " + o.Id, detail: String(o.Description || "").slice(0, 60),
           bedrag: num((o.Totals || {}).AmountIncl), eenheid: "eur", datum: o.CreationDate, tegel: ""
         });
@@ -993,8 +993,8 @@
       if (/^offerte$/i.test(toestand)) {
         var oud = Math.abs(num(dagenTot(String(o.CreationDate).slice(0, 10))));
         if (oud >= 14) leg(uid, {
-          bron: "vers", titel: "Offerte ligt er " + oud + " dagen",
-          actie: "Bel de klant na of sluit de offerte.",
+          bron: "vers", titel: "Voorstel ligt er " + oud + " dagen",
+          actie: "Bel de klant na of sluit het voorstel.",
           verwijzing: "Order " + o.Id, detail: String(o.Description || "").slice(0, 60),
           bedrag: num((o.Totals || {}).AmountIncl), eenheid: "eur", datum: o.CreationDate, tegel: "",
         });
