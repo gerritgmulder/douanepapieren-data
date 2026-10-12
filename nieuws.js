@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-12", bestand: "order-status.html", soort: "hersteld",
+      titel: "Orderstatus: ook zwembaden en sauna's",
+      wat:   "Orders op 'Wachten op aanbetaling' worden nu ook bekeken. Daar staan de orders van zwembaden en sauna's; die schuiven nu net als de spa's door naar '30% aanbetaald' of 'Volledig betaald' zodra de betaling binnen is."
+    },
+    {
       datum: "2026-10-09", bestand: "mijnroute.html", soort: "nieuw",
       titel: "Klant bellen met één tik",
       wat:   "Bij elke stop staat een grote groene knop om de klant meteen te bellen, ook bij servicemeldingen. In de opleverbon zet je bij Geleverd met min en plus hoeveel er echt is geleverd."

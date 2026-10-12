@@ -328,7 +328,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <p class="sub">
         Logic4 markeert een order pas als "officieel" zodra de status handmatig is aangepast
         nadat er een betaling is binnengekomen. Deze tool zoekt orders die nog op
-        <b>Verkooporder</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald, en
+        <b>Verkooporder</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald, en
         adviseert de juiste status. Bij een dry-run kijk je alleen mee; Logic4 blijft zoals hij is.
       </p>
 
@@ -410,12 +410,18 @@ const ALLOWED_USERS = [
 
 // Logic4-status-IDs (zie memory: logic4_api_orders.md)
 const STATUS_VERKOOPORDER = 1;
+const STATUS_WACHT_AANBETALING = 15;
 const STATUS_30_AANBETAALD = 25;
 const STATUS_VOLLEDIG_BETAALD = 30;
 
 // Welke statussen pakken we als bron — orders die mogelijk een upgrade nodig hebben.
+/* "Wachten op aanbetaling" erbij (12 okt 2026). Zwembaden (Joppe) en sauna's
+   (Rosalie) zetten hun orders eerst op die status, en die werd nooit bekeken:
+   op die dag stonden er 67 orders met een betaling op, 19 al helemaal betaald.
+   Zij zetten de status daardoor nog elke dag met de hand om. */
 const SOURCE_STATUSES = [
   { id: STATUS_VERKOOPORDER,   label: "Verkooporder" },
+  { id: STATUS_WACHT_AANBETALING, label: "Wachten op aanbetaling" },
   { id: STATUS_30_AANBETAALD,  label: "30% aanbetaald" },
 ];
 
@@ -517,6 +523,7 @@ function decideTargetStatus(order) {
 function statusName(id) {
   switch (id) {
     case STATUS_VERKOOPORDER:       return "Verkooporder";
+    case STATUS_WACHT_AANBETALING:  return "Wachten op aanbetaling";
     case STATUS_30_AANBETAALD:      return "30% aanbetaald";
     case STATUS_VOLLEDIG_BETAALD:   return "Volledig betaald, vrijgeven leveren";
     default:                        return `Status ${id}`;
