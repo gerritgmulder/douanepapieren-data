@@ -1,5 +1,5 @@
 {
-  "version": "0.35.59",
+  "version": "0.35.60",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -410,6 +410,10 @@
     {
       "name": "voorraadbepaling.html",
       "note": "Voorraadbepaling: open inkooporders per model naast de verkoopverhouding van de laatste 12 maanden (Chantal, Arno)"
+    },
+    {
+      "name": "logic4.html",
+      "note": "Logic4 nagebouwd (proef, beheerlaag). Laadt de pagina uit het archief van de worker (erp/index.html)."
     }
   ]
 }

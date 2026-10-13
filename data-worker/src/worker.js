@@ -17608,7 +17608,7 @@ const FP_WORKER = {
       }
       if (request.method === "GET" && url.searchParams.get("lijst")) return new Response((await archiefDO(env).fetch("https://archief/", { method: "POST", headers: { "X-Sleutel": "*lijst" } })).body, { headers: { "Content-Type": "application/json" } });
       if (request.method === "GET" && !sleutel) return new Response((await archiefDO(env).fetch("https://archief/", { method: "POST", headers: { "X-Sleutel": "*overzicht" } })).body, { headers: { "Content-Type": "application/json" } });
-      if (!/^(plfile:|dpfile:|schipfile:|inkoopfile:|tuinconfig\/)/.test(sleutel)) return reply(400, { ok: false, error: "sleutel" });
+      if (!/^(plfile:|dpfile:|schipfile:|inkoopfile:|tuinconfig\/|erp\/)/.test(sleutel)) return reply(400, { ok: false, error: "sleutel" });
       if (request.method === "PUT") { await bestandZet(env, sleutel, await request.arrayBuffer()); return reply(200, { ok: true }); }
       if (request.method === "DELETE") return reply(200, { ok: true, was: await bestandWeg(env, sleutel) });
       const b = await bestandLees(env, sleutel);

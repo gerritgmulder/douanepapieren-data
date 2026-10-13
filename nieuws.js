@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-13", bestand: "logic4.html", soort: "nieuw",
+      titel: "Logic4, nagebouwd",
+      wat:   "Dezelfde modules als in Logic4, met echte gegevens: orders, voorstellen, inkoop, artikelen, debiteuren, openstaande posten, grootboek en service. Per functie zie je wat er al is en wat er nog komt, en onder Omvang nabouw staat het plan."
+    },
+    {
       datum: "2026-10-13", bestand: "opleverbonnen.html", soort: "beter",
       titel: "Bonnen altijd aan te passen",
       wat:   "Met Aanpassen pas je elke bon aan, ook als hij al gemaild is: wat er geleverd is, de checklist, de opmerking en wat de klant betaalde. Alles wat op de order staat komt op de bon. Terug naar de monteur vraagt nu om een duidelijke Ja."

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logic4 - Fonteyn Dashboard</title>
+<!-- ══════════════════════════════════════════════════════════════════════
+     LOGIC4, NAGEBOUWD - proef voor de beheerlaag
+     Gerrit (13 okt 2026): Logic4 nabouwen in het Dashboard, om aan Dolf te
+     laten zien. De pagina zelf staat niet in deze repo (die is openbaar) maar
+     in het archief van de worker (erp/index.html), net als de Tuinset
+     configurator. Bron: Claude/Projects/Fonteyn ERP, online zetten met
+     tools/zet-online.sh daar. Deze tegel haalt hem op en toont hem; de
+     gegevens komen zoals bij elke tegel via het hulpprogramma van de pc.
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  body { margin: 0; font-family: "Montserrat", system-ui, sans-serif; background: #f6f7f5; }
+  #melding { max-width: 420px; margin: 14vh auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 34px; text-align: center; color: #6b7280; }
+  #melding h2 { color: #144734; margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<div id="melding"><h2>Logic4</h2><p id="tekst">Even laden&hellip;</p><a href="dashboard.html">&larr; Terug naar het dashboard</a></div>
+<script>
+(async function(){
+  if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+  var ik = (localStorage.getItem("fp.email") || "").toLowerCase();
+  var tekst = document.getElementById("tekst");
+  if (window.fpToegang && !fpToegang.mag("administratie-proef", ik)) { tekst.textContent = "Deze tegel is nog in voorbereiding."; return; }
+  var sleutel = "";
+  for (var i = 0; i < 20 && !(sleutel = localStorage.getItem("fp.teamkey") || ""); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  if (!sleutel) { tekst.textContent = "Log opnieuw in op het dashboard, dan verschijnt Logic4 hier."; return; }
+  var html = "";
+  try {
+    var r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/beheer/archief?sleutel=erp/index.html", { headers: { "X-Fonteyn-Auth": sleutel } });
+    if (r.ok) html = await r.text();
+  } catch (e) {}
+  if (!html) { tekst.textContent = "Het laden vraagt een nieuwe poging. Ververs de pagina even."; return; }
+  try {
+    fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", { method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel },
+      body: JSON.stringify({ user: ik, tile: "logic4", action: "open", detail: "" }) }).catch(function(){});
+  } catch (e) {}
+  // De pagina neemt dit venster over; adres en inlog blijven gelijk, dus de
+  // gegevens lopen gewoon via het hulpprogramma zoals bij elke tegel.
+  document.open(); document.write(html); document.close();
+})();
+</script>
+</body>
+</html>
