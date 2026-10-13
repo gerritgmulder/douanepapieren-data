@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-13", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Bonnen altijd aan te passen",
+      wat:   "Met Aanpassen pas je elke bon aan, ook als hij al gemaild is: wat er geleverd is, de checklist, de opmerking en wat de klant betaalde. Alles wat op de order staat komt op de bon. Terug naar de monteur vraagt nu om een duidelijke Ja."
+    },
+    {
+      datum: "2026-10-13", bestand: "planning.html", soort: "beter",
+      titel: "Alleen leveren zichtbaar op de afspraak",
+      wat:   "Staat het vinkje Alleen leveren aan, dan zie je dat meteen op het blok in het tijdraster en op het kaartje."
+    },
+    {
       datum: "2026-10-12", bestand: "opleverbonnen.html", soort: "hersteld",
       titel: "Servicebon: alleen het bedrag van het bezoek",
       wat:   "Op een servicebon staat bij Betaling alleen nog wat dit bezoek kost, nooit meer het bedrag van de oude order van de spa. Antwoordt een klant op de servicebon, dan komt die mail bij servicespa@fonteyn.nl binnen."

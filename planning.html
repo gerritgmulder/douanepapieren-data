@@ -20,7 +20,10 @@
   document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
-    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}/* Alleen leveren (Kevin, 13 okt 2026): goed zichtbaar op blok en kaartje. */
+.blok .al{display:inline-block;margin:1px 0;padding:0 5px;border-radius:4px;background:#fde68a;color:#7c2d12;font-size:9.5px;font-weight:700;white-space:nowrap}
+.afs .badge.al{background:#fde68a!important;color:#7c2d12!important}
+</style>'+
     '<div class="gt"><h1>Planning</h1><p>Deze tegel is voor de afdeling planning.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
@@ -2400,6 +2403,8 @@ function blokken(items){
          hoeven niet in het blok. Wat er wél in moet: ordernummer,
          ITS-nummer en klantnaam. De tijden staan nog in de tip. */
       ((a.ordernr||a.itsId)?'<div class="nr">'+(a.ordernr?esc(a.ordernr):'')+(a.ordernr&&a.itsId?' · ':'')+(a.itsId?'ITS '+esc(a.itsId):'')+'</div>':'')+
+      /* Kevin (video 13 okt 2026): "alleen leveren" ook op het blok zelf. */
+      (a.alleenLeveren?'<div class="al">Alleen leveren</div>':'')+
       '<div class="k" data-bewerk="klant" title="Klik om de naam aan te passen">'+esc(a.klant||c.naam)+'</div>'+
       /* Gerrit (17 sep 2026): plaatsnaam en spanaam ook dik in het blok; de
          rest (wie, tijd, adres, telefoon, wie het plande) pas na een klik. */
@@ -2417,7 +2422,8 @@ function kaartje(a){
   if (a.door) voet.push("gepland door "+esc(voornaam(a.door)));
   return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';'+betaalRand(a)+'">'+
     '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
-    '<span class="badge" style="background:rgba(255,255,255,.55);color:inherit">'+esc(c.naam)+'</span></div>'+
+    '<span class="badge" style="background:rgba(255,255,255,.55);color:inherit">'+esc(c.naam)+'</span>'+
+    (a.alleenLeveren?'<span class="badge al">Alleen leveren</span>':'')+'</div>'+
     '<div class="klant">'+esc(a.klant||"(naam nog invullen)")+'</div>'+
     (sub?'<div class="sub">'+sub+'</div>':"")+
     (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';

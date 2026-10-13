@@ -7600,7 +7600,7 @@ async function bonIndexBijwerken(env, bon) {
     // Voor het zoekvak in de tegel Opleverbonnen (Kevin, 22 sep 2026).
     spaType: bon.spaType || "", serienr: bon.serienr || "", adviseur: bon.adviseur || "",
     // Servicebon: geen orderbedrag, alleen het bezoek zelf (Kevin, 12 okt 2026).
-    openstaand: (bon.soort === "service" || bon.itsId) ? null : (bon.betaling && bon.betaling.openstaand != null ? bon.betaling.openstaand : null),
+    openstaand: bon.itsId ? null : (bon.betaling && bon.betaling.openstaand != null ? bon.betaling.openstaand : null),
     methode: (bon.betaling && bon.betaling.methode) || "",
     ontvangen: (bon.betaling && bon.betaling.bedrag) || 0,
     nee: Object.values(bon.checklist || {}).filter(x => x && x.a === "nee").length,
@@ -7732,11 +7732,12 @@ async function bonHandle(request, env, url) {
     let b = {}; try { b = await request.json(); } catch {}
     const bon = b.id ? await env.FONTEYN_DATA.get(BON_SLEUTEL(b.id), { type: "json" }) : null;
     if (!bon) return reply(404, { ok: false, error: "bon niet gevonden" });
-    if (bon.status === "gemaild") return reply(409, { ok: false, error: "deze bon is al naar de klant gemaild" });
+    // Kevin (13 okt 2026): "Ik moet altijd die bonnen kunnen aanpassen", ook als hij al gemaild is.
     const nieuw = bonSchoon(Object.assign({}, bon, b.bon || {}, {
       handtekeningMonteur: bon.handtekeningMonteur, handtekeningKlant: bon.handtekeningKlant, status: bon.status === "akkoord" ? "klaar" : bon.status,
     }), bon.door || wie);
     for (const k of ["checklist", "service", "opmerking", "klantMail", "geleverd", "spaType", "serienr"]) if (b.bon && k in b.bon) bon[k] = nieuw[k];
+    if (b.bon && b.bon.betaling) bon.betaling = Object.assign({}, bon.betaling || {}, { methode: nieuw.betaling.methode, bedrag: nieuw.betaling.bedrag });
     bon.kantoor = { door: wie, ts: new Date().toISOString() };
     bon.gewijzigd = bon.kantoor.ts;
     await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
@@ -7803,7 +7804,8 @@ function bonHtml(bon, vragen) {
     "<td style='padding:4px 8px;border-bottom:1px solid #eee;font-weight:600;color:" + (v.a === "ja" ? "#15803d" : v.a === "nee" ? "#b91c1c" : "#6b7280") + "'>" + e(antwoord[v.a] || "-") + "</td>" +
     "<td style='padding:4px 8px;border-bottom:1px solid #eee;color:#374151'>" + e(v.opm || "") + "</td></tr>").join("");
   const bt = bon.betaling || {};
-  const isServiceBon = bon.soort === "service" || !!bon.itsId;
+  // Alleen bij een ITS-melding telt uitsluitend het bezoek; een 'service' op een order toont de order (Kevin, 13 okt 2026).
+  const isServiceBon = !!bon.itsId;
   /* Bij een servicebon telt alleen wat er bij dit bezoek te betalen is. Het
      bedrag van de oude order van de spa hoort er nooit bij (Kevin, 12 okt 2026:
      die order is allang betaald, het bedrag staat alleen op de factuur). */
@@ -7838,7 +7840,7 @@ function bonHtml(bon, vragen) {
     (bon.serienr ? "<tr><td style='padding:3px 8px;color:#6b7280'>Serienummer</td><td style='padding:3px 8px'>" + e(bon.serienr) + "</td></tr>" : "") +
     (bon.plaats ? "<tr><td style='padding:3px 8px;color:#6b7280'>Adres</td><td style='padding:3px 8px'>" + e(bon.plaats) + "</td></tr>" : "") +
     "</table>" +
-    (!isService && (bon.geleverd || []).length ? "<h3 style='color:#144734;margin:18px 0 6px'>Geleverd</h3><table style='border-collapse:collapse;font-size:13px;width:100%'>" +
+    (bon.ordernr && !bon.itsId && (bon.geleverd || []).length ? "<h3 style='color:#144734;margin:18px 0 6px'>Geleverd</h3><table style='border-collapse:collapse;font-size:13px;width:100%'>" +
       bon.geleverd.map(g => "<tr><td " + td + " width='48'><b>" + e(g.aantal) + "x</b></td><td " + td + ">" + e(g.oms) +
         (g.aantal < g.besteld ? " <span style='color:#b45309'>(besteld " + e(g.besteld) + ", rest volgt)</span>" : "") + "</td></tr>").join("") + "</table>" : "") +
     (isService ? serviceBlok : "<h3 style='color:#144734;margin:18px 0 6px'>Gedaan bij u thuis</h3>" +

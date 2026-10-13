@@ -336,6 +336,17 @@ function belKnop(t){
   return '<a class="bel" href="tel:'+esc(nr)+'">&#128222; Bel '+esc(t)+'</a>';
 }
 
+/* Alles wat op de order staat en nog geleverd moet worden, óók de regels met
+   sterretjes (verloopstukken, klemmen, slang). Kevin (13 okt 2026): "De helft
+   staat niet op de bon wat wel op de order staat." De paklijst laat die
+   onderdelen bewust weg; de bon is voor de klant en voor het afboeken. */
+function geleverdRegels(o){
+  return (o && o.regels || []).map(function(r, i){ return { r: r, i: i }; })
+    .filter(function(x){ return x.r.omschrijving && !(x.r.open != null && x.r.afgeleverd > 0 && x.r.open <= 0); })
+    .map(function(x){ var n = (x.r.open != null && x.r.afgeleverd > 0) ? x.r.open : x.r.aantal;
+      return { i: x.i, code: String(x.r.code||""), oms: String(x.r.omschrijving).replace(/^\s*\*+\s*/, ""), besteld: n, aantal: n }; });
+}
+
 function stopHtml(a){
   var c = CATS[a.soort] || CATS.intern;
   var nr = String(a.ordernr||"").trim();
@@ -480,9 +491,10 @@ function bonBlok(a, o){
   /* Wat er echt geleverd is (Kevin, 9 okt 2026): "anders weet ik niet wat er
      geleverd is en kan ik niet de order afboeken in Logic". Standaard alles
      wat nog open stond; de monteur zet lager wat er niet is meegegaan. */
-  if (!isService && !bon.geleverd && !slot && o && o.ok)
-    bon.geleverd = pakRegels(o).map(function(x){ return { i: x.i, code: String(x.r.code||""), oms: x.r.omschrijving, besteld: x.aantal, aantal: x.aantal }; });
-  var geleverd = isService ? "" : '<h4>Geleverd</h4>' + (!bon.geleverd
+  var heeftOrder = !!bon.ordernr && !bon.itsId;
+  if (heeftOrder && !bon.geleverd && !slot && o && o.ok)
+    bon.geleverd = geleverdRegels(o);
+  var geleverd = !heeftOrder ? "" : '<h4>Geleverd</h4>' + (!bon.geleverd
     ? '<p class="wacht">Orderregels worden opgehaald&hellip;</p>'
     : bon.geleverd.map(function(g, k){
         return '<div class="gel'+(g.aantal < g.besteld ? " minder" : "")+'"><span class="om">'+esc(g.oms)+(g.code?'<small>'+esc(g.code)+'</small>':'')+'</span>'+
@@ -490,7 +502,7 @@ function bonBlok(a, o){
           '<button type="button" data-gel="'+k+'" data-d="1"'+dis+'>+</button></span><span class="van">van '+esc(g.besteld)+'</span></div>';
       }).join(""));
   var bt = bon.betaling;
-  var betaling = isService
+  var betaling = !heeftOrder && isService
     ? '<p class="wacht">Het totaal van deze servicebon staat hierboven. Vul in of de klant ter plekke heeft betaald.</p>'
     : bt.openstaand == null
     ? '<p class="wacht">Vul hieronder in wat er is voldaan; het orderbedrag volgt nog.</p>'
