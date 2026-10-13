@@ -17612,7 +17612,7 @@ const FP_WORKER = {
       if (request.method === "PUT") { await bestandZet(env, sleutel, await request.arrayBuffer()); return reply(200, { ok: true }); }
       if (request.method === "DELETE") return reply(200, { ok: true, was: await bestandWeg(env, sleutel) });
       const b = await bestandLees(env, sleutel);
-      return b ? new Response(b) : reply(404, { ok: false });
+      return b ? new Response(b, { headers: { ...corsHeaders, "Cache-Control": "no-store" } }) : reply(404, { ok: false });
     }
     if (url.pathname === "/beheer/kv-teller" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
