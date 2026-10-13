@@ -4160,8 +4160,8 @@ function pcPaneel(o){
   h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Akkoord gegeven op</b>"+
     "<input type='date' class='pcAkkoord' data-k='"+esc(k)+"' value='"+esc(s.akkoord||"")+"' style='padding:4px 6px;font:inherit;font-size:12.5px'>"+
     (s.cargoReady
-      ? "<span>→ <b>cargo ready "+esc(datumNL(s.cargoReady))+"</b> <span style='color:var(--muted)'>(akkoord + 8 weken; op "+esc(datumNL(s.meldVanaf))+" staan de mails aan Jazzi en de dealer klaar in je Berichten)</span></span>"
-      : "<span style='color:var(--muted)'>vul de datum in waarop je akkoord gaf op de proforma; cargo ready is 8 weken later</span>")+"</div>";
+      ? "<span>→ <b>cargo ready "+esc(datumNL(s.cargoReady))+"</b> <span style='color:var(--muted)'>(akkoord + "+(s.weken||(o.usa?4:8))+" weken; op "+esc(datumNL(s.meldVanaf))+" staan de mails aan Jazzi en de dealer klaar in je Berichten)</span></span>"
+      : "<span style='color:var(--muted)'>vul de datum in waarop je akkoord gaf op de proforma; cargo ready is "+(o.usa?4:8)+" weken later</span>")+"</div>";
   const magDeposit=!s.betaald&&!s.depositVerstuurd&&(Number(s.betaaldPct)||0)<30;
   h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Betaling</b>"+
     (s.betaald ? "<span class='pill' style='background:#dcfce7;color:#15803d'>volledig betaald</span>"

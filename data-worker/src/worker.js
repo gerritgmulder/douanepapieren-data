@@ -8756,8 +8756,9 @@ function pcOrdersUitLedger(ledger) {
       const k = String(r.ordernr);
       const o = per[k] || (per[k] = { ordernr: r.ordernr, debtorId: r.debtorId, naam: r.naam,
         containerNr: r.containerNr || null, referentie: r.referentie || null,
-        totaal: Number(r.totaal) || 0, aanbetaling: Number(r.aanbetaling) || 0, betaaldPct: Number(r.betaaldPct) || 0, qty: 0 });
+        totaal: Number(r.totaal) || 0, aanbetaling: Number(r.aanbetaling) || 0, betaaldPct: Number(r.betaaldPct) || 0, qty: 0, usa: false });
       o.qty += Number(r.qty) || 0;
+      if (r.usa) o.usa = true;
       if (!o.containerNr && r.containerNr) o.containerNr = r.containerNr;
     }
   }
@@ -8785,8 +8786,11 @@ function pcToestand(order, rec, vandaag) {
   uit.laatsteMail = naBalance.length ? naBalance[naBalance.length - 1].ts : null;
   if (!rec.akkoord) return uit;
   /* Gerrit (7 okt 2026): cargo ready is 8 weken na het akkoord op de
-     proforma, en 5 dagen ervoor komen de mails aan Jazzi en de dealer klaar. */
-  uit.cargoReady = pcPlusDagen(rec.akkoord, 56);
+     proforma, en 5 dagen ervoor komen de mails aan Jazzi en de dealer klaar.
+     Chantal (13 okt 2026): dat geldt voor Europa; bij Amerika (Warehouse
+     Texas) is cargo ready 4 weken na het akkoord. */
+  uit.weken = order && order.usa ? 4 : 8;
+  uit.cargoReady = pcPlusDagen(rec.akkoord, uit.weken * 7);
   uit.meldVanaf = pcPlusDagen(uit.cargoReady, -5);
   if (!order || uit.betaald) return uit;              // geleverd of betaald: klaar
   const laatsteDag = uit.laatsteMail
@@ -17860,10 +17864,15 @@ const FP_WORKER = {
     if (!verwacht || delen[1] !== verwacht.slice(0, 32)) return new Response("Geen toegang", { status: 403 });
     const pad = delen.slice(2).join("/") || "index.html";
     if (!/^[\w./-]+$/.test(pad) || pad.includes("..")) return new Response("Niet gevonden", { status: 404 });
-    const inhoud = await env.FONTEYN_DATA.get("tuinconfig/" + pad);
+    // Tekst (pagina, code) en binaire bestanden (foto's, lucht, 3D-modellen) apart.
+    const ext = pad.split(".").pop().toLowerCase();
+    const SOORT = { html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8", json: "application/json",
+      svg: "image/svg+xml", gltf: "model/gltf+json", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", hdr: "application/octet-stream", bin: "application/octet-stream" };
+    const binair = ["png", "jpg", "jpeg", "hdr", "bin"].includes(ext);
+    const inhoud = await env.FONTEYN_DATA.get("tuinconfig/" + pad, binair ? { type: "arrayBuffer" } : undefined);
     if (inhoud == null) return new Response("Niet gevonden", { status: 404 });
-    const soort = { html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8", json: "application/json", svg: "image/svg+xml" }[pad.split(".").pop()] || "text/plain";
-    return new Response(inhoud, { headers: { "Content-Type": soort, "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+    return new Response(inhoud, { headers: { "Content-Type": SOORT[ext] || "text/plain",
+      "Cache-Control": pad.startsWith("assets/") ? "private, max-age=86400" : "no-store", "X-Robots-Tag": "noindex" } });
   }
   if (url.pathname === "/planning/rijtijd" && request.method === "POST") {
     if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
