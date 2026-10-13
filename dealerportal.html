@@ -1666,15 +1666,16 @@ function algemeenVoorModel(model){
   const m = (stockModels||[]).find(x => x.model === model);
   if (m && GEEN_ALG_SPA.has(m.collection)) return [];
   /* De handleiding bestaat in vijf talen (2 okt 2026): (EN), (NL), (DE),
-     (FR) en (IT) achter de titel. Een partner ziet die in de taal van het
-     portaal, en anders de Engelse. */
+     (FR) en (IT) achter de titel. Ahmed (video 7 okt 2026): een Duitse partner
+     wil hem in het Duits, ook als het portaal in het Nederlands staat. Dus alle
+     talen, die van het portaal bovenaan, dan Engels, Duits, Frans, Italiaans. */
   const taalVan = f => { const t = String(f.title || "").match(/\((EN|NL|DE|FR|IT)\)\s*$/); return t ? t[1].toLowerCase() : null; };
   const metTaal = algemeneSpaDocs.filter(taalVan);
   if (!metTaal.length) return algemeneSpaDocs;
   const nu = window.ppTaal || "en";
-  let keuze = metTaal.filter(f => taalVan(f) === nu);
-  if (!keuze.length) keuze = metTaal.filter(f => taalVan(f) === "en");
-  return algemeneSpaDocs.filter(f => !taalVan(f)).concat(keuze);
+  const volgorde = [nu, "en", "de", "fr", "it", "nl"];
+  const plek = f => { const i = volgorde.indexOf(taalVan(f)); return i < 0 ? 99 : i; };
+  return algemeneSpaDocs.filter(f => !taalVan(f)).concat(metTaal.slice().sort((a, b) => plek(a) - plek(b)));
 }
 function docsVoorModel(model){
   const pogingen = [String(model||"").replace(/^spa\s+/i, "").trim()];
