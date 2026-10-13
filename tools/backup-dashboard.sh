@@ -101,11 +101,23 @@ else
   zeg "     LET OP: de sleutellijst kwam niet (goed) binnen; met de vorige verder"
   rm -f "$DOEL/cloudflare/kv/alle-sleutels.json.nieuw"
 fi
+# Sinds 13 okt 2026 staan de documenten niet meer in KV maar in het archief
+# (een Durable Object met 5 GB, zie Archief in worker.js): KV raakte vol. De
+# lijst daarvan komt via de worker, met de teamsleutel.
+TEAMSLEUTEL="$(grep -oE '[A-Za-z0-9_-]{20,}' "$SLEUTELMAP/fonteyn-teamsleutel-dashboard.txt" 2>/dev/null | head -1)"
+export TEAMSLEUTEL
+curl -sf "https://fonteyn-data-store.g-mulder.workers.dev/beheer/archief?lijst=1" -H "X-Fonteyn-Auth: $TEAMSLEUTEL" \
+  > "$DOEL/cloudflare/kv/archief-sleutels.json.nieuw" 2>>"$LOG.fouten" \
+  && python3 -c 'import json,sys; assert isinstance(json.load(open(sys.argv[1])), list)' "$DOEL/cloudflare/kv/archief-sleutels.json.nieuw" 2>>"$LOG.fouten" \
+  && mv "$DOEL/cloudflare/kv/archief-sleutels.json.nieuw" "$DOEL/cloudflare/kv/archief-sleutels.json" \
+  || { zeg "     LET OP: de lijst van het archief kwam niet binnen; met de vorige verder"; rm -f "$DOEL/cloudflare/kv/archief-sleutels.json.nieuw"; }
 python3 - "$DOEL" <<'PY'
 import json,sys,os
 doel=sys.argv[1]
 d=json.load(open(os.path.join(doel,"cloudflare/kv/alle-sleutels.json")))
 namen=[x["name"] for x in d]
+try: namen+=[x["name"] for x in json.load(open(os.path.join(doel,"cloudflare/kv/archief-sleutels.json"))) if x["name"] not in set(namen)]
+except Exception: pass
 soort=lambda n: n.split(":")[0]
 binair=[n for n in namen if soort(n) in ("dpfile","plfile","schipfile")]
 vluchtig=[n for n in namen if soort(n) in ("dp-sess","mailsleutel","dp-login")]

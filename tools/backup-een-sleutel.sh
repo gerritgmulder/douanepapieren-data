@@ -17,6 +17,13 @@ fi
 # Eén herkansing. Met vijf aanvragen tegelijk geeft Cloudflare af en toe een
 # 401 terwijl het token net ververst wordt; de tweede poging lukt dan wel. Een
 # lege waarde is geen fout - die bestaat gewoon - dus daar niet op herkansen.
+# Documenten komen uit het archief (via de worker); staat er niets, dan nog
+# één keer in KV kijken.
+if [ "$soort" = "doc" ] && [ -n "${TEAMSLEUTEL:-}" ]; then
+  enc="$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$sleutel")"
+  if curl -sf "https://fonteyn-data-store.g-mulder.workers.dev/beheer/archief?sleutel=$enc" -H "X-Fonteyn-Auth: $TEAMSLEUTEL" -o "$doel" 2>>"$LOG.fouten" && [ -s "$doel" ]; then exit 0; fi
+  rm -f "$doel"
+fi
 poging=1
 while :; do
   if $WRANGLER kv key get "$sleutel" --namespace-id "$NS" --remote > "$doel" 2>>"$LOG.fouten"; then

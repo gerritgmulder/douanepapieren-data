@@ -2529,7 +2529,7 @@ async function dpAdminPutFile(request, env, url) {
   const buf = await request.arrayBuffer();
   if (!buf.byteLength) return reply(400, { ok: false, error: "empty-body" });
   if (buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "max-24mb" });
-  await env.FONTEYN_DATA.put("dpfile:" + id, buf);
+  await bestandZet(env, "dpfile:" + id, buf);
   return reply(200, { ok: true, id, bytes: buf.byteLength });
 }
 
@@ -2543,7 +2543,7 @@ async function dpServeFile(env, url, sess) {
   if (dpPrijsgevoeligeIds(docsData).has(id) && await dpIsDealer(env, sess)) {
     return reply(403, { ok: false, error: "niet-beschikbaar-voor-dealers" });
   }
-  const buf = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
+  const buf = await bestandLees(env, "dpfile:" + id);
   if (!buf) return reply(404, { ok: false, error: "not-found" });
   const ext = id.split(".").pop();
   const name = id.split("/").pop().replace(/"/g, "");
@@ -4872,7 +4872,7 @@ async function handleDealerRoutes(request, env, url) {
       if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const id = dpFileId(url);
       if (!id) return reply(400, { ok: false, error: "bad-id" });
-      const buf = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
+      const buf = await bestandLees(env, "dpfile:" + id);
       if (!buf) return reply(404, { ok: false, error: "not-found" });
       return new Response(buf, { status: 200, headers: { ...corsHeaders,
         "Content-Type": id.endsWith(".pdf") ? "application/pdf" : "application/octet-stream",
@@ -4888,8 +4888,7 @@ async function handleDealerRoutes(request, env, url) {
       if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const id = dpFileId(url);
       if (!id) return reply(400, { ok: false, error: "bad-id" });
-      const bestond = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
-      await env.FONTEYN_DATA.delete("dpfile:" + id);
+      const bestond = await bestandWeg(env, "dpfile:" + id);
       return reply(200, { ok: true, id, bestond: !!bestond });
     }
     if (p === "/dealers/admin/kleurfotos" && request.method === "GET") return dpAdminKleurfotos(env, url);
@@ -14742,7 +14741,7 @@ async function plZetBestand(request, env, url) {
   // Excel en zit daar ver onder; een bestand dat hier tegenaan loopt is
   // vrijwel zeker iets anders (een scan op volle resolutie bijvoorbeeld).
   if (buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "bestand is groter dan 24 MB" });
-  await env.FONTEYN_DATA.put("plfile:" + id, buf);
+  await bestandZet(env, "plfile:" + id, buf);
   return reply(200, { ok: true, id, bytes: buf.byteLength });
 }
 
@@ -14752,7 +14751,7 @@ async function plGeefBestand(request, env, url) {
   if (!plAuthOk(request, env)) return reply(401, { ok: false, error: "Unauthorized" });
   const id = plBestandId(url);
   if (!id) return reply(400, { ok: false, error: "ongeldig id" });
-  const buf = await env.FONTEYN_DATA.get("plfile:" + id, { type: "arrayBuffer" });
+  const buf = await bestandLees(env, "plfile:" + id);
   if (!buf) return reply(404, { ok: false, error: "bestand niet gevonden" });
   const ext = id.split(".").pop();
   return new Response(buf, { headers: {
@@ -14774,7 +14773,7 @@ async function plWisBestand(request, env) {
   for (const raw of ids) {
     const id = String(raw || "").toLowerCase();
     if (!/^[a-z0-9][a-z0-9._-]{5,90}$/.test(id) || id.includes("..")) continue;
-    await env.FONTEYN_DATA.delete("plfile:" + id);
+    await bestandWeg(env, "plfile:" + id);
     gewist.push(id);
   }
   if (!gewist.length) return reply(400, { ok: false, error: "geen geldig id" });
@@ -15379,13 +15378,13 @@ async function schipZetBestand(request, env, url) {
   const buf = await request.arrayBuffer();
   if (!buf.byteLength) return reply(400, { ok: false, error: "leeg bestand" });
   if (buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "groter dan 24 MB" });
-  await env.FONTEYN_DATA.put("schipfile:" + id, buf);
+  await bestandZet(env, "schipfile:" + id, buf);
   return reply(200, { ok: true, id, bytes: buf.byteLength });
 }
 async function schipGeefBestand(env, url) {
   const id = schipBestandId(url);
   if (!id) return reply(400, { ok: false, error: "ongeldige bestandsnaam" });
-  const buf = await env.FONTEYN_DATA.get("schipfile:" + id, { type: "arrayBuffer" });
+  const buf = await bestandLees(env, "schipfile:" + id);
   if (!buf) return reply(404, { ok: false, error: "bestand niet gevonden" });
   const ext = String(id.split(".").pop() || "").toLowerCase();
   const naam = id.split("/").pop();
@@ -16960,6 +16959,106 @@ export class LiveKamer {
   webSocketError(ws) { this.webSocketClose(ws); }
 }
 
+/* ─── Archief: bestanden in een Durable Object met SQLite ──────────────
+   Gerrit (13 okt 2026): melding van Cloudflare dat we op 90% zitten. KV
+   (de gewone opslag) heeft gratis 1 GB en 1000 keer opslaan per dag; de
+   prijslijsten (ruim 320 MB) en de documenten van Passion Partners (ruim
+   260 MB) namen samen al driekwart van die GB in, en elk geüpload bestand
+   kostte een van de 1000. Een Durable Object met SQLite heeft gratis 5 GB
+   en 100.000 schrijfacties per dag, en geeft bestanden terug als
+   ArrayBuffer (D1 geeft een lijst getallen, dat kost bij 20 MB te veel
+   rekentijd). Eén rij mag maximaal 2 MB zijn, dus een bestand gaat in
+   stukken van 1,9 MB.
+
+   Lezen kijkt eerst hier en dan pas in KV, zodat bestanden van vóór de
+   verhuizing gewoon blijven werken. /beheer/archief-verhuis zet ze over. */
+const ARCHIEF_STUK = 1900000;
+export class Archief {
+  constructor(state, env) {
+    this.state = state; this.sql = state.storage.sql;
+    this.sql.exec("CREATE TABLE IF NOT EXISTS stuk (sleutel TEXT NOT NULL, nr INTEGER NOT NULL, data BLOB, PRIMARY KEY (sleutel, nr))");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS bestand (sleutel TEXT PRIMARY KEY, grootte INTEGER, stukken INTEGER, ts INTEGER)");
+  }
+  async fetch(request) {
+    const sleutel = request.headers.get("X-Sleutel") || "";
+    if (!sleutel) return new Response("geen sleutel", { status: 400 });
+    if (request.method === "GET") {
+      const kop = [...this.sql.exec("SELECT grootte, stukken FROM bestand WHERE sleutel = ?", sleutel)][0];
+      if (!kop) return new Response(null, { status: 404 });
+      const delen = [...this.sql.exec("SELECT data FROM stuk WHERE sleutel = ? ORDER BY nr", sleutel)].map(r => r.data);
+      return new Response(new Blob(delen), { headers: { "X-Grootte": String(kop.grootte) } });
+    }
+    if (request.method === "PUT") {
+      const buf = await request.arrayBuffer();
+      const n = Math.max(1, Math.ceil(buf.byteLength / ARCHIEF_STUK));
+      this.state.storage.transactionSync(() => {
+        this.sql.exec("DELETE FROM stuk WHERE sleutel = ?", sleutel);
+        for (let i = 0; i < n; i++) this.sql.exec("INSERT INTO stuk (sleutel, nr, data) VALUES (?, ?, ?)", sleutel, i, buf.slice(i * ARCHIEF_STUK, (i + 1) * ARCHIEF_STUK));
+        this.sql.exec("INSERT OR REPLACE INTO bestand (sleutel, grootte, stukken, ts) VALUES (?, ?, ?, ?)", sleutel, buf.byteLength, n, Date.now());
+      });
+      return new Response(JSON.stringify({ ok: true, grootte: buf.byteLength, stukken: n }));
+    }
+    if (request.method === "DELETE") {
+      const was = [...this.sql.exec("SELECT 1 FROM bestand WHERE sleutel = ?", sleutel)].length > 0;
+      this.sql.exec("DELETE FROM stuk WHERE sleutel = ?", sleutel);
+      this.sql.exec("DELETE FROM bestand WHERE sleutel = ?", sleutel);
+      return new Response(JSON.stringify({ ok: true, was }));
+    }
+    if (request.method === "POST" && sleutel === "*lijst") {
+      return new Response(JSON.stringify([...this.sql.exec("SELECT sleutel AS name, grootte, ts FROM bestand ORDER BY sleutel")]));
+    }
+    if (request.method === "POST" && sleutel === "*overzicht") {
+      const r = [...this.sql.exec("SELECT COUNT(*) AS n, SUM(grootte) AS bytes FROM bestand")][0];
+      return new Response(JSON.stringify({ ok: true, bestanden: r.n, bytes: r.bytes || 0, opslag: this.sql.databaseSize }));
+    }
+    return new Response("?", { status: 405 });
+  }
+}
+function archiefDO(env) { return env.ARCHIEF.get(env.ARCHIEF.idFromName("bestanden")); }
+async function bestandLees(env, sleutel) {
+  if (env.ARCHIEF) {
+    try {
+      const r = await archiefDO(env).fetch("https://archief/", { headers: { "X-Sleutel": sleutel } });
+      if (r.status === 200) return await r.arrayBuffer();
+    } catch (e) { console.log("[archief] lezen: " + (e.message || e)); }
+  }
+  const kv = await env.FONTEYN_DATA.get(sleutel, { type: "arrayBuffer" });
+  return kv && kv.byteLength ? kv : null;
+}
+async function bestandZet(env, sleutel, buf) {
+  if (!env.ARCHIEF) return env.FONTEYN_DATA.put(sleutel, buf);
+  const r = await archiefDO(env).fetch("https://archief/", { method: "PUT", headers: { "X-Sleutel": sleutel }, body: buf });
+  if (!r.ok) throw new Error("archief: opslaan mislukt (" + r.status + ")");
+}
+// Geeft terug of het bestand er was. KV ook leeggooien zolang de verhuizing loopt.
+async function bestandWeg(env, sleutel) {
+  let was = false;
+  if (env.ARCHIEF) { try { was = !!(await (await archiefDO(env).fetch("https://archief/", { method: "DELETE", headers: { "X-Sleutel": sleutel } })).json()).was; } catch (e) {} }
+  const oud = await env.FONTEYN_DATA.get(sleutel, { type: "stream" });
+  if (oud) { try { await oud.cancel(); } catch (e) {} await env.FONTEYN_DATA.delete(sleutel); was = true; }
+  return was;
+}
+/* KV -> archief, een handvol per keer (het gratis plan staat 50 aanroepen per
+   verzoek toe). Een bestand gaat pas uit KV als het archief dezelfde grootte
+   terugmeldt. */
+async function archiefVerhuis(env, prefix, max) {
+  /* De lijst van KV loopt tot een minuut achter: net verhuisde sleutels staan
+     er dan nog in, maar zijn leeg. Die worden overgeslagen. */
+  const lijst = await env.FONTEYN_DATA.list({ prefix, limit: 1000 });
+  const uit = [];
+  let gedaan = 0, leeg = 0;
+  for (const k of lijst.keys) {
+    if (gedaan >= Math.min(max, 15) || leeg > 400) break;
+    const buf = await env.FONTEYN_DATA.get(k.name, { type: "arrayBuffer" });
+    if (!buf) { leeg++; continue; }
+    gedaan++;
+    const r = await (await archiefDO(env).fetch("https://archief/", { method: "PUT", headers: { "X-Sleutel": k.name }, body: buf })).json();
+    if (r.ok && r.grootte === buf.byteLength) { await env.FONTEYN_DATA.delete(k.name); uit.push({ sleutel: k.name, grootte: r.grootte }); }
+    else uit.push({ sleutel: k.name, fout: true });
+  }
+  return { ok: true, verhuisd: uit, leeg, meer: gedaan > 0 };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    DE POORT VOOR EXTERNEN
    ═══════════════════════════════════════════════════════════════════════════
@@ -17327,8 +17426,41 @@ async function kortingenMaand(env, maand, vers) {
   return uit;
 }
 
+/* ─── Teller voor opslaan in KV ─────────────────────────────────────────
+   Het gratis plan van Cloudflare geeft 1000 keer opslaan (put/delete) per dag
+   voor het hele Dashboard; daarboven mislukt opslaan tot 02:00 's nachts. Op
+   12 okt 2026 zaten we op 959. Deze teller schrijft per dag en per soort
+   sleutel (alles vóór de eerste : of /, zonder nummers) mee in D1 (tabel
+   kv_teller), zodat zichtbaar is wie het budget opmaakt. D1 heeft 100.000
+   schrijfacties per dag, dus de teller kost niets van het KV-budget.
+   Zien: GET /beheer/kv-teller (team-sleutel). */
+function kvSoort(key) {
+  const k = String(key || "");
+  const m = k.match(/^[^:/]+/);
+  return (m ? m[0] : k).replace(/[-_]\d.*$/, "").slice(0, 48);
+}
+function kvMetTeller(env, ctx) {
+  const kv = env && env.FONTEYN_DATA, db = env && env.ACTIVITEIT;
+  if (!kv || !db || kv.__teller) return env;
+  const tel = (soort, key) => {
+    const w = db.prepare("INSERT INTO kv_teller (dag, sleutel, n) VALUES (?1, ?2, 1) ON CONFLICT(dag, sleutel) DO UPDATE SET n = n + 1")
+      .bind(new Date().toISOString().slice(0, 10), soort + " " + kvSoort(key)).run().catch(() => {});
+    if (ctx && ctx.waitUntil) ctx.waitUntil(w);
+  };
+  const omhulsel = {
+    __teller: true,
+    get: (...a) => kv.get(...a),
+    getWithMetadata: (...a) => kv.getWithMetadata(...a),
+    list: (...a) => kv.list(...a),
+    put: (k, ...a) => { tel("put", k); return kv.put(k, ...a); },
+    delete: (k, ...a) => { tel("delete", k); return kv.delete(k, ...a); },
+  };
+  return Object.assign({}, env, { FONTEYN_DATA: omhulsel });
+}
+
 const FP_WORKER = {
   async scheduled(event, env, ctx) {
+    env = kvMetTeller(env, ctx);
     ctx.waitUntil((async () => {
       try {
         if (!env.LOGIC4_USERNAME) { console.log("[cron] geen Logic4-creds"); return; }
@@ -17447,7 +17579,8 @@ const FP_WORKER = {
     })());
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
+    env = kvMetTeller(env, ctx);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
@@ -17463,6 +17596,29 @@ const FP_WORKER = {
     if (url.pathname.startsWith("/extern/")) {
       const ex = await externHandle(request, env, url);
       if (ex) return ex;
+    }
+
+    if (url.pathname === "/beheer/archief" || url.pathname === "/beheer/archief-verhuis") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const sleutel = String(url.searchParams.get("sleutel") || "");
+      if (url.pathname === "/beheer/archief-verhuis" && request.method === "POST") {
+        const prefix = String(url.searchParams.get("prefix") || "");
+        if (!/^(plfile:|dpfile:|schipfile:|inkoopfile:|tuinconfig\/)/.test(prefix)) return reply(400, { ok: false, error: "prefix" });
+        return reply(200, await archiefVerhuis(env, prefix, Number(url.searchParams.get("max")) || 10));
+      }
+      if (request.method === "GET" && url.searchParams.get("lijst")) return new Response((await archiefDO(env).fetch("https://archief/", { method: "POST", headers: { "X-Sleutel": "*lijst" } })).body, { headers: { "Content-Type": "application/json" } });
+      if (request.method === "GET" && !sleutel) return new Response((await archiefDO(env).fetch("https://archief/", { method: "POST", headers: { "X-Sleutel": "*overzicht" } })).body, { headers: { "Content-Type": "application/json" } });
+      if (!/^(plfile:|dpfile:|schipfile:|inkoopfile:|tuinconfig\/)/.test(sleutel)) return reply(400, { ok: false, error: "sleutel" });
+      if (request.method === "PUT") { await bestandZet(env, sleutel, await request.arrayBuffer()); return reply(200, { ok: true }); }
+      if (request.method === "DELETE") return reply(200, { ok: true, was: await bestandWeg(env, sleutel) });
+      const b = await bestandLees(env, sleutel);
+      return b ? new Response(b) : reply(404, { ok: false });
+    }
+    if (url.pathname === "/beheer/kv-teller" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const r = await env.ACTIVITEIT.prepare("SELECT dag, sleutel, n FROM kv_teller WHERE dag >= ?1 ORDER BY dag DESC, n DESC")
+        .bind(new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10)).all();
+      return reply(200, { ok: true, rijen: r.results || [] });
     }
 
     // Team-sleutel voor medewerkers (Logic4-login als bewijs)
@@ -17871,7 +18027,7 @@ const FP_WORKER = {
     const SOORT = { html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8", json: "application/json",
       svg: "image/svg+xml", gltf: "model/gltf+json", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", hdr: "application/octet-stream", bin: "application/octet-stream" };
     const binair = ["png", "jpg", "jpeg", "hdr", "bin"].includes(ext);
-    const inhoud = await env.FONTEYN_DATA.get("tuinconfig/" + pad, binair ? { type: "arrayBuffer" } : undefined);
+    const inhoud = (await bestandLees(env, "tuinconfig/" + pad)) ?? (await env.FONTEYN_DATA.get("tuinconfig/" + pad, binair ? { type: "arrayBuffer" } : undefined));
     if (inhoud == null) return new Response("Niet gevonden", { status: 404 });
     return new Response(inhoud, { headers: { "Content-Type": SOORT[ext] || "text/plain",
       "Cache-Control": pad.startsWith("assets/") ? "private, max-age=86400" : "no-store", "X-Robots-Tag": "noindex" } });
@@ -18530,12 +18686,12 @@ const FP_WORKER = {
           if (!/^[a-z0-9_.\-]{3,120}$/.test(id)) return reply(400, { ok: false, error: "ongeldige bestandsnaam" });
           const buf = await request.arrayBuffer();
           if (!buf.byteLength || buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "leeg of groter dan 24 MB" });
-          await env.FONTEYN_DATA.put("inkoopfile:" + id, buf);
+          await bestandZet(env, "inkoopfile:" + id, buf);
           return reply(200, { ok: true, id });
         }
         if (url.pathname === "/inkoop/bestand" && request.method === "GET") {
           const id = (url.searchParams.get("id") || "").toLowerCase();
-          const buf = await env.FONTEYN_DATA.get("inkoopfile:" + id, { type: "arrayBuffer" });
+          const buf = await bestandLees(env, "inkoopfile:" + id);
           if (!buf) return reply(404, { ok: false, error: "bestand niet gevonden" });
           const ext = id.split(".").pop();
           return new Response(buf, { status: 200, headers: { "Content-Type": ext === "pdf" ? "application/pdf" : ext === "xml" ? "application/xml" : "application/octet-stream", "Content-Disposition": 'inline; filename="' + id.split("/").pop() + '"', "Access-Control-Allow-Origin": "*" } });

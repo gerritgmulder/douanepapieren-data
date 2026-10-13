@@ -71,8 +71,12 @@ crons = ["0 * * * *", "30 * * * *", "15 * * * *", "45 * * * *"]
 # ook op het gratis plan beschikbaar (met SQLite-opslag); wij bewaren er
 # niets in - de KV-bucket blijft de waarheid - dus de limieten raken ons niet.
 [durable_objects]
-bindings = [{ name = "LIVE", class_name = "LiveKamer" }]
+bindings = [{ name = "LIVE", class_name = "LiveKamer" }, { name = "ARCHIEF", class_name = "Archief" }]
 
 [[migrations]]
 tag = "live-v1"
 new_sqlite_classes = ["LiveKamer"]
+
+[[migrations]]
+tag = "archief-v1"
+new_sqlite_classes = ["Archief"]
