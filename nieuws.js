@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "planning.html", soort: "nieuw",
+      titel: "Planning",
+      wat:   "Je ziet nu de tegel Planning: alle routes en afspraken van de bezorgers en monteurs."
+    },
+    {
       datum: "2026-10-14", bestand: "voorraad.html", soort: "beter",
       titel: "Particulier: reserveringen weer bovenaan",
       wat:   "In het tabblad Particulier staan de reserveringen weer bovenaan, daaronder Afroep en binnengekomen, en daaronder Gepland. Nieuwe kleuren uit Logic4 (zoals de Soulmate in Full OAK) staan nu ook in de lijst."

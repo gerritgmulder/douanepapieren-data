@@ -298,6 +298,8 @@
       // Wennink, Patrick Kroes en Hans van Putten bewust niet (Kevin).
       // bertjan.kok is dezelfde persoon als bertjan (Gerrit, 12 sep 2026).
       "dylan.possemis", "joeri.rijkenberg", "joey.mosterd", "mike.de.boer", "plaatsing",
+      // Manon en Nomi (Gerrit, 14 okt 2026), kijken.
+      "manon", "nomi",
     ],
     /* Wijzigen doen Kevin en Gerwin (Gerrit, 7 sep 2026: "alleen Kevin en
        Gerwin moeten bewerkingsrechten hebben"). De rest van de afdeling -
