@@ -17,6 +17,15 @@ fi
 # Eén herkansing. Met vijf aanvragen tegelijk geeft Cloudflare af en toe een
 # 401 terwijl het token net ververst wordt; de tweede poging lukt dan wel. Een
 # lege waarde is geen fout - die bestaat gewoon - dus daar niet op herkansen.
+# Buckets via de worker: die leest eerst D1 (waar sinds 14 okt 2026 alles
+# wordt bewaard) en dan KV. Rechtstreeks uit KV zou een oude stand opleveren.
+if [ "$soort" = "bucket" ] && [ -n "${TEAMSLEUTEL:-}" ]; then
+  enc="$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$sleutel")"
+  code=$(curl -s -o "$doel" -w "%{http_code}" "https://fonteyn-data-store.g-mulder.workers.dev/beheer/kv?sleutel=$enc" -H "X-Fonteyn-Auth: $TEAMSLEUTEL" 2>>"$LOG.fouten")
+  if [ "$code" = "200" ] && [ -s "$doel" ]; then exit 0; fi
+  if [ "$code" = "404" ]; then echo "LEEG $sleutel" >> "$LOG"; rm -f "$doel"; exit 0; fi
+  rm -f "$doel"
+fi
 # Documenten komen uit het archief (via de worker); staat er niets, dan nog
 # één keer in KV kijken.
 if [ "$soort" = "doc" ] && [ -n "${TEAMSLEUTEL:-}" ]; then

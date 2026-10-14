@@ -17493,6 +17493,20 @@ function kvSoort(key) {
   const m = k.match(/^[^:/]+/);
   return (m ? m[0] : k).replace(/[-_]\d.*$/, "").slice(0, 48);
 }
+/* ─── Opslaan in D1 in plaats van KV ────────────────────────────────────
+   14 okt 2026: Cloudflare blokkeerde KV-opslaan voor de rest van de dag
+   ("exceeded the daily Workers KV free tier limit of 1,000 put operations").
+   Dan valt in elk Dashboard het bewaren uit: planning, bonnen, vinkjes.
+   Gerrit: "DIT MAG NOOIT GEBEUREN".
+
+   Daarom gaat elk put/delete van FONTEYN_DATA nu naar D1 (tabel kv in
+   fonteyn-activiteit): 100.000 geschreven rijen per dag in plaats van 1.000
+   keer opslaan, en meteen zichtbaar in plaats van tot een minuut later. Lezen
+   kijkt eerst in D1 en anders in KV, dus alles wat vóór vandaag in KV stond
+   blijft gewoon werken. Een tekst groter dan een rij mag (2 MB) gaat in
+   stukken; binaire waarden gaan naar het Archief (kvbin/<sleutel>).
+   De rest van de code merkt hier niets van: het is dezelfde get/put/list. */
+const KVD1_STUK = 500000;   // tekens per rij; ook bij 4 bytes per teken < 2 MB
 function kvMetTeller(env, ctx) {
   const kv = env && env.FONTEYN_DATA, db = env && env.ACTIVITEIT;
   if (!kv || !db || kv.__teller) return env;
@@ -17501,14 +17515,112 @@ function kvMetTeller(env, ctx) {
       .bind(new Date().toISOString().slice(0, 10), soort + " " + kvSoort(key)).run().catch(() => {});
     if (ctx && ctx.waitUntil) ctx.waitUntil(w);
   };
-  const omhulsel = {
-    __teller: true,
-    get: (...a) => kv.get(...a),
-    getWithMetadata: (...a) => kv.getWithMetadata(...a),
-    list: (...a) => kv.list(...a),
-    put: (k, ...a) => { tel("put", k); return kv.put(k, ...a); },
-    delete: (k, ...a) => { tel("delete", k); return kv.delete(k, ...a); },
+  const leesD1 = async (key) => {
+    try {
+      const r = await db.prepare("SELECT deel, waarde, soort, meta, verloopt FROM kv WHERE sleutel = ?1 ORDER BY deel").bind(String(key)).all();
+      const rijen = r.results || [];
+      if (!rijen.length) return null;
+      const kop = rijen[0];
+      if (kop.soort === "weg") return { weg: true };
+      if (kop.verloopt && kop.verloopt * 1000 < Date.now()) return { weg: true };
+      let meta = null; try { meta = kop.meta ? JSON.parse(kop.meta) : null; } catch (e) {}
+      if (kop.soort === "bin") return { bin: true, meta };
+      return { tekst: rijen.map(x => x.waarde || "").join(""), meta };
+    } catch (e) { console.log("[kv-d1] lezen " + key + ": " + (e.message || e)); return null; }
   };
+  const typeVan = (opt) => typeof opt === "string" ? opt : ((opt && opt.type) || "text");
+  const omzetten = async (key, d, type) => {
+    if (d.bin) {
+      const buf = await bestandLees(env, "kvbin/" + key);
+      if (!buf) return null;
+      if (type === "arrayBuffer") return buf;
+      if (type === "stream") return new Response(buf).body;
+      const s = new TextDecoder().decode(buf);
+      return type === "json" ? JSON.parse(s) : s;
+    }
+    if (type === "json") return JSON.parse(d.tekst);
+    if (type === "arrayBuffer") return new TextEncoder().encode(d.tekst).buffer;
+    if (type === "stream") return new Response(d.tekst).body;
+    return d.tekst;
+  };
+  const get = async (key, opt) => {
+    const d = await leesD1(key);
+    if (d) return d.weg ? null : omzetten(key, d, typeVan(opt));
+    return kv.get(key, opt);
+  };
+  const getWithMetadata = async (key, opt) => {
+    const d = await leesD1(key);
+    if (d) return d.weg ? { value: null, metadata: null } : { value: await omzetten(key, d, typeVan(opt)), metadata: d.meta || null };
+    return kv.getWithMetadata(key, opt);
+  };
+  const put = async (key, value, opts) => {
+    tel("put", key);
+    key = String(key);
+    const o = opts || {};
+    const verloopt = o.expiration ? Number(o.expiration) : (o.expirationTtl ? Math.floor(Date.now() / 1000) + Number(o.expirationTtl) : null);
+    const meta = o.metadata != null ? JSON.stringify(o.metadata) : null;
+    let soort = "tekst", tekst = null;
+    if (typeof value === "string") tekst = value;
+    else if (value == null) tekst = "";
+    else {
+      let buf = value;
+      if (value instanceof ReadableStream) buf = await new Response(value).arrayBuffer();
+      else if (ArrayBuffer.isView(value)) buf = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+      if (!(buf instanceof ArrayBuffer)) { tekst = String(value); }
+      else { soort = "bin"; await bestandZet(env, "kvbin/" + key, buf); }
+    }
+    const nu = Date.now();
+    const stmts = [db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(key)];
+    if (soort === "bin") {
+      stmts.push(db.prepare("INSERT INTO kv (sleutel, deel, waarde, soort, meta, verloopt, delen, ts) VALUES (?1, 0, NULL, 'bin', ?2, ?3, 0, ?4)").bind(key, meta, verloopt, nu));
+    } else {
+      const n = Math.max(1, Math.ceil(tekst.length / KVD1_STUK));
+      for (let i = 0; i < n; i++)
+        stmts.push(db.prepare("INSERT INTO kv (sleutel, deel, waarde, soort, meta, verloopt, delen, ts) VALUES (?1, ?2, ?3, 'tekst', ?4, ?5, ?6, ?7)")
+          .bind(key, i, tekst.slice(i * KVD1_STUK, (i + 1) * KVD1_STUK), meta, verloopt, n, nu));
+    }
+    /* Vangnet: lukt D1 niet (storing, of ooit zijn eigen daglimiet), dan
+       toch bewaren in KV, en de oude D1-regel weghalen zodat de nieuwe
+       KV-waarde niet wordt overschaduwd. */
+    try { await db.batch(stmts); }
+    catch (e) {
+      console.log("[kv-d1] opslaan " + key + " via KV: " + (e.message || e));
+      await kv.put(key, soort === "bin" ? await bestandLees(env, "kvbin/" + key) : tekst, opts);
+      try { await db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(key).run(); } catch (e2) {}
+    }
+  };
+  const del = async (key) => {
+    tel("delete", key);
+    key = String(key);
+    await db.batch([
+      db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(key),
+      db.prepare("INSERT INTO kv (sleutel, deel, waarde, soort, ts) VALUES (?1, 0, NULL, 'weg', ?2)").bind(key, Date.now()),
+    ]);
+    try { await kv.delete(key); } catch (e) { /* KV-limiet: de markering in D1 telt */ }
+  };
+  const list = async (opt) => {
+    const o = opt || {};
+    let res;
+    try { res = await kv.list(o); } catch (e) { res = { keys: [], list_complete: true }; }
+    try {
+      const prefix = String(o.prefix || "");
+      const r = await db.prepare("SELECT sleutel, soort, meta, verloopt FROM kv WHERE deel = 0 AND substr(sleutel, 1, ?2) = ?1").bind(prefix, prefix.length).all();
+      const d1 = new Map((r.results || []).map(x => [x.sleutel, x]));
+      const nu = Date.now() / 1000;
+      const keys = (res.keys || []).filter(k => { const x = d1.get(k.name); return !x || (x.soort !== "weg" && !(x.verloopt && x.verloopt < nu)); });
+      if (res.list_complete !== false) {
+        const al = new Set(keys.map(k => k.name));
+        for (const [naam, x] of d1) {
+          if (al.has(naam) || x.soort === "weg" || (x.verloopt && x.verloopt < nu)) continue;
+          let metadata; try { metadata = x.meta ? JSON.parse(x.meta) : undefined; } catch (e) {}
+          keys.push({ name: naam, ...(x.verloopt ? { expiration: x.verloopt } : {}), ...(metadata !== undefined ? { metadata } : {}) });
+        }
+        keys.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+      }
+      return { ...res, keys };
+    } catch (e) { console.log("[kv-d1] list: " + (e.message || e)); return res; }
+  };
+  const omhulsel = { __teller: true, get, getWithMetadata, put, delete: del, list };
   return Object.assign({}, env, { FONTEYN_DATA: omhulsel });
 }
 
@@ -17667,6 +17779,20 @@ const FP_WORKER = {
       if (request.method === "DELETE") return reply(200, { ok: true, was: await bestandWeg(env, sleutel) });
       const b = await bestandLees(env, sleutel);
       return b ? new Response(b, { headers: { ...corsHeaders, "Cache-Control": "no-store" } }) : reply(404, { ok: false });
+    }
+    /* Voor de backup: een sleutel lezen zoals de worker hem ziet (eerst D1,
+       dan KV), en de lijst van sleutels die in D1 staan. Sessies en
+       inlogsleutels nooit. */
+    if (url.pathname === "/beheer/kv" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      if (url.searchParams.get("lijst")) {
+        const r = await env.ACTIVITEIT.prepare("SELECT sleutel, soort, ts FROM kv WHERE deel = 0").all();
+        return reply(200, { ok: true, sleutels: (r.results || []).filter(x => !/^(dp-sess|mailsleutel|dp-login)/.test(x.sleutel)) });
+      }
+      const sleutel = String(url.searchParams.get("sleutel") || "");
+      if (!sleutel || /^(dp-sess|mailsleutel|dp-login)/.test(sleutel)) return reply(400, { ok: false });
+      const v = await env.FONTEYN_DATA.get(sleutel, { type: "arrayBuffer" });
+      return v == null ? reply(404, { ok: false }) : new Response(v, { headers: { ...corsHeaders, "Cache-Control": "no-store" } });
     }
     if (url.pathname === "/beheer/kv-teller" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });

@@ -118,6 +118,14 @@ d=json.load(open(os.path.join(doel,"cloudflare/kv/alle-sleutels.json")))
 namen=[x["name"] for x in d]
 try: namen+=[x["name"] for x in json.load(open(os.path.join(doel,"cloudflare/kv/archief-sleutels.json"))) if x["name"] not in set(namen)]
 except Exception: pass
+# Sleutels die alleen in D1 staan (sinds 14 okt 2026 bewaart de worker daar).
+try:
+    import urllib.request
+    rq=urllib.request.Request("https://fonteyn-data-store.g-mulder.workers.dev/beheer/kv?lijst=1", headers={"X-Fonteyn-Auth": os.environ.get("TEAMSLEUTEL","")})
+    d1=json.load(urllib.request.urlopen(rq, timeout=60)).get("sleutels",[])
+    weg={x["sleutel"] for x in d1 if x.get("soort")=="weg"}
+    namen=[n for n in namen if n not in weg]+[x["sleutel"] for x in d1 if x.get("soort")!="weg" and x["sleutel"] not in set(namen)]
+except Exception as e: print("  LET OP: lijst uit D1 kwam niet binnen:", e)
 soort=lambda n: n.split(":")[0]
 binair=[n for n in namen if soort(n) in ("dpfile","plfile","schipfile")]
 vluchtig=[n for n in namen if soort(n) in ("dp-sess","mailsleutel","dp-login")]

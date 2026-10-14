@@ -161,6 +161,11 @@ while IFS= read -r -d '' status && IFS= read -r -d '' sleutel && IFS= read -r -d
   fi
   if $WRANGLER kv key put "$sleutel" --path "$pad" \
        --namespace-id "$NSID" --remote >/dev/null 2>&1; then
+    # Sinds 14 okt 2026 bewaart de worker in D1 (tabel kv) en leest hij daar
+    # eerst. Een oude D1-regel zou de herstelde KV-waarde overschaduwen, dus
+    # die gaat weg. Een enkel aanhalingsteken in de sleutel verdubbelen (SQL).
+    $WRANGLER d1 execute fonteyn-activiteit --remote --command \
+      "DELETE FROM kv WHERE sleutel = '${sleutel//\'/\'\'}'" >/dev/null 2>&1 </dev/null
     gedaan=$((gedaan + 1))
     printf '  gezet: %s\n' "$sleutel"
   else
