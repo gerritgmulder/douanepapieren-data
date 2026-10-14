@@ -286,8 +286,10 @@ const EMAIL_KEY = "fp.email";
 const REASONS = ["Fout klant","Fout adviseur","Pickfout","Reparatie","Productfout","Nalevering","Klacht","Transportschade","Overig"];
 /* Wat er op het scherm staat (Gerrit, 25 sep 2026: ook de categorieën in
    positieve taal). Opgeslagen blijft de oude waarde, zodat bestaande retouren
-   en het overzicht blijven kloppen; dit is alleen de naam die je ziet. */
-const REASON_LABEL = { "Fout klant":"Bij de klant", "Fout adviseur":"Bij de adviseur", "Pickfout":"Bij het picken", "Productfout":"In het product" };
+   en het overzicht blijven kloppen; dit is alleen de naam die je ziet.
+   Manon (13 okt 2026) wilde de oude namen terug: Fout klant, Fout adviseur,
+   Pickfout, Productfout. Die staan nu weer op het scherm. */
+const REASON_LABEL = {};
 const redenNaam = (r) => REASON_LABEL[r] || r;
 const LOCATIONS = ["Voorraad","Outlet","Derving","Showroommodel"];
 const REASON_COLORS = {

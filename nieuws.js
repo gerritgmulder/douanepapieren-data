@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "retouren.html", soort: "beter",
+      titel: "Redenen weer zoals vroeger",
+      wat:   "De redenen heten weer Fout klant, Fout adviseur, Pickfout en Productfout, in de lijst en in de taartgrafiek."
+    },
+    {
       datum: "2026-10-14", bestand: "opleverbonnen.html", soort: "beter",
       titel: "Reacties op bonnen naar Spa service",
       wat:   "Antwoordt een klant op een opleverbon of servicebon, dan komt dat binnen bij servicespa@fonteyn.nl."
