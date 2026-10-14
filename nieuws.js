@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Reacties op bonnen naar Spa service",
+      wat:   "Antwoordt een klant op een opleverbon of servicebon, dan komt dat binnen bij servicespa@fonteyn.nl."
+    },
+    {
       datum: "2026-10-13", bestand: "logic4.html", soort: "nieuw",
       titel: "Logic4, nagebouwd",
       wat:   "Dezelfde modules als in Logic4, met echte gegevens: orders, voorstellen, inkoop, artikelen, debiteuren, openstaande posten, grootboek en service. Per functie zie je wat er al is en wat er nog komt, en onder Omvang nabouw staat het plan."

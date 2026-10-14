@@ -7763,9 +7763,11 @@ async function bonHandle(request, env, url) {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: "Fonteyn Bezorgservice <" + adres + ">", to: [naar],
-        /* Een antwoord op een servicebon hoort bij Spa service, niet in de
-           mailbox van wie hem verstuurde (Kevin, 12 okt 2026). */
-        reply_to: (bon.soort === "service" || bon.itsId) ? ["servicespa@fonteyn.nl"] : (/@/.test(wie) ? [wie] : undefined),
+        /* Een antwoord van de klant op een bon hoort bij Spa service, niet in
+           de mailbox van wie hem verstuurde. Eerst alleen servicebonnen
+           (Kevin, 12 okt 2026), sinds 14 okt ook de opleverbonnen: Kevin
+           kreeg de reacties nog steeds in zijn eigen postvak. */
+        reply_to: ["servicespa@fonteyn.nl"],
         subject: ((bon.soort === "service" || bon.itsId) ? "Servicebon Fonteyn" : "Opleverbon Fonteyn") + (bon.ordernr ? " - order " + bon.ordernr : "") + (bon.itsId ? " - melding " + bon.itsId : "") + (bon.datum ? " - " + bon.datum.split("-").reverse().join("-") : ""),
         html, attachments: bijlagen,
       }),
