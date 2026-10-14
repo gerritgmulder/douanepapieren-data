@@ -712,21 +712,6 @@
   <!-- Particulier / Partner / Partner containers — platte lijsten per soort klant.
        Adviseurs zien alléén deze drie tabs (alleen-lezen). -->
   <div id="tab-particulier" class="hidden">
-    <!-- Kevin (6 okt 2026): "Op afroep" en "Binnengekomen spa's" bovenaan de
-         pagina, en geen scrollvak in een scrollvak: alles onder elkaar. -->
-    <!-- Afroep en binnengekomen spa's (Chantal, 5 aug 2026). Zelfde gedachte als
-         'Binnen per adviseur' bij Partner, maar particulieren hebben geen
-         adviseur-indeling: hier splitst het op wát er met de spa moet gebeuren.
-         Wat je bovenin aanvinkt zakt naar dit blok; wat hier op Gepland gaat
-         verdwijnt, en is alleen terug te halen met 'geplande spa's tonen'. -->
-    <div class="card">
-      <h3>Afroep en binnengekomen - <span id="partBlokTotaal">0</span> spa's</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Alles wat je hierboven op <b>Afroep</b> of <b>Inplannen</b> hebt gezet staat hier. Vink <b>Gepland</b> aan zodra de afspraak met de klant staat; de regel verdwijnt dan uit beide lijsten.</p>
-      <div class="actions" style="gap:10px;align-items:center;margin:0 0 8px"><input id="partBlokSearch" placeholder="zoek op ordernummer, model of klant…" style="min-width:260px;padding:7px"></div>
-      <div id="partBlokTabs" class="tabs" style="margin-bottom:10px"></div>
-      <div id="partBlokLijst"></div>
-    </div>
-
     <div class="card">
       <h3>Particulier - reserveringen van particuliere klanten</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Alle openstaande spa-reserveringen van <b>particuliere</b> klanten, met de verwachte levering. Deze staan óók in het tabblad Reserveringen.</p>
@@ -741,6 +726,24 @@
         <b>Gepland</b> aanvinken haalt de spa uit dit overzicht: die is dan met de klant afgesproken en gaat fysiek weg.
       </p>
       <div id="partList" style="margin-top:12px"></div>
+    </div>
+
+
+    <!-- Volgorde: eerst de reserveringen, dan Afroep en binnengekomen, dan
+         Gepland. Chantal (video, 14 okt 2026): "Huidige reserveringen moet
+         volledig bovenaan staan." Kevin had op 6 okt Afroep bovenaan gevraagd;
+         geen scrollvak in een scrollvak blijft: alles onder elkaar. -->
+    <!-- Afroep en binnengekomen spa's (Chantal, 5 aug 2026). Zelfde gedachte als
+         'Binnen per adviseur' bij Partner, maar particulieren hebben geen
+         adviseur-indeling: hier splitst het op wát er met de spa moet gebeuren.
+         Wat je bovenin aanvinkt zakt naar dit blok; wat hier op Gepland gaat
+         verdwijnt, en is alleen terug te halen met 'geplande spa's tonen'. -->
+    <div class="card">
+      <h3>Afroep en binnengekomen - <span id="partBlokTotaal">0</span> spa's</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Alles wat je hierboven op <b>Afroep</b> of <b>Inplannen</b> hebt gezet staat hier. Vink <b>Gepland</b> aan zodra de afspraak met de klant staat; de regel verdwijnt dan uit beide lijsten.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin:0 0 8px"><input id="partBlokSearch" placeholder="zoek op ordernummer, model of klant…" style="min-width:260px;padding:7px"></div>
+      <div id="partBlokTabs" class="tabs" style="margin-bottom:10px"></div>
+      <div id="partBlokLijst"></div>
     </div>
 
     <!-- Gepland. Chantal (video, 19 aug 2026): "ik wil hier een derde tabblad

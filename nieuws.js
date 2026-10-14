@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "voorraad.html", soort: "beter",
+      titel: "Particulier: reserveringen weer bovenaan",
+      wat:   "In het tabblad Particulier staan de reserveringen weer bovenaan, daaronder Afroep en binnengekomen, en daaronder Gepland. Nieuwe kleuren uit Logic4 (zoals de Soulmate in Full OAK) staan nu ook in de lijst."
+    },
+    {
       datum: "2026-10-14", bestand: "retouren.html", soort: "beter",
       titel: "Redenen weer zoals vroeger",
       wat:   "De redenen heten weer Fout klant, Fout adviseur, Pickfout en Productfout, in de lijst en in de taartgrafiek."
