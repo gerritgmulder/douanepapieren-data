@@ -8648,10 +8648,14 @@ async function voorraadbepalingBereken(env) {
 
   // Verkocht per model, 12 maanden, zonder Amerika
   const verkocht = {}, perMaand = {}; let vanaf = null, tot = null;
-  for (let i = 0; i < codes.length; i += 80) {
+  /* Porties van 1000, niet 80. Sinds de spa-catalogus op 14 okt 2026 alle
+     5.120 varianten bevat (was 888) werden dat 64 aanroepen en liep de tegel
+     vast op "Too many subrequests" (Chantal). 1000 per keer geeft dezelfde
+     uitkomst (nagerekend); alle codes in één keer geeft bij Logic4 een 500. */
+  for (let i = 0; i < codes.length; i += 1000) {
     const l = await post("/v3/Management/GetProductCollectionSalesInformation", {
       TimeFrame: 2, HistoryPoints: 12, IncludingCurrentPeriod: true,
-      ProductCodes: codes.slice(i, i + 80), ExcludeDebtorIds: [AMERIKA_DEBTOR],
+      ProductCodes: codes.slice(i, i + 1000), ExcludeDebtorIds: [AMERIKA_DEBTOR],
     });
     for (const x of (Array.isArray(l) ? l : [])) {
       const m = codeToModel[String(x.ProductCode)]; if (!m) continue;
