@@ -2684,18 +2684,49 @@ async function dpBouwSpaCatalogus(env, { opslaan = true } = {}) {
   const handmatig = new Map();
   for (const [m, cs] of Object.entries(CAT_HANDMATIG)) for (const c of cs) handmatig.set(c, m);
 
-  const catalog = {};
-  const alle = new Map();
-  let gescand = 0, gevonden = 0;
-  for (let page = 0; page < 200; page++) {
+  /* Alleen de spa-groepen ophalen, niet alle artikelen van Logic4.
+     ═══════════════════════════════════════════════════════════════════
+     Chantal (14 okt 2026): "order 3520006 kan ik nergens vinden bij
+     reserveringen". Die order heeft een Soulmate in een kleur die op 2 okt
+     in Logic4 kwam, en die stond niet in de catalogus. De ronde die dat
+     bijwerkt liep sinds 2 okt elke keer vast op "Too many subrequests": hij
+     haalde alle ±30.000 artikelen op in pagina's van 500 (60+ aanroepen) en
+     het gratis plan staat er 50 per keer toe. De catalogus stond daardoor
+     nog op 8 september.
+
+     Nu: per spa-groep in pagina's van 1000 (±11 aanroepen), plus één
+     aanroep op id voor wat er vóór deze ronde al in de catalogus stond maar
+     buiten die groepen valt (de vaste lijst hierboven, ijsbaden, warmtepomp). */
+  const oudCat = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const oudPerCode = new Map();
+  for (const vs of Object.values(oudCat.models || {})) for (const v of vs) oudPerCode.set(String(v.code), v);
+  const haal = async (filter) => {
     const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", {
       method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({ TakeRecords: 500, SkipRecords: page * 500 }),
+      body: JSON.stringify(filter),
     });
     if (!r.ok) throw new Error("GetProducts HTTP " + r.status);
     const j = await r.json();
-    const prods = Array.isArray(j) ? j : (j.Records || j.Products || []);
-    if (!prods.length) break;
+    return Array.isArray(j) ? j : (j.Records || j.Products || []);
+  };
+  const pakketten = [];
+  for (const groep of CAT_SPA_GROEPEN) {
+    for (let page = 0; page < 20; page++) {
+      const prods = await haal({ ProductGroupId: groep, UseChildProductGroups: true, TakeRecords: 1000, SkipRecords: page * 1000 });
+      pakketten.push(prods);
+      if (prods.length < 1000) break;
+    }
+  }
+  const gezien = new Set(pakketten.flat().map(p => String(p.ProductCode || "")));
+  const nogNodig = [...new Set([...handmatig.keys(), ...Object.keys(byCode), ...oudPerCode.keys()])]
+    .filter(c => !gezien.has(c) && oudPerCode.get(c) && oudPerCode.get(c).productId).map(c => oudPerCode.get(c).productId);
+  for (let i = 0; i < nogNodig.length; i += 1000) pakketten.push(await haal({ ProductIds: nogNodig.slice(i, i + 1000), TakeRecords: 1000, SkipRecords: 0 }));
+
+  const catalog = {};
+  const alle = new Map();
+  let gescand = 0, gevonden = 0;
+  const opgenomen = new Set();
+  for (const prods of pakketten) {
     gescand += prods.length;
     for (const p of prods) {
       const code = String(p.ProductCode || "");
@@ -2716,39 +2747,55 @@ async function dpBouwSpaCatalogus(env, { opslaan = true } = {}) {
         const uit = delen[1].replace(/\bswimspa\b/ig, " ").replace(/\bspa\b/ig, " ").replace(/\s+/g, " ").trim();
         if (uit) model = uit;
       }
-      if (!model) continue;
+      if (!model || opgenomen.has(code)) continue;
+      opgenomen.add(code);
       if (!handmatig.has(code) && /\bECO\b/i.test(naam) && !/ECO/i.test(model)) model += " ECO";
       gevonden++;
       (catalog[model] = catalog[model] || []).push({ code, productId: p.Id || p.ProductId || null, desc: naam });
     }
-    if (prods.length < 500) break;
   }
 
-  // Wat er in een samengesteld artikel zit, en hoeveel je er nu van kunt maken.
+  /* Wat er in een samengesteld artikel zit, en hoeveel je er nu van kunt maken.
+     De samenstelling verandert zelden: die komt uit de vorige ronde (met het
+     id van elk onderdeel erbij), en alleen wat nieuw is wordt opgevraagd, hoogstens
+     twintig per ronde. De voorraad van de onderdelen haalt één aanroep op id. */
+  let samenNieuw = 0;
+  const samen = [];
   for (const vs of Object.values(catalog)) for (const v of vs) {
     const p = alle.get(v.code);
     if (!p || !p.IsComposedProduct) continue;
     v.samengesteld = true;
-    try {
-      const r = await fetch("https://api.logic4server.nl/v3/Products/GetComposedProductComposition", {
-        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify(p.ProductId ?? p.Id),
-      });
-      if (!r.ok) continue;
-      const delen = await r.json().catch(() => []);
-      v.bevat = (Array.isArray(delen) ? delen : []).map(d => ({
-        code: String(d.ProductCode || ""), qty: Number(d.Qty) || 1,
-        naam: (alle.get(String(d.ProductCode)) || {}).ProductName1 || "",
-        vrij: Number((alle.get(String(d.ProductCode)) || {}).FreeStock) || 0,
-      }));
-      const uit = v.bevat.filter(d => alle.has(d.code)).map(d => Math.floor((Number(d.vrij) || 0) / Math.max(1, Number(d.qty) || 1)));
-      v.teMaken = uit.length ? Math.max(0, Math.min(...uit)) : 0;
-    } catch (e) {}
+    const oud = oudPerCode.get(v.code);
+    if (oud && Array.isArray(oud.bevat) && oud.bevat.length && oud.bevat.every(d => d.pid)) {
+      v.bevat = oud.bevat.map(d => ({ code: d.code, pid: d.pid, qty: d.qty }));
+    } else if (samenNieuw < 20) {
+      samenNieuw++;
+      try {
+        const r = await fetch("https://api.logic4server.nl/v3/Products/GetComposedProductComposition", {
+          method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify(p.ProductId ?? p.Id),
+        });
+        if (!r.ok) continue;
+        const delen = await r.json().catch(() => []);
+        v.bevat = (Array.isArray(delen) ? delen : []).map(d => ({ code: String(d.ProductCode || ""), pid: d.ProductId || null, qty: Number(d.Qty) || 1 }));
+      } catch (e) { continue; }
+    } else continue;
+    samen.push(v);
+  }
+  const onderdeelIds = [...new Set(samen.flatMap(v => v.bevat).filter(d => !alle.has(d.code) && d.pid).map(d => d.pid))];
+  for (let i = 0; i < onderdeelIds.length; i += 1000) {
+    try { for (const p of await haal({ ProductIds: onderdeelIds.slice(i, i + 1000), TakeRecords: 1000, SkipRecords: 0 })) alle.set(String(p.ProductCode || ""), p); } catch (e) {}
+  }
+  for (const v of samen) {
+    v.bevat = v.bevat.map(d => ({ ...d,
+      naam: (alle.get(d.code) || {}).ProductName1 || "",
+      vrij: Number((alle.get(d.code) || {}).FreeStock) || 0 }));
+    const uit = v.bevat.filter(d => alle.has(d.code)).map(d => Math.floor((Number(d.vrij) || 0) / Math.max(1, Number(d.qty) || 1)));
+    v.teMaken = uit.length ? Math.max(0, Math.min(...uit)) : 0;
   }
 
   // Wat is er nieuw ten opzichte van de vorige keer?
-  const oud = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
-  const oudeModellen = oud.models || {};
+  const oudeModellen = oudCat.models || {};
   const oudeCodes = new Set();
   for (const vs of Object.values(oudeModellen)) for (const v of vs) oudeCodes.add(String(v.code));
   const nieuweModellen = Object.keys(catalog).filter(m => !oudeModellen[m]).sort();
