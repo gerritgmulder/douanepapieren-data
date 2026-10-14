@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Je eigen indeling",
+      wat:   "Met de knop Indeling rechts naast de tabbladen zet je de tabbladen en de blokken in je eigen volgorde, en zet je een blok uit dat je niet gebruikt. Het bovenste tabblad is waar Voorraadbeheer mee opent. Het geldt alleen voor jou."
+    },
+    {
       datum: "2026-10-14", bestand: "planning.html", soort: "nieuw",
       titel: "Namen voor de routes zelf bijhouden",
       wat:   "Onderaan de keuzelijst 'wie rijdt?' staat nu 'namen bewerken'. Daar zet je zelf een naam erbij of haal je er een weg; dat geldt meteen voor iedereen die plant."

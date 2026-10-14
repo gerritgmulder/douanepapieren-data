@@ -146,6 +146,7 @@ const ALLOWED_BUCKETS = new Set([
   // vergelijken met nu zien we vanzelf welke tegel er voor iemand bij is
   // gekomen, zonder dat er iemand aan hoeft te denken dat op te schrijven.
   "dashboard-gezien",
+  "voorraad-indeling",   // Per e-mailadres: eigen volgorde van tabbladen en blokken in Voorraadbeheer (14 okt 2026)
   "dashboard-indeling",  // Per e-mailadres: eigen volgorde van afdelingen en tegels op het dashboard (het tandwiel)
   "planning-its-order",
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
@@ -17141,7 +17142,7 @@ const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                           "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo", "/extern/logic4"];
 const EXTERN_EXACT = ["/internal/teamkey"];
 const EXTERN_VAKKEN = [
-  "takenlijst", "taken", "taken-ritme", "dashboard-gezien", "dashboard-indeling",
+  "takenlijst", "taken", "taken-ritme", "dashboard-gezien", "dashboard-indeling", "voorraad-indeling",
   "planning", "planning-paklijst", "reserveringen-live", "spa-catalog", "voorraad-notities", "werkplaats",
   "bank-instellingen", "mollie-uitbetaling-geboekt", "bol-provisie-geboekt", "retouren",
 ];

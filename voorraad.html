@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="ci-pdf.js"></script>
 <script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
+<script>/* De echte fetch, vóór alleenLezen() hem afschermt: de eigen indeling bewaren mag iedereen. */ window.__echteFetch = window.fetch.bind(window);</script>
 <script src="proforma-inkoop.js"></script>
 <script src="spa-migratie.js"></script>
 <script src="spa-ontvangst.js"></script>
@@ -6554,6 +6555,194 @@ function loadVoorraadDemo(){
   var wacht=null;
   new MutationObserver(function(){ clearTimeout(wacht); wacht=setTimeout(labels,60); }).observe(document.body,{childList:true,subtree:true});
   labels();
+})();
+</script>
+<script>
+/* ═══ Eigen indeling van Voorraadbeheer (het tandwiel) ══════════════════
+   Gerrit (14 okt 2026): "Ik ga Voorraadbeheer zo maken dat je zelf kunt
+   schikken hoe je de indeling wilt." Aanleiding: Chantal wilde bij
+   Particulier de reserveringen bovenaan, Kevin juist Afroep. Nu kiest ieder
+   zijn eigen volgorde.
+
+   Wat je kunt: de tabbladen in je eigen volgorde (het eerste tabblad is
+   waar Voorraadbeheer mee opent), per tabblad de blokken in je eigen
+   volgorde, en een blok uitzetten. Welke tabbladen iemand mag zien verandert
+   niet; dat blijft zoals het is. Bewaard per e-mailadres in de bucket
+   voorraad-indeling, net als het tandwiel op het dashboard:
+
+     { "chantal@fonteyn.nl": { tabs: ["particulier", ...],
+                               blokken: { particulier: ["Particulier reserveringen ...", ...] },
+                               uit: { particulier: ["Gepland"] } } }
+
+   Een blok of tabblad dat later bijkomt staat gewoon achteraan. */
+(function(){
+  var BASIS = "https://fonteyn-data-store.g-mulder.workers.dev/data/", BUCKET = "voorraad-indeling";
+  var f = window.__echteFetch || window.fetch.bind(window);
+  var email = (localStorage.getItem("fp.email") || "").toLowerCase();
+  var sleutel = function(){ return localStorage.getItem("fp.teamkey") || ""; };
+  var mijn = null, tabStandaard = null, blokStandaard = {}, plekken = {}, bewaarTimer = null;
+  var balk = document.querySelector("main .tabs") || document.querySelector(".tabs");
+  if (!balk || !email) return;
+
+  var stijl = document.createElement("style");
+  stijl.textContent =
+    ".vi-weg{display:none!important}" +
+    ".vi-knop{margin-left:auto;border:1px solid var(--border,#e5e7eb);background:#fff;border-radius:8px;padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer;align-self:center}" +
+    ".vi-laag{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow-y:auto}" +
+    ".vi-paneel{background:#fff;border-radius:14px;max-width:560px;width:100%;padding:18px 20px;box-shadow:0 16px 40px rgba(0,0,0,.2)}" +
+    ".vi-paneel h3{margin:0 0 4px;font-size:17px}.vi-paneel .uitleg{color:#6b7280;font-size:13px;margin:0 0 12px}" +
+    ".vi-paneel h4{margin:14px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280}" +
+    ".vi-rij{display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid #eef0f2;border-radius:8px;margin:0 0 4px;font-size:13.5px}" +
+    ".vi-rij .naam{flex:1;min-width:0;overflow-wrap:break-word}.vi-rij.uit .naam{color:#9ca3af;text-decoration:line-through}" +
+    ".vi-rij button{border:1px solid #e5e7eb;background:#fff;border-radius:6px;width:28px;height:26px;cursor:pointer;font-size:11px}" +
+    ".vi-rij button:disabled{opacity:.35;cursor:default}.vi-rij label{font-size:12px;color:#6b7280;display:flex;align-items:center;gap:4px;white-space:nowrap}" +
+    ".vi-blokken{margin:0 0 0 14px}.vi-voet{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:16px}" +
+    ".vi-voet button{border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:7px 13px;font:inherit;font-size:13px;cursor:pointer}" +
+    ".vi-voet .klaar{background:#144734;color:#fff;border-color:#144734}";
+  document.head.appendChild(stijl);
+
+  var tabKnoppen = function(){ return [].slice.call(balk.querySelectorAll(":scope > .tab")); };
+  var zichtbaar = function(el){ return el.style.display !== "none" && !el.classList.contains("hidden"); };
+  var tabNaam = function(id){ var b = balk.querySelector('.tab[data-tab="'+id+'"]'); return b ? b.textContent.trim() : id; };
+  // Een blok herkennen aan zijn kop, zonder tellers ("Gepland - 3") zodat de sleutel vast blijft.
+  function blokKop(kaart){
+    var h = kaart.querySelector(":scope > h3, :scope > h2, :scope > h4, h3, h4");
+    var s = h ? h.textContent : (kaart.textContent || "");
+    return s.replace(/\s+/g, " ").trim();
+  }
+  function blokSleutel(kaart, i){
+    var s = blokKop(kaart).replace(/\d+/g, "").replace(/[^A-Za-zÀ-ÿ]+/g, " ").trim().slice(0, 60);
+    return s || ("blok " + (i + 1));
+  }
+  // Wat je in het venster ziet: de kop zelf, zonder de tellers erachter.
+  function blokNaam(kaart){
+    var s = blokKop(kaart).replace(/\s+-\s+\d.*$/, "").replace(/\s+-\s*$/, "");
+    return s.length > 70 ? s.slice(0, 68) + "…" : s;
+  }
+  function kaartenVan(id){
+    var box = document.getElementById("tab-" + id);
+    return box ? [].slice.call(box.querySelectorAll(":scope > .card")) : [];
+  }
+  function vastleggen(){
+    if (tabStandaard) return;
+    tabStandaard = tabKnoppen().map(function(b){ return b.dataset.tab; });
+    tabStandaard.forEach(function(id){
+      var ks = kaartenVan(id);
+      blokStandaard[id] = ks.map(function(k, i){ var s = blokSleutel(k, i); k.dataset.viSleutel = s; return s; });
+      // Een vaste plek per blok, zodat blokken van plek kunnen ruilen zonder
+      // de rest van het tabblad (meldingen, uitklapvakken) mee te schuiven.
+      plekken[id] = ks.map(function(k){ var p = document.createElement("span"); p.className = "vi-plek"; p.hidden = true; k.parentNode.insertBefore(p, k); return p; });
+    });
+  }
+  function volgorde(bewaard, alle){
+    var b = (bewaard || []).filter(function(x){ return alle.indexOf(x) >= 0; });
+    return b.concat(alle.filter(function(x){ return b.indexOf(x) < 0; }));
+  }
+  function pasToe(){
+    vastleggen();
+    var knoppen = {}; tabKnoppen().forEach(function(b){ knoppen[b.dataset.tab] = b; });
+    var gear = balk.querySelector(".vi-knop");
+    volgorde(mijn && mijn.tabs, tabStandaard).forEach(function(id){ if (knoppen[id]) balk.insertBefore(knoppen[id], gear); });
+    tabStandaard.forEach(function(id){
+      var ks = {}; kaartenVan(id).forEach(function(k){ ks[k.dataset.viSleutel] = k; });
+      volgorde(mijn && mijn.blokken && mijn.blokken[id], blokStandaard[id]).forEach(function(s, i){
+        var k = ks[s], p = plekken[id][i]; if (k && p) p.parentNode.insertBefore(k, p.nextSibling);
+      });
+      var uit = (mijn && mijn.uit && mijn.uit[id]) || [];
+      Object.keys(ks).forEach(function(s){ ks[s].classList.toggle("vi-weg", uit.indexOf(s) >= 0); });
+    });
+  }
+  async function lees(){
+    try { var r = await f(BASIS + BUCKET, { headers: { "X-Fonteyn-Auth": sleutel() } }); return r.ok ? ((await r.json()) || {}) : {}; }
+    catch(e){ return {}; }
+  }
+  async function schrijf(){
+    try {
+      var alles = await lees();
+      if (mijn) alles[email] = mijn; else delete alles[email];
+      await f(BASIS + BUCKET, { method: "PUT", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel() }, body: JSON.stringify(alles) });
+    } catch(e){}
+  }
+  function bewaarStraks(){ clearTimeout(bewaarTimer); bewaarTimer = setTimeout(schrijf, 600); }
+  function huidig(){
+    vastleggen();
+    var uit = { tabs: tabKnoppen().map(function(b){ return b.dataset.tab; }), blokken: {}, uit: (mijn && mijn.uit) ? JSON.parse(JSON.stringify(mijn.uit)) : {} };
+    tabStandaard.forEach(function(id){ uit.blokken[id] = kaartenVan(id).map(function(k){ return k.dataset.viSleutel; }); });
+    return uit;
+  }
+  function schuif(lijst, x, stap){
+    var i = lijst.indexOf(x), j = i + stap;
+    if (i < 0 || j < 0 || j >= lijst.length) return;
+    lijst.splice(i, 1); lijst.splice(j, 0, x);
+  }
+
+  function paneel(){
+    var laag = document.createElement("div"); laag.className = "vi-laag";
+    document.body.appendChild(laag);
+    function teken(){
+      var tabs = tabKnoppen().filter(zichtbaar).map(function(b){ return b.dataset.tab; });
+      var h = '<div class="vi-paneel"><h3>Jouw indeling</h3><p class="uitleg">Zet de tabbladen en de blokken in de volgorde die jij handig vindt. Het bovenste tabblad is waar Voorraadbeheer mee opent. Het wordt meteen bewaard en geldt alleen voor jou.</p><h4>Tabbladen en blokken</h4>';
+      tabs.forEach(function(id, ti){
+        h += '<div class="vi-rij"><span class="naam"><b>' + tabNaam(id).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</b></span>' +
+          '<button type="button" data-tab="'+id+'" data-stap="-1" title="Omhoog"'+(ti===0?" disabled":"")+'>▲</button>' +
+          '<button type="button" data-tab="'+id+'" data-stap="1" title="Omlaag"'+(ti===tabs.length-1?" disabled":"")+'>▼</button></div>';
+        var kaarten = kaartenVan(id), ks = kaarten.map(function(k){ return k.dataset.viSleutel; });
+        if (ks.length) {
+          var uit = (mijn && mijn.uit && mijn.uit[id]) || [];
+          h += '<div class="vi-blokken">';
+          ks.forEach(function(s, bi){
+            var weg = uit.indexOf(s) >= 0;
+            h += '<div class="vi-rij'+(weg?" uit":"")+'"><span class="naam">' + blokNaam(kaarten[bi]).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</span>' +
+              '<label><input type="checkbox" data-aan="'+id+'" data-blok="'+s.replace(/"/g, "&quot;")+'"'+(weg?"":" checked")+'> tonen</label>' +
+              '<button type="button" data-blokvan="'+id+'" data-blok="'+s.replace(/"/g, "&quot;")+'" data-stap="-1" title="Omhoog"'+(bi===0?" disabled":"")+'>▲</button>' +
+              '<button type="button" data-blokvan="'+id+'" data-blok="'+s.replace(/"/g, "&quot;")+'" data-stap="1" title="Omlaag"'+(bi===ks.length-1?" disabled":"")+'>▼</button></div>';
+          });
+          h += '</div>';
+        }
+      });
+      h += '<div class="vi-voet"><button type="button" class="standaard">Standaard herstellen</button><button type="button" class="klaar">Klaar</button></div></div>';
+      laag.innerHTML = h;
+      laag.querySelectorAll("button[data-stap]").forEach(function(b){ b.addEventListener("click", function(){
+        mijn = huidig();
+        var stap = Number(b.dataset.stap);
+        if (b.dataset.tab){
+          var zicht = tabKnoppen().filter(zichtbaar).map(function(x){ return x.dataset.tab; });
+          schuif(zicht, b.dataset.tab, stap);
+          mijn.tabs = zicht.concat(mijn.tabs.filter(function(x){ return zicht.indexOf(x) < 0; }));
+        } else {
+          schuif(mijn.blokken[b.dataset.blokvan], b.dataset.blok, stap);
+        }
+        pasToe(); bewaarStraks(); teken();
+      }); });
+      laag.querySelectorAll("input[data-aan]").forEach(function(c){ c.addEventListener("change", function(){
+        mijn = huidig();
+        var id = c.dataset.aan, s = c.dataset.blok, l = (mijn.uit[id] = mijn.uit[id] || []);
+        if (c.checked) mijn.uit[id] = l.filter(function(x){ return x !== s; }); else if (l.indexOf(s) < 0) l.push(s);
+        pasToe(); bewaarStraks(); teken();
+      }); });
+      laag.querySelector(".standaard").addEventListener("click", function(){
+        mijn = { tabs: tabStandaard.slice(), blokken: JSON.parse(JSON.stringify(blokStandaard)), uit: {} };
+        pasToe(); mijn = null; bewaarStraks(); teken();
+      });
+      laag.querySelector(".klaar").addEventListener("click", function(){ laag.remove(); });
+    }
+    laag.addEventListener("click", function(e){ if (e.target === laag) laag.remove(); });
+    teken();
+  }
+
+  var knop = document.createElement("button");
+  knop.type = "button"; knop.className = "vi-knop"; knop.textContent = "⚙ Indeling"; knop.title = "Tabbladen en blokken in je eigen volgorde";
+  knop.addEventListener("click", paneel);
+  balk.appendChild(knop);
+  vastleggen();
+  lees().then(function(alles){
+    mijn = alles[email] || null;
+    if (!mijn) return;
+    pasToe();
+    // Openen op het eerste tabblad van jouw volgorde (alleen als dat zichtbaar is en nog niet open staat).
+    var eerste = tabKnoppen().filter(zichtbaar)[0], actief = balk.querySelector(".tab.active");
+    if (eerste && actief && eerste !== actief) eerste.click();
+  });
 })();
 </script>
 </body>

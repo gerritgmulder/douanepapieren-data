@@ -398,6 +398,12 @@ function opentegel(url) {
   });
   venster.webContents.setUserAgent(venster.webContents.getUserAgent() + " " + appUA());
   nietWitBlijven(venster);
+  /* Meteen zo groot als het scherm, met de titelbalk erbij (gemaximaliseerd,
+     niet schermvullend). Gerrit (14 okt 2026): "als je nu een tegel
+     aanklikt dan opent er een nieuw venster maar die moet meteen fullscreen
+     zijn (zeg maar zo groot als het scherm)". Het venster staat dan op het
+     scherm van het dashboard, want daar is het aangemaakt. */
+  venster.maximize();
   tegelVensters.set(naam, venster);
   venster.loadURL(url);
   return venster;
