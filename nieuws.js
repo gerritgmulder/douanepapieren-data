@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "planning.html", soort: "nieuw",
+      titel: "Planning",
+      wat:   "Je ziet nu de tegel Planning: alle routes en afspraken van de bezorgers en monteurs."
+    },
+    {
       datum: "2026-10-14", bestand: "planning.html", soort: "beter",
       titel: "Routes: alles op één lijn",
       wat:   "Alle dagen zijn even breed en de uren lopen in de hele week gelijk. De tijden staan één keer links. Boven de planning staan hoogstens vijf meldingen per dag; de rest zit achter '+ meer'."

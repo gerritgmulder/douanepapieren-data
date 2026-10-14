@@ -751,7 +751,7 @@ var PLANNERS = { "servicespa":"Mike", "spaservice":"Mike", "mike.deboer":"Mike d
    en Arno kijken mee, Dolf en Gerrit zitten overal bij - maar ze rijden geen
    route, en dan hoort hun naam ook niet in dat menu te staan. */
 var NIET_OP_DE_WEG = ["gerrit","dolf","chantal","arno","don","fonteyn.don","maartens",
-                      "fonteynbot","nomi","gretha","osman","manon","reinier.k","plaatsing"];
+                      "fonteynbot","nomi","gretha","osman","manon","reinier.k","plaatsing","werkplaats"];
 function planNaam(wie){
   var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"").toLowerCase();
   return PLANNERS[lokaal] || voornaam(wie);
