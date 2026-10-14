@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "planning.html", soort: "beter",
+      titel: "Ingeplande routes blijven staan",
+      wat:   "Een route met stops erin is ingepland en blijft staan: het kruisje om hem weg te halen staat alleen bij een lege route."
+    },
+    {
       datum: "2026-10-14", bestand: "planning.html", soort: "nieuw",
       titel: "Planning",
       wat:   "Je ziet nu de tegel Planning: alle routes en afspraken van de bezorgers en monteurs."

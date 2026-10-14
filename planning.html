@@ -1545,7 +1545,10 @@ function tekenBord(){
                uitgeprint stel papieren mee, voorblad plus de orders in
                bezoekvolgorde. Alleen tonen als er iets te printen is. */
 
-            (MAG_BEWERKEN?'<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>':"")+
+            /* Gerrit (14 okt 2026): staat er een stop in de route, dan is hij
+               ingepland en kan hij niet meer weg. Het kruisje staat alleen bij
+               een lege route. */
+            (MAG_BEWERKEN && !stops.length?'<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>':"")+
           '</h4>'+
           '<div class="stops tijdas" style="height:'+(BORD_TOT-BORD_VAN)*BORD_PX+'px">'+
             tijdasHtml(stops, MAG_BEWERKEN?"sleep hier een stop":"nog leeg")+
@@ -1930,7 +1933,7 @@ async function voegRouteToe(dISO){
 }
 async function haalRouteWeg(dISO, nr){
   var stops = stopsVan(dISO, nr, routesVan(dISO)[0].nr===nr);
-  if (stops.length && !(await vraagVenster("Route weghalen?", "Route "+nr+" heeft "+stops.length+" stop(s). Die komen in de eerste route te staan. Doorgaan?", "Doorgaan"))) return;
+  if (stops.length) return;   // een ingeplande route blijft staan
   try{
     await bewaarBord(function(d){
       var lijst = (d.routes[dISO]||[]).filter(function(x){ return Number(x.nr)!==nr; });
