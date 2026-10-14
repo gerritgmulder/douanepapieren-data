@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "planning.html", soort: "beter",
+      titel: "Routes: alles op één lijn",
+      wat:   "Alle dagen zijn even breed en de uren lopen in de hele week gelijk. De tijden staan één keer links. Boven de planning staan hoogstens vijf meldingen per dag; de rest zit achter '+ meer'."
+    },
+    {
       datum: "2026-10-14", bestand: "voorraad.html", soort: "nieuw",
       titel: "Je eigen indeling",
       wat:   "Met de knop Indeling rechts naast de tabbladen zet je de tabbladen en de blokken in je eigen volgorde, en zet je een blok uit dat je niet gebruikt. Het bovenste tabblad is waar Voorraadbeheer mee opent. Het geldt alleen voor jou."
