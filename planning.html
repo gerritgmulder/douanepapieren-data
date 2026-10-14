@@ -20,10 +20,7 @@
   document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
-    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}/* Alleen leveren (Kevin, 13 okt 2026): goed zichtbaar op blok en kaartje. */
-.blok .al{display:inline-block;margin:1px 0;padding:0 5px;border-radius:4px;background:#fde68a;color:#7c2d12;font-size:9.5px;font-weight:700;white-space:nowrap}
-.afs .badge.al{background:#fde68a!important;color:#7c2d12!important}
-</style>'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
     '<div class="gt"><h1>Planning</h1><p>Deze tegel is voor de afdeling planning.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
@@ -151,6 +148,8 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .dagband.zoek-dim{opacity:.28}
 .routekol.scheiding{border-left:1px dashed #e5e7eb}
 /* Zoeken in het raster: raak licht op, de rest wordt vaag. */
+.rij-twee{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-4px 0 10px}
+.rij-twee .rasterzoek{margin:0;flex:1 1 300px;min-width:0}
 .rasterzoek{display:flex;align-items:center;gap:10px;margin:-4px 0 10px}
 .rasterzoek input{border:1px solid var(--rand);border-radius:9px;padding:8px 12px;font:inherit;font-size:13px;width:340px;max-width:100%}
 .rasterzoek span{font-size:12px;color:var(--grijs)}
@@ -202,6 +201,11 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
    en spanaam, alle vier dik. De rest komt pas als je op het blok klikt. */
 .blok .p,.blok .m{font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blok .m{opacity:.9}
+.blok .m.wp{opacity:1;color:#9a3412;font-size:10px;white-space:normal;overflow:visible;line-height:12px}
+/* Alleen leveren (Kevin, 13 okt 2026): goed zichtbaar op blok en kaartje. */
+.blok .al{display:inline-block;margin:1px 0;padding:0 5px;border-radius:4px;background:#fde68a;color:#7c2d12;font-size:9.5px;font-weight:700;white-space:nowrap}
+.afs .badge.al{background:#fde68a!important;color:#7c2d12!important}
+
 .blokinfo{position:fixed;z-index:45;background:#fff;border:1px solid var(--rand);border-radius:12px;
    box-shadow:0 10px 30px rgba(15,23,42,.22);padding:12px 14px;width:290px;max-width:calc(100vw - 24px);
    font-size:12.5px;color:var(--ink);line-height:1.45}
@@ -561,16 +565,6 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
     <button type="button" id="itsKnop">🔧 Servicemeldingen</button>
     <a id="bonKnop" href="opleverbonnen.html" target="_blank" rel="noopener" title="De opleverbonnen die de monteurs bij de klant hebben ingevuld; opent de tegel Opleverbonnen">📋 Opleverbonnen</a>
     <button type="button" class="nieuw" id="nieuwKnop">+ Afspraak</button>
-    <span class="weergavekeus" id="periodeKeus">
-      <button type="button" data-periode="dag">Dag</button>
-      <button type="button" data-periode="werkweek" class="aan">Werkweek</button>
-      <button type="button" data-periode="week">Hele week</button>
-      <button type="button" data-periode="maand">Maand</button>
-    </span>
-    <span class="weergavekeus" id="weergaveKeus">
-      <button type="button" data-weergave="routes" class="aan">Routes</button>
-      <button type="button" data-weergave="tijd">Tijdraster</button>
-    </span>
   </div>
   <!-- Zoeken in het tijdraster. Gerrit (11 sep 2026): "een zoekbalk waarin je
        gemakkelijk het ordernummer, klantnaam of ITS-nummer kunt invullen en hij
@@ -581,11 +575,25 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
        de kleuren stond hier. Kevin (video, 20 sep 2026): "die regel hierboven
        mag gewoon weggehaald worden, zodat het raster wat verder omhoog komt."
        De kleuren spreken voor zich; wie er meekijkt staat nu in de zoekbalk. -->
+  <!-- Routes/Tijdraster en de zoekbalk op één regel (Kevin, video 14 okt
+       2026: "zoekbalk hiernaast, zodat alles een stuk verder omhoog kan"). -->
+  <div class="rij-twee">
+<span class="weergavekeus" id="periodeKeus">
+      <button type="button" data-periode="dag">Dag</button>
+      <button type="button" data-periode="werkweek" class="aan">Werkweek</button>
+      <button type="button" data-periode="week">Hele week</button>
+      <button type="button" data-periode="maand">Maand</button>
+    </span>
+  <span class="weergavekeus" id="weergaveKeus">
+    <button type="button" data-weergave="routes" class="aan">Routes</button>
+    <button type="button" data-weergave="tijd">Tijdraster</button>
+  </span>
   <div class="rasterzoek" id="rasterZoekBalk">
     <input id="rasterZoek" placeholder="Zoek op ordernummer, ITS-nummer, klantnaam, postcode, mailadres of debiteurnummer" autocomplete="off">
     <span id="rasterZoekUit"></span>
     <span id="liveAanwezig" class="live-wie"></span>
     <span id="liveMelding" class="live-melding"></span>
+  </div>
   </div>
 
   <!-- Servicemeldingen uit Logic4 (ITS), status Inplannen. Aanklikken zet de
@@ -1188,9 +1196,17 @@ function teken(){
   /* Breed genoeg voor de routes naast elkaar, maar nooit breder dan het
      venster: opzij schuiven mag niet. Past het niet, dan worden de stroken
      smaller en zie je in het blok alleen het nummer en de naam. */
+  /* Kevin (video, 14 okt 2026): bij Hele week stond zondag er niet op. De
+     dagen waren minstens 84 pixels per route breed; bij drie routes werd een
+     week 1.800 pixels en viel de zondag rechts buiten beeld. Nu krijgt elke
+     dag hoogstens zijn deel van de breedte die er is. */
+  var ruimte = (($("agendaHouder") || {}).clientWidth || window.innerWidth) - 54;
+  if (!window._plBreedteLuistert){ window._plBreedteLuistert = true; var _rt = null;
+    window.addEventListener("resize", function(){ clearTimeout(_rt); _rt = setTimeout(function(){ if (weergave !== "routes") teken(); }, 250); }); }
+  var perDag = Math.max(40, Math.floor(ruimte / Math.max(1, week.length)));
   ["rooster","rasterKop"].forEach(function(id){
     $(id).style.setProperty("--dagen", week.length);
-    $(id).style.setProperty("--dagbreedte", Math.max(96, 84*maxRoutes) + "px");
+    $(id).style.setProperty("--dagbreedte", Math.min(Math.max(96, 84*maxRoutes), perDag) + "px");
   });
   $("rooster").style.minWidth = "0";
   $("dagKoppen").innerHTML = kopHtml;
@@ -2389,6 +2405,9 @@ function blokken(items){
     var hoog = Math.max(24, (b.tot-b.van)/60*UUR_PX-2);
     var w = 100/b.breed, links = b.lane*w;
     var stad = stadUit(a.plaats), spa = spaNaam(a);
+    /* De warmtepomp op een eigen regel. Achter de spanaam viel hij in een
+       smal blok weg: Kevin (14 okt 2026) zag alleen "+…". */
+    var wpRegel = / \+ warmtepomp$/.test(spa); if (wpRegel) spa = spa.replace(/ \+ warmtepomp$/, "");
     /* Wie het heeft ingepland staat altijd in beeld, ook op een klein blok.
        Gerrit (7 sep 2026): "Ik wil ook kunnen zien wie het heeft ingepland."
        Bij een laag blok is er geen ruimte voor een regel, dus dan wordt het
@@ -2405,6 +2424,8 @@ function blokken(items){
       ((a.ordernr||a.itsId)?'<div class="nr">'+(a.ordernr?esc(a.ordernr):'')+(a.ordernr&&a.itsId?' · ':'')+(a.itsId?'ITS '+esc(a.itsId):'')+'</div>':'')+
       /* Kevin (video 13 okt 2026): "alleen leveren" ook op het blok zelf. */
       (a.alleenLeveren?'<div class="al">Alleen leveren</div>':'')+
+      /* Direct onder het nummer, zodat hij ook in een kort blok te zien is. */
+      (wpRegel?'<div class="m wp">+ warmtepomp</div>':"")+
       '<div class="k" data-bewerk="klant" title="Klik om de naam aan te passen">'+esc(a.klant||c.naam)+'</div>'+
       /* Gerrit (17 sep 2026): plaatsnaam en spanaam ook dik in het blok; de
          rest (wie, tijd, adres, telefoon, wie het plande) pas na een klik. */

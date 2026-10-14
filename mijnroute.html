@@ -360,6 +360,11 @@ function stopHtml(a){
     '<div class="sub">'+
       (a.plaats ? '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a.plaats)+'" target="_blank" rel="noopener">'+esc(a.plaats)+'</a>' : '')+
       (nr ? ' &middot; order '+esc(nr) : '')+(a.itsId ? ' &middot; ITS '+esc(a.itsId) : '')+
+      /* Debiteurnummer van de klant (Kevin, 14 okt 2026): uit de order, of
+         bij een servicemelding uit de melding. */
+      (function(){ var mi = a.itsId && meldingen ? meldingen.find(function(m){ return String(m.id) === String(a.itsId); }) : null;
+        var d = (o && o.ok && o.debiteur) || (mi && mi.debiteur) || "";
+        return d ? ' &middot; debiteur '+esc(d) : ""; })()+
     '</div>'+
     (a.wat && !a.itsId ? '<div class="sub">'+esc(a.wat)+'</div>' : '')+
     '</div></div>'+

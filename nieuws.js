@@ -51,6 +51,21 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "planning.html", soort: "beter",
+      titel: "Hele week met zondag, zoekbalk omhoog",
+      wat:   "Bij Hele week staan zaterdag en zondag nu altijd op het scherm. Routes, Tijdraster en de zoekbalk staan op één regel, zodat de planning hoger begint. Een warmtepomp staat op een eigen regel in het blok."
+    },
+    {
+      datum: "2026-10-14", bestand: "mijnroute.html", soort: "beter",
+      titel: "Debiteurnummer bij elke stop",
+      wat:   "Naast het ordernummer of het ITS-nummer staat nu ook het debiteurnummer van de klant."
+    },
+    {
+      datum: "2026-10-14", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Debiteurnummer bij elke bon",
+      wat:   "In de lijst en bij het openen van een bon staat nu het debiteurnummer van de klant."
+    },
+    {
       datum: "2026-10-14", bestand: "voorraad.html", soort: "nieuw",
       titel: "Nieuwe spa's: de Snow-reeks",
       wat:   "Snow Grand, Snow Prestige, Snow Classic en Snow Luxury van Romex staan nu overal: Voorraadbeheer, Reserveringen en Voorraadbepaling. Een invoice of proforma van Romex wordt herkend (SW-30A, 110T/P-580T, Urben 5 709D, Urben 2 719D) en je maakt er zo een inkooporder van."

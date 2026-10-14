@@ -118,7 +118,8 @@ async function laadKlantInfo(){
     try{
       var j = await bonApi("/planning/klantinfo", { orders: orders, its: its });
       klantInfo = { orders: j.orders||{}, its: j.its||{} };
-      if (($("bonZoek").value||"").trim()) bonOverzicht(true);
+      // Opnieuw tekenen voor het debiteurnummer, maar alleen als de lijst open staat.
+      if (($("bonInhoud") || {}).querySelector && $("bonInhoud").querySelector("table.bonlijst")) bonOverzicht(true);
       if (!j.nogOnbekend) { klantInfoKlaar = true; break; }
     }catch(e){ break; }
   }
@@ -128,7 +129,7 @@ async function bonOverzicht(uitGeheugen){
   var box = $("bonInhoud");
   if (!(uitGeheugen && bonnenCache)) box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p>';
   try{
-    if (!(uitGeheugen && bonnenCache)) { var j = await bonApi("/planning/bonnen"); bonnenCache = j.bonnen||[]; }
+    if (!(uitGeheugen && bonnenCache)) { var j = await bonApi("/planning/bonnen"); bonnenCache = j.bonnen||[]; setTimeout(laadKlantInfo, 0); }
     var alle = bonnenCache;
     var tel = {}; alle.forEach(function(b){ var k = b.status === "klaar" ? "open" : b.status; tel[k] = (tel[k]||0)+1; });
     $("bonFilters").innerHTML = FILTERS.map(function(f){ var n = f[0] === "alles" ? alle.length : (tel[f[0]]||0);
@@ -159,7 +160,7 @@ async function bonOverzicht(uitGeheugen){
     box.innerHTML = '<div style="overflow:auto"><table class="bonlijst"><thead><tr><th>Datum</th><th>Klant</th><th>Order</th><th>Monteur</th><th>Openstaand</th><th>Voldaan</th><th>Nee</th><th>Status</th></tr></thead><tbody>'+
       lijst.map(function(b){
         return '<tr class="rij" data-id="'+esc(b.id)+'"><td style="white-space:nowrap">'+esc(nlD(b.datum))+(b.tijd?' '+esc(b.tijd):'')+'</td><td><b>'+esc(b.klant)+'</b><div style="color:var(--grijs);font-size:11px">'+esc(b.plaats||"")+'</div></td>'+
-          '<td>'+esc(b.ordernr||(b.itsId?"ITS "+b.itsId:""))+'</td><td>'+esc(b.monteur||"")+'</td>'+
+          '<td>'+esc(b.ordernr||(b.itsId?"ITS "+b.itsId:""))+(debVan(b)?'<div style="color:var(--grijs);font-size:11px">deb. '+esc(debVan(b))+'</div>':'')+'</td><td>'+esc(b.monteur||"")+'</td>'+
           '<td>'+(b.serviceTotaal!=null?'<span title="servicebon: materialen, voorrijkosten en arbeid">service '+bonGeld(b.serviceTotaal)+'</span>':(b.openstaand!=null?bonGeld(b.openstaand):"-"))+'</td><td>'+(b.methode&&b.methode!=="geen"?bonGeld(b.ontvangen)+" "+(b.methode==="contant"?"contant":"bank"):(b.methode==="geen"?bonGeld(0):"-"))+'</td>'+
           '<td>'+(b.nee?'<span style="color:#b91c1c;font-weight:700">'+b.nee+'</span>':'')+'</td>'+
           '<td><span class="bonstatus '+esc(b.status)+'">'+esc((window.OPLEVERBON_STATUS||{})[b.status]||b.status)+'</span></td></tr>';
@@ -167,12 +168,25 @@ async function bonOverzicht(uitGeheugen){
     box.querySelectorAll("tr.rij").forEach(function(r){ r.addEventListener("click", function(){ bonDetail(r.dataset.id); }); });
   }catch(e){ box.innerHTML = '<p style="color:var(--rood);font-size:13px">Ophalen vraagt een nieuwe poging: '+esc(e.message)+'</p>'; }
 }
+/* Het debiteurnummer van de klant (Kevin, 14 okt 2026): uit de order, of
+   bij een servicemelding uit de melding. Komt uit dezelfde opzoeklijst als
+   het zoeken. */
+function debVan(b){
+  var o = klantInfo.orders[String(b.ordernr||"").replace(/\D/g,"")] || {}, i = klantInfo.its[String(b.itsId||"")] || {};
+  return String(o.debiteur || i.debiteur || b.debiteur || "");
+}
 async function bonDetail(id){
   var box = document.getElementById("bonInhoud"); if (!box) return;
   box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Bon ophalen\u2026</p>';
   var bon;
   try{ bon = (await bonApi("/planning/bon?id="+encodeURIComponent(id))).bon; if (!bon) throw new Error("deze bon is onbekend"); }
   catch(e){ box.innerHTML = '<p style="color:var(--rood)">'+esc(e.message)+'</p>'; return; }
+  if (!debVan(bon) && (bon.ordernr || bon.itsId)) {
+    try {
+      var kj = await bonApi("/planning/klantinfo", { orders: bon.ordernr ? [String(bon.ordernr)] : [], its: bon.itsId ? [String(bon.itsId)] : [] });
+      Object.assign(klantInfo.orders, kj.orders || {}); Object.assign(klantInfo.its, kj.its || {});
+    } catch(e) {}
+  }
   var vragen = window.OPLEVERBON_VRAGEN||[], A = window.OPLEVERBON_ANTWOORD||{};
   var bt = bon.betaling||{};
   var isService = bon.soort === "service" || !!bon.itsId, sv = bon.service || {};
@@ -195,7 +209,7 @@ async function bonDetail(id){
     '<p><button type="button" id="bonTerug" style="border:1px solid var(--rand);background:#fff;border-radius:8px;padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer">\u2190 Overzicht</button> '+
     '<span class="bonstatus '+esc(bon.status)+'" style="margin-left:8px">'+esc((window.OPLEVERBON_STATUS||{})[bon.status]||bon.status)+'</span></p>'+
     '<div class="kop2"><div><span>Klant</span> <b>'+esc(bon.klant)+'</b></div><div><span>Datum</span> '+esc(nlD(bon.datum))+(bon.tijd?' '+esc(bon.tijd):'')+'</div>'+
-    '<div><span>Adres</span> '+esc(bon.plaats)+'</div><div><span>Order</span> '+esc(bon.ordernr||(bon.itsId?"ITS "+bon.itsId:"-"))+'</div>'+
+    '<div><span>Adres</span> '+esc(bon.plaats)+'</div><div><span>Order</span> '+esc(bon.ordernr||(bon.itsId?"ITS "+bon.itsId:"-"))+(debVan(bon)?' &middot; <span>debiteur</span> '+esc(debVan(bon)):'')+'</div>'+
     '<div><span>Telefoon</span> '+esc(bon.telefoon||"-")+'</div><div><span>Soort</span> '+esc(bon.soort)+'</div>'+
     '<div><span>Monteur</span> '+esc([bon.monteur,bon.monteur2].filter(Boolean).join(" & "))+'</div><div><span>Kenteken</span> '+esc(bon.kenteken||"-")+'</div>'+
     '<div><span>Spa</span> '+esc(bon.spaType||"-")+'</div><div><span>Serienummer</span> '+esc(bon.serienr||"-")+'</div>'+
