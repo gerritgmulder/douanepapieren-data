@@ -220,6 +220,15 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .tapveld{display:flex;align-items:center;gap:8px;width:100%;padding:9px 11px;border:1px solid var(--rand);
    border-radius:8px;font:inherit;font-size:14px;color:var(--groen);background:#f4f9ec;text-align:left;cursor:pointer;min-height:40px}
 .tapveld .pijl{margin-left:auto;color:var(--grijs);font-size:12px}
+.namenkaart{max-width:400px;text-align:left}
+.namenlijst{list-style:none;margin:0 0 10px;padding:0;max-height:46vh;overflow-y:auto;border:1px solid var(--rand);border-radius:10px}
+.namenlijst li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid #f1f2f1;font-size:13.5px;text-align:left}
+.namenlijst li span{flex:1;min-width:0}
+.namenlijst li:first-child{border-top:0}
+.namenlijst .naamWeg{flex:none;width:auto;margin:0 0 0 auto;background:none;border:0;color:var(--grijs);cursor:pointer;font-size:16px;line-height:1;padding:0 4px}
+.namenlijst .naamWeg:hover{color:var(--rood)}
+.naamnieuw{display:flex;gap:8px}
+.naamnieuw input{flex:1;min-width:0;border:1px solid var(--rand);border-radius:9px;padding:8px 10px;font:inherit;font-size:13px}
 .vraagkaart{background:#fff;border-radius:16px;max-width:360px;width:100%;padding:20px 18px;margin:auto;text-align:center}
 .vraagkaart h3{margin:0 0 6px;font-size:17px;color:var(--groen)}
 .vraagkaart p{margin:0 0 16px;font-size:14px;color:var(--ink);overflow-wrap:break-word;white-space:pre-line}
@@ -762,8 +771,66 @@ function collegas(){
       if (naam && uit.indexOf(naam) < 0) uit.push(naam);
     });
   } catch(e){}
+  /* Kevin (14 okt 2026): "Ik wil een optie bewerken hebben zodat ik zelf
+     extra namen kan toevoegen of kan verwijderen." Wat hij toevoegt of
+     weghaalt staat in een eigen bucket (planning-namen), los van de planning
+     zelf: die wordt bij elke wijziging aan een afspraak in zijn geheel
+     teruggeschreven en zou een extra veld kwijtraken. */
+  uit = uit.filter(function(n){ return namenInstel.weg.indexOf(n) < 0; });
+  namenInstel.extra.forEach(function(n){ if (n && uit.indexOf(n) < 0) uit.push(n); });
   uit.sort(function(a,b){ return a.localeCompare(b); });
   return uit;
+}
+var namenInstel = { extra: [], weg: [] };
+async function laadNamen(){
+  try {
+    var r = await fetch(W+"/data/planning-namen", { headers:{ "X-Fonteyn-Auth": teamKey() } });
+    if (r.ok){ var j = await r.json(); namenInstel = { extra: Array.isArray(j.extra) ? j.extra : [], weg: Array.isArray(j.weg) ? j.weg : [] }; }
+  } catch(e){}
+}
+function namenVenster(){
+  var laag = document.createElement("div");
+  laag.className = "laag";
+  function lijstHtml(){
+    return collegas().map(function(n){ return '<li><span>'+esc(n)+'</span><button type="button" class="naamWeg" data-naam="'+esc(n)+'" title="Uit de lijst halen">&times;</button></li>'; }).join("") ||
+      '<li style="color:var(--grijs)">De lijst is leeg.</li>';
+  }
+  laag.innerHTML = '<div class="vraagkaart namenkaart"><h3>Namen voor de routes</h3>'+
+    '<p style="font-size:13px;margin:0 0 10px">Voeg een naam toe of haal er een weg. Geldt voor iedereen die plant.</p>'+
+    '<ul class="namenlijst"></ul>'+
+    '<div class="naamnieuw"><input maxlength="60" placeholder="nieuwe naam"><button type="button" class="doe erbij">Toevoegen</button></div>'+
+    '<p class="namenmelding" style="font-size:12px;color:var(--rood);margin:6px 0 0"></p>'+
+    '<div class="knoppen"><button type="button" class="doe klaar">Klaar</button></div></div>';
+  document.body.appendChild(laag);
+  var ul = laag.querySelector(".namenlijst"), vak = laag.querySelector(".naamnieuw input"), mel = laag.querySelector(".namenmelding");
+  function toon(){ ul.innerHTML = lijstHtml(); }
+  async function bewaar(wijzig){
+    mel.textContent = "";
+    var oud = JSON.parse(JSON.stringify(namenInstel));
+    wijzig(namenInstel); toon();
+    try {
+      var r = await fetch(W+"/data/planning-namen", { method:"PUT", headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
+        body: JSON.stringify({ extra: namenInstel.extra, weg: namenInstel.weg, door: ik, ts: new Date().toISOString() }) });
+      if (!r.ok) throw new Error("HTTP "+r.status);
+      liveStuur({ soort:"gewijzigd", wat:"namen" });
+    } catch(e){ namenInstel = oud; toon(); mel.textContent = "Bewaren vraagt een nieuwe poging ("+e.message+")."; }
+  }
+  ul.addEventListener("click", function(e){
+    var b = e.target.closest(".naamWeg"); if (!b) return;
+    var n = b.dataset.naam;
+    bewaar(function(s){ s.extra = s.extra.filter(function(x){ return x !== n; }); if (s.weg.indexOf(n) < 0) s.weg.push(n); });
+  });
+  function erbij(){
+    var n = vak.value.trim().replace(/\s+/g, " "); if (!n) return;
+    vak.value = "";
+    bewaar(function(s){ s.weg = s.weg.filter(function(x){ return x !== n; }); if (s.extra.indexOf(n) < 0) s.extra.push(n); });
+  }
+  laag.querySelector(".erbij").addEventListener("click", erbij);
+  vak.addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); erbij(); } });
+  function weg(){ laag.remove(); teken(); }
+  laag.querySelector(".klaar").addEventListener("click", weg);
+  laag.addEventListener("click", function(e){ if (e.target === laag) weg(); });
+  toon(); setTimeout(function(){ try{ vak.focus(); }catch(e){} }, 0);
 }
 function minuten(t){ var m = String(t||"").match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1])*60+(+m[2]) : null; }
 function tijdStr(min){ return String(Math.floor(min/60)).padStart(2,"0")+":"+String(min%60).padStart(2,"0"); }
@@ -840,6 +907,7 @@ async function rijtijdVullen(rtAdressen, poging){
 
 /* ── opslag ── */
 async function lees(){
+  await laadNamen();
   try{
     var r = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
     if(!r.ok) return null;
@@ -1446,7 +1514,7 @@ function tekenBord(){
                   (MAG_BEWERKEN
                     ? '<select class="rijderKies" data-datum="'+w.iso+'" data-nr="'+r.nr+'" data-plek="'+sl+'">'+
                         opties.map(function(o){ return '<option value="'+esc(o)+'"'+(o===naam?' selected':'')+'>'+(o ? esc(o) : (sl===1?"wie rijdt?":"wie rijdt mee?"))+'</option>'; }).join("")+
-                        '<option value="\u2026">\u2026 andere naam</option></select>'
+                        '<option value="\u2026">\u2026 andere naam</option><option value="\u270e">\u270e namen bewerken\u2026</option></select>'
                     : '<span class="wie vast">'+(naam ? '\ud83d\udc64 '+esc(naam) : '<span style="color:#b7bfb9;font-weight:400">'+(sl===1?"wie rijdt?":"wie rijdt mee?")+'</span>')+'</span>')+
                   (MAG_BEWERKEN && sl > 1 ? '<button type="button" class="plekWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" data-plek="'+sl+'" title="Deze plek weghalen">&times;</button>' : '')+
                   '</span>';
@@ -1817,6 +1885,7 @@ async function haalRouteWeg(dISO, nr){
 async function rijderGekozen(sel){
   var dISO = sel.dataset.datum, nr = Number(sel.dataset.nr), plek = Number(sel.dataset.plek)||1;
   var veld = plek === 1 ? "wie" : "wie"+plek;
+  if (sel.value === "\u270e"){ namenVenster(); return; }
   if (sel.value === "\u2026"){
     var vak = document.createElement("input");
     vak.className = "naamvak"; vak.maxLength = 60; vak.placeholder = "naam";
@@ -1867,6 +1936,7 @@ function bewerkRijder(el){
   var opties = [""].concat(namen);
   if (oud && opties.indexOf(oud) < 0) opties.push(oud);      // een eigen naam blijft staan
   opties.push("\u2026 andere naam");
+  if (MAG_BEWERKEN) opties.push("\u270e namen bewerken\u2026");
   opties.forEach(function(n){
     var o = document.createElement("option");
     o.value = n; o.textContent = n === "" ? "wie rijdt?" : n;
@@ -1880,6 +1950,7 @@ function bewerkRijder(el){
   el.appendChild(vak);
   kies.focus();
   kies.addEventListener("change", function(){
+    if (kies.value === "\u270e namen bewerken\u2026") { el.removeAttribute("data-bezig"); teken(); namenVenster(); return; }
     if (kies.value === "\u2026 andere naam") {
       vak.style.display = ""; vak.value = ""; vak.focus();
     } else { klaar(true); }

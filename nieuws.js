@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "planning.html", soort: "nieuw",
+      titel: "Namen voor de routes zelf bijhouden",
+      wat:   "Onderaan de keuzelijst 'wie rijdt?' staat nu 'namen bewerken'. Daar zet je zelf een naam erbij of haal je er een weg; dat geldt meteen voor iedereen die plant."
+    },
+    {
       datum: "2026-10-14", bestand: "planning.html", soort: "beter",
       titel: "Hele week met zondag, zoekbalk omhoog",
       wat:   "Bij Hele week staan zaterdag en zondag nu altijd op het scherm. Routes, Tijdraster en de zoekbalk staan op één regel, zodat de planning hoger begint. Een warmtepomp staat op een eigen regel in het blok."

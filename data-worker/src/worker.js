@@ -168,6 +168,7 @@ const ALLOWED_BUCKETS = new Set([
   "herinneringen-tekst", // Herinneringen: de mailtekst (Engels en Nederlands), aanpasbaar in de tegel
   "keten-meldingen",     // Ketenbewaking: de open meldingen van de laatste controle (worker schrijft, tegel leest)
   "keten-status",        // Ketenbewaking: per melding afgehandeld/uitgesteld met notitie (tegel schrijft via /keten/status)
+  "planning-namen",      // Extra en weggehaalde namen in de keuzelijst van de routes (Kevin, 14 okt 2026)
   "planning-paklijst",   // Per orderregel: gepakt of niet, door wie, wanneer (tegel Mijn route)  // Per ITS-melding de order (of de laatste order van de klant) voor de betaalstand, een dag bewaard
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
