@@ -202,6 +202,17 @@ const SPA_CODES = [
   ["WS-506M","Hurricane Deep"],
   ["WS-S06M","Hurricane Deep"],
   ["WS-06M","Hurricane Deep"],
+  // Guangzhou Romex Sanitary Ware — Snow-reeks (Chantal, 14 okt 2026, van
+  // commercial invoice NE294-20260319-002). Model No. is het artikelnummer
+  // van de leverancier. Op de invoice staat 110T/P-580T, Chantal schreef
+  // 11T/P-580T; beide staan erin, net als Urben5 met en zonder spatie.
+  ["SW-30A","Snow Grand"],
+  ["110T/P-580T","Snow Prestige"],
+  ["11T/P-580T","Snow Prestige"],
+  ["Urben 5 709D","Snow Classic"],
+  ["Urben5 709D","Snow Classic"],
+  ["Urben 2 719D","Snow Luxury"],
+  ["Urben2 719D","Snow Luxury"],
 ];
 // Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
 // code namelijk verschillend: wij hebben "SKT888-G1" in de codelijst staan, de

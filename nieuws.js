@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-14", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Nieuwe spa's: de Snow-reeks",
+      wat:   "Snow Grand, Snow Prestige, Snow Classic en Snow Luxury van Romex staan nu overal: Voorraadbeheer, Reserveringen en Voorraadbepaling. Een invoice of proforma van Romex wordt herkend (SW-30A, 110T/P-580T, Urben 5 709D, Urben 2 719D) en je maakt er zo een inkooporder van."
+    },
+    {
       datum: "2026-10-14", bestand: "planning.html", soort: "nieuw",
       titel: "Planning",
       wat:   "Je ziet nu de tegel Planning: alle routes en afspraken van de bezorgers en monteurs."

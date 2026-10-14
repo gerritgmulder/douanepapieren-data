@@ -166,6 +166,19 @@
       ],
     },
     {
+      fabriek: "Guangzhou Romex Sanitary Ware Co., Ltd",
+      merk: "Snow",
+      contact: null, email: null,
+      bron: "commercial invoice NE294-20260319-002, 20-08-2026 (Chantal, 14 okt 2026)",
+      opmerking: "Nieuwe spa's. In Logic4 crediteur 994000732. Bedragen FOB Yantian in USD; 30% vooraf, 70% voor verscheping.",
+      modellen: [
+        { model: "Snow Grand",    code: "SW-30A",       inkoopUsd: 5931, verkoopEur: null },
+        { model: "Snow Prestige", code: "110T/P-580T",  inkoopUsd: 3600, verkoopEur: null },
+        { model: "Snow Classic",  code: "Urben 5 709D", inkoopUsd: 3900, verkoopEur: null },
+        { model: "Snow Luxury",   code: "Urben 2 719D", inkoopUsd: 4650, verkoopEur: null },
+      ],
+    },
+    {
       fabriek: "Guangzhou Huantong Industry Co. LTD",
       merk: "Tropic Spas / Lovia spas",
       contact: "Joe", email: "yw18@ispas.cn",
