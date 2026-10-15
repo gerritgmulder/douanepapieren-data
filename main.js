@@ -653,6 +653,10 @@ function createWindow() {
     tegelVensters.clear();
   });
   nietWitBlijven(mainWindow);
+  /* Het dashboard start meteen zo groot als het scherm, met de titelbalk
+     erbij, net als de tegelvensters. Gerrit (15 okt 2026): "Als je het
+     Dashboard opstart wil ik dat dat venster direct volscherm is". */
+  mainWindow.maximize();
   mainWindow.loadURL(URL);
 
   const menu = Menu.buildFromTemplate([
