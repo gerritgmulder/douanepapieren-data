@@ -282,6 +282,8 @@
        hier bij. */
     "werkplaats": [
       "arno", "chantal", "christiaan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin", "manon", "nomi",
+      // Tim van Planning: dezelfde rechten als Kevin en Gerwin (Gerrit, 15 okt 2026).
+      "tim",
       // De computer in de werkplaats logt in met het Logic4-account Werkplaats (Kevin, 12 okt 2026).
       "werkplaats",
     ],
@@ -315,6 +317,8 @@
        regelt planning.html zelf (OP_TELEFOON). */
     "planning-bewerk": [
       "bart.vdb", "bertjan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
+      // Tim mag ook inplannen, net als Kevin en Gerwin (Gerrit, 15 okt 2026).
+      "tim",
       // Het service-spa-account (servicespa@fonteyn.nl) mag ook plannen (Chantal, 8 okt 2026).
       "mike",
     ],
@@ -397,7 +401,7 @@
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
       "dali", "dolf", "don", "edwin", "fonteynbot", "gerrit", "gerwin",
-      "kevin", "luis", "manon", "nomi", "patrick", "yves",
+      "kevin", "luis", "manon", "nomi", "patrick", "tim", "yves",
       // Service spa: alleen Particulier, met plannen (Chantal, 8 okt 2026).
       "mike",
     ],

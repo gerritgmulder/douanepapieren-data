@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-15", groep: "planning-bewerk", soort: "nieuw",
+      titel: "Tim plant mee",
+      wat:   "Tim kan nu ook routes en afspraken inplannen en wijzigen, net als Kevin en Gerwin."
+    },
+    {
       datum: "2026-10-14", bestand: "planning.html", soort: "beter",
       titel: "Ingeplande routes blijven staan",
       wat:   "Een route met stops erin is ingepland en blijft staan: het kruisje om hem weg te halen staat alleen bij een lege route."
