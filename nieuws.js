@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "bakwagen.html", soort: "nieuw",
+      titel: "Bakwagenroute",
+      wat:   "De eigen ritten uit Logic4 per chauffeur, per dag. Per stop het ordernummer, de klant, het telefoonnummer, de chauffeursinfo en wat er mee moet. De klant tekent op de telefoon voor ontvangst of voor een retour, en de chauffeur zet er een opmerking bij als er iets mis is; die komt bij Manon."
+    },
+    {
       datum: "2026-10-16", iedereen: true, soort: "beter",
       titel: "Alle tegels over de hele breedte",
       wat:   "Elke tegel en het startscherm gebruiken nu de hele breedte van je scherm. Tabellen en lijsten hebben meer ruimte, zodat je meer tegelijk kunt lezen."

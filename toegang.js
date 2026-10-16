@@ -207,6 +207,13 @@
       "arno", "chantal", "dolf", "fonteynbot", "gerrit", "manon",
     ],
     // Transport laden en Prijslijst maken
+    /* Bakwagenroute: de eigen ritten per chauffeur (Gerrit, 16 okt 2026).
+       Manon maakt de ritten, Nomi kijkt mee, de chauffeurs melden af. Jordy
+       logt in als JordyS. Dani en Johny hebben nog geen Logic4-account; zodra
+       dat er is, horen ze hier bij. */
+    "bakwagen": [
+      "dolf", "fonteynbot", "gerrit", "jordys", "manon", "nomi",
+    ],
     "logistiek": [
       "arno", "christiaan", "dolf", "don", "fonteynbot", "gerrit", "manon",
     ],

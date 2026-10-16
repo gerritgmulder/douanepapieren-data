@@ -16050,6 +16050,151 @@ async function logic4Lees(env, request, body) {
   return reply(200, { ok: r.ok, status: r.status, data });
 }
 
+/* ═══ BAKWAGENROUTE ══════════════════════════════════════════════════════
+   Gerrit (16 okt 2026): "Ik wil dat je daar voor de bakwagen chauffeurs (onze
+   eigen chauffeurs die op onze eigen 3 bakwagens spullen leveren aan
+   klanten) een lijst maakt, per chauffeur, met de ritten die ze moeten
+   rijden." Manon maakt de ritten elke dag aan in Logic4 (Round). Een
+   chauffeur of voertuig koppelt ze daar niet; ze schrijft het in de naam:
+   "Eigenroute 16-10 Dani", "Eigen route 14-10 - Jordy". Daarop herkennen we
+   de eigen ritten en de chauffeur. Ritten van DHL, VDH, Flevobird en Bekker
+   horen er niet bij.
+
+   Chauffeursinfo: het opmerkingveld van de ritregel (Remarks, in de
+   rittengenerator) en de notities van de order (daar staat nu "graag half
+   uur van te voren bellen", "bakwagen leveren ivm smalle straat").
+
+   Logic4 kent per order alleen een zoekvraag op één Id, dus de orders worden
+   in D1 bewaard (bakwagen_order, een kwartier vers) en per keer hooguit 30
+   nieuw opgevraagd: het gratis plan staat 50 opvragingen per keer toe. De
+   tegel vraagt het dan een paar seconden later nog eens.
+
+   Afmelden (handtekening, naam, opmerking) staat in D1, tabel bakwagen_af.
+   Een opmerking van de chauffeur ("er mist een kussen") komt als bericht bij
+   Manon in het Dashboard. */
+const BW_CHAUFFEURS = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordi", rx: /\bjord[iy]\b/i }, { naam: "Johny", rx: /\bjoh?n+[iy]\b|\bjohn\b/i }];
+const BW_RIT = /eigen ?r?oute|bakwagen/i;
+const BW_MANON = ["manon@fonteyn.nl", "fonteyn.manon", "manon"];
+let _bwTabellen = false;
+async function bwDb(env) {
+  const db = env.ACTIVITEIT;
+  if (!_bwTabellen) {
+    await db.batch([
+      db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_order (id TEXT PRIMARY KEY, json TEXT, ts INTEGER)"),
+      db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_af (rit TEXT, orderid TEXT, soort TEXT, naam TEXT, opmerking TEXT, chauffeur TEXT, door TEXT, ts INTEGER, hand TEXT, PRIMARY KEY (rit, orderid))"),
+    ]);
+    _bwTabellen = true;
+  }
+  return db;
+}
+function bwChauffeur(tekst) { const c = BW_CHAUFFEURS.find(c => c.rx.test(String(tekst || ""))); return c ? c.naam : ""; }
+function bwTel(t) { t = String(t || "").trim(); return (t.replace(/\D/g, "").length >= 6) ? t : ""; }
+/* Wat de chauffeur van een order nodig heeft; prijsregels (korting,
+   compensatie, verzendkosten) laten we weg. */
+function bwOrderKort(o, klant) {
+  const a = o.DeliveryAddress || {}, f = o.InvoiceAddress || {}, b = o.AccountAddress || {};
+  const telefoon = bwTel(a.TelephoneNumber) || bwTel(f.TelephoneNumber) || bwTel(b.TelephoneNumber) || bwTel(klant && klant.MobileNumber) || bwTel(klant && klant.TelephoneNumber);
+  const artikelen = (o.OrderRows || []).filter(r => !/^(korting|compensatie|verzendkosten|bezorgkosten|kosten )/i.test(String(r.Description || "").trim()) && !(Number(r.NettPrice) < 0))
+    .map(r => ({ aantal: Number(r.Qty) || 1, naam: String(r.Description || "").replace(/\s+/g, " ").trim().slice(0, 140), deel: !!r.IsAssemblyChild }))
+    .filter(r => r.naam).slice(0, 25);
+  return { order: String(o.Id), debiteur: o.DebtorId || null,
+    // Logic4 zet "None" neer als er geen voornaam is ingevuld ("None Nusmeijer").
+    klant: String(a.ContactName || a.CompanyName || f.ContactName || b.ContactName || "").replace(/\bNone\b/g, "").replace(/\s+/g, " ").trim(), bedrijf: (a.CompanyName || "").trim(),
+    telefoon, mail: a.Email || f.Email || "",
+    adres: [a.Address1, a.Address2].filter(Boolean).join(" ").trim(), postcode: a.Zipcode || "", plaats: a.City || "", land: a.CountryCode || "",
+    notities: String(o.Notes || "").trim(), omschrijving: String(o.Description || "").trim(), artikelen };
+}
+async function bakwagenRitten(env, datum) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) datum = pcVandaag();
+  const db = await bwDb(env);
+  const tok = await l4Token(env);
+  const l4 = async (pad, body) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, { method: "POST", headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error("logic4 " + pad + " " + r.status);
+    const j = await r.json(); return Array.isArray(j) ? j : (j && j.Records) || [];
+  };
+  const rondes = (await l4("/v3/Round/GetRounds", { DateTimeCreatedFrom: pcPlusDagen(datum, -21), TakeRecords: 400 }))
+    .filter(r => !r.HideInSystem && String(r.DateTimePlanned || "").slice(0, 10) === datum && (BW_RIT.test(r.Description || "") || bwChauffeur(r.Description)));
+  const ritten = [];
+  for (const r of rondes.slice(0, 8)) {
+    const regels = (await l4("/v3/Round/GetRoundOrders", { RoundId: r.Id, TakeRecords: 100 })).filter(x => x.OrderId);
+    regels.sort((a, b) => (Number(a.Sorting) || 0) - (Number(b.Sorting) || 0) || a.Id - b.Id);
+    ritten.push({ id: String(r.Id), naam: String(r.Description || "").trim(), chauffeur: bwChauffeur(r.Description), soort: Number(r.TypeId) === 2 ? "retour" : "levering",
+      memo: String(r.Memo || "").trim(), regels });
+  }
+  // Orders: uit D1 als ze vers zijn, anders opvragen (hooguit 30 per keer).
+  const ids = [...new Set(ritten.flatMap(r => r.regels.map(x => String(x.OrderId))))];
+  const bewaard = {};
+  for (let i = 0; i < ids.length; i += 90) {
+    const stuk = ids.slice(i, i + 90);
+    const rs = await db.prepare("SELECT id, json, ts FROM bakwagen_order WHERE id IN (" + stuk.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...stuk).all();
+    for (const x of rs.results || []) bewaard[x.id] = { o: JSON.parse(x.json), ts: x.ts };
+  }
+  const vers = Date.now() - 15 * 60000, nieuw = [];
+  let opgevraagd = 0, bezig = false;
+  for (const id of ids) {
+    // Een order die al gefactureerd is geeft Logic4 hier niet meer; dat vragen we pas na 6 uur opnieuw.
+    if (bewaard[id] && (bewaard[id].ts > vers || (bewaard[id].o.gefactureerd && bewaard[id].ts > Date.now() - 6 * 3600000))) continue;
+    if (opgevraagd >= 30) { bezig = true; continue; }
+    opgevraagd++;
+    const o = (await l4("/v3/Orders/GetOrders", { Id: Number(id), TakeRecords: 1 }).catch(() => null) || [null])[0];
+    if (o === undefined) {
+      bewaard[id] = { o: { order: id, gefactureerd: true }, ts: Date.now() };
+      nieuw.push(db.prepare("INSERT OR REPLACE INTO bakwagen_order (id, json, ts) VALUES (?1, ?2, ?3)").bind(id, JSON.stringify(bewaard[id].o), Date.now()));
+      continue;
+    }
+    if (!o) { bezig = true; continue; }
+    let klant = null;
+    const a = o.DeliveryAddress || {}, f = o.InvoiceAddress || {};
+    if (!bwTel(a.TelephoneNumber) && !bwTel(f.TelephoneNumber) && o.DebtorId && opgevraagd < 30) {
+      opgevraagd++;
+      klant = (await l4("/v3/Relations/GetCustomers", { Id: Number(o.DebtorId), TakeRecords: 1 }).catch(() => []))[0] || null;
+    }
+    const kort = bwOrderKort(o, klant);
+    bewaard[id] = { o: kort, ts: Date.now() };
+    nieuw.push(db.prepare("INSERT OR REPLACE INTO bakwagen_order (id, json, ts) VALUES (?1, ?2, ?3)").bind(id, JSON.stringify(kort), Date.now()));
+  }
+  if (nieuw.length) await db.batch(nieuw);
+  // Wat er al is afgemeld (zonder de handtekening zelf; die haalt de tegel apart op).
+  const af = {};
+  const ritIds = ritten.map(r => r.id);
+  if (ritIds.length) {
+    const rs = await db.prepare("SELECT rit, orderid, soort, naam, opmerking, chauffeur, door, ts, length(hand) AS hl FROM bakwagen_af WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
+    for (const x of rs.results || []) af[x.rit + ":" + x.orderid] = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, door: x.door, ts: x.ts, getekend: Number(x.hl) > 0 };
+  }
+  return { ok: true, datum, bezig, chauffeurs: BW_CHAUFFEURS.map(c => c.naam),
+    ritten: ritten.map(r => ({ id: r.id, naam: r.naam, chauffeur: r.chauffeur, soort: r.soort, memo: r.memo,
+      stops: r.regels.map(x => Object.assign({ regel: String(x.Id), opmerkingRit: String(x.Remarks || "").trim(), af: af[r.id + ":" + x.OrderId] || null },
+        (bewaard[String(x.OrderId)] || {}).o || { order: String(x.OrderId), laden: true })) })) };
+}
+async function bakwagenAfmelden(env, wie, b) {
+  const rit = String(b.rit || "").replace(/\D/g, ""), order = String(b.order || "").replace(/\D/g, "");
+  if (!rit || !order) return { ok: false, error: "rit en order zijn nodig" };
+  const soort = b.soort === "retour" ? "retour" : "levering";
+  const hand = String(b.hand || "");
+  if (hand && (!hand.startsWith("data:image/png;base64,") || hand.length > 400000)) return { ok: false, error: "handtekening te groot" };
+  const naam = String(b.naam || "").slice(0, 120), opmerking = String(b.opmerking || "").slice(0, 2000), chauffeur = String(b.chauffeur || "").slice(0, 40);
+  const db = await bwDb(env), ts = Date.now();
+  await db.prepare("INSERT OR REPLACE INTO bakwagen_af (rit, orderid, soort, naam, opmerking, chauffeur, door, ts, hand) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
+    .bind(rit, order, soort, naam, opmerking, chauffeur, wie, ts, hand).run();
+  if (opmerking.trim()) {
+    const d = await berichtenLees(env);
+    const klant = String(b.klant || "").slice(0, 80);
+    if (berichtErbij(d, { id: "bakwagen-opm:" + rit + ":" + order + ":" + ts, aan: BW_MANON, soort: "bakwagen-opm", ref: { rit, order },
+        titel: "Opmerking van " + (chauffeur || "de chauffeur") + " bij order " + order + (klant ? " (" + klant + ")" : ""),
+        tekst: (soort === "retour" ? "Bij het retour ophalen: " : "Bij de levering: ") + opmerking.trim() })) {
+      berichtenOpruimen(d);
+      await env.FONTEYN_DATA.put(BERICHTEN_KEY, JSON.stringify(d));
+    }
+  }
+  return { ok: true, ts };
+}
+async function bakwagenHandtekening(env, rit, order) {
+  const db = await bwDb(env);
+  const x = await db.prepare("SELECT hand FROM bakwagen_af WHERE rit = ?1 AND orderid = ?2").bind(String(rit || ""), String(order || "")).first();
+  return { ok: true, hand: x ? x.hand : "" };
+}
+
 /* Postvak in, of een andere vaste map. Alleen de mappen die Exchange bij
    naam kent - een vrije mapnaam meegeven zou betekenen dat de tegel overal
    in de mailbox kan grasduinen, en daar is nu geen reden voor. */
@@ -18650,6 +18795,21 @@ const FP_WORKER = {
     /* Gegevens opvragen uit Logic4 zonder het hulpprogramma van de pc.
        Zelfde vorm als /api/logic4-call daar, zodat de tegels niet hoeven te
        weten waar het antwoord vandaan komt - alleen opvragen, nooit wijzigen. */
+    /* Bakwagenroute: de eigen ritten van Manon per chauffeur, en het afmelden
+       met handtekening en opmerking (Gerrit, 16 okt 2026). */
+    if (url.pathname.startsWith("/bakwagen/")) {
+      if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);
+      try {
+        if (url.pathname === "/bakwagen/ritten" && request.method === "GET")
+          return reply(200, await bakwagenRitten(env, url.searchParams.get("datum") || pcVandaag()));
+        if (url.pathname === "/bakwagen/afmelden" && request.method === "POST")
+          return reply(200, await bakwagenAfmelden(env, wie, await request.json().catch(() => ({}))));
+        if (url.pathname === "/bakwagen/handtekening" && request.method === "GET")
+          return reply(200, await bakwagenHandtekening(env, url.searchParams.get("rit"), url.searchParams.get("order")));
+      } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
+      return reply(404, { ok: false });
+    }
     if (url.pathname === "/logic4/lees" && request.method === "POST") {
       const b = await request.json().catch(() => ({}));
       return logic4Lees(env, request, b);

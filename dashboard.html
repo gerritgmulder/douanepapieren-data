@@ -524,6 +524,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Upload een inkooporder en print in één keer alle A6-labels voor binnenkomende dozen.</p>
       </a>
 
+      <a href="bakwagen.html" class="tile hidden" id="tileBakwagen">
+        <div class="icon">🚛</div>
+        <h3>Bakwagenroute</h3>
+        <p>De ritten van Dani, Jordi en Johny per dag, met handtekening van de klant en een opmerking.</p>
+      </a>
+
       <a href="transport.html" class="tile hidden" id="tileTransport">
         <div class="icon">🚚</div>
         <h3>Transport laden</h3>
@@ -1477,6 +1483,9 @@ async function startBerichten(email){
             // Kevin: welke opleverbonnen van gisteren nog open staan, met een knop erheen.
             onder = '<ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px;color:#374151">' + String(m.tekst||"").split(" | ").map(r => '<li>' + relEsc(r) + '</li>').join("") + '</ul>';
             acties = '<a href="opleverbonnen.html" style="background:#144734;color:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap">Naar opleverbonnen</a>' + knop2("brAct", "Gezien", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"');
+          } else if (m.soort === "bakwagen-opm") {
+            // Een opmerking van een bakwagenchauffeur bij levering of retour (Gerrit, 16 okt 2026).
+            acties = '<a href="bakwagen.html" style="background:#144734;color:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap">Naar Bakwagenroute</a>' + knop2("brAct", "Gezien", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"');
           } else if (m.soort === "pp-bellen") {
             if (m.telefoon) onder = '<div style="margin-top:4px;font-size:14px"><a href="tel:' + relEsc(String(m.telefoon).replace(/[^0-9+]/g,"")) + '" style="color:#144734;font-weight:700">' + relEsc(m.telefoon) + '</a></div>';
             acties = knop("brAct", "Gebeld", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"') + knop2("brAct", "Morgen weer", 'data-id="' + relEsc(m.id) + '" data-a="later"');
