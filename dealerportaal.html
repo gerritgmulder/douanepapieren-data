@@ -1351,22 +1351,7 @@ function relatieKaart(index){
       + '<div class="blok"><p class="uit">' + (d.pw
           ? 'Deze relatie heeft al een wachtwoord en kan inloggen. Met <b>Bewaren</b> komen je wijzigingen erin; opnieuw uitnodigen kan met de knop ernaast.'
           : 'Met <b>Bewaren en uitnodigen</b> rechtsonder komt alles erin en krijgt de relatie de welkomstmail. Daarmee kiest de relatie zelf een wachtwoord en is meteen binnen. De link is zeven dagen geldig.'
-            + ' Blijft de mail uit, dan maak je hieronder bij <b>Meer</b> een inloglink.') + '</p></div>'
-      /* De acties die eerst achter de drie puntjes in de lijst zaten. */
-      + (nieuw ? '' : '<details class="blok" style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Meer: inloglink, wachtwoord, blokkeren of verwijderen</summary>'
-          + '<div id="rkMeer" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
-          + '<button class="btn lnkD" data-i="' + index + '" type="button" title="Een inloglink zonder mail, bijvoorbeeld voor WhatsApp. Zeven dagen geldig, eenmalig.">Inloglink maken</button>'
-          + '<button class="btn pwD" data-i="' + index + '" type="button" title="Zelf een wachtwoord zetten, bijvoorbeeld om telefonisch door te geven.">Wachtwoord zetten</button>'
-          + '<button class="btn togAct" data-i="' + index + '" type="button">' + (accounts.dealers[index] && accounts.dealers[index].active === false ? "Weer toelaten" : "Blokkeren") + '</button>'
-          + '<button class="btn delD" data-i="' + index + '" type="button" style="color:var(--bad);border-color:#fca5a5">' + WEG_ICOON + 'Verwijderen</button>'
-          + '</div></details>');
-    /* De knoppen bij Meer doen hetzelfde als eerst in het menu; het venster
-       gaat eerst dicht, want daarna klopt de lijst niet meer met wat hier staat. */
-    const meer = $$("rkMeer");
-    if (meer) {
-      meer.querySelectorAll("button").forEach(b => b.addEventListener("click", () => laag.remove(), true));
-      koppelRijActies(meer);
-    }
+            + ' Blijft de mail uit, dan maak je in de lijst via <b>&#8943;</b> een inloglink.') + '</p></div>';
     // De knoppen onderaan passen bij de stand van de relatie.
     const kb = $$("rkBewaar"), ku = $$("rkUitnodigen");
     if (kb && ku) {
@@ -1782,6 +1767,7 @@ function relatieKaart(index){
         const j = await r.json();
         if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
         try{ if(window.fpLog) window.fpLog("uitnodiging-verstuurd", d.email+" ("+d.company+")"); }catch(e){}
+        markeerUitgenodigd(d.email);
         setStatus("ok", "Welkomstmail verstuurd naar "+d.email+".");
         await pDialoog({
           titel: "Klaar - de uitnodiging is onderweg",
@@ -1799,7 +1785,7 @@ function relatieKaart(index){
               + esc(aanhefVan(d.contact.aanhef).vnw) + " zelf een wachtwoord en kan "
               + esc(aanhefVan(d.contact.aanhef).vnw) + " direct inloggen op Passion Partners. "
               + "De link is zeven dagen geldig.</p>"
-              + "<p>Hiermee ben je klaar. Blijft de mail uit, gebruik dan de knop <b>uitnodiging</b> in de lijst.</p>",
+              + "<p>Hiermee ben je klaar. Blijft de mail uit, kies dan in de lijst bij <b>&#8943;</b> voor Opnieuw uitnodigen.</p>",
           bevestig: tl("Klaar", "Done"), geenAnnuleren: true });
       } catch(e){
         setStatus("bad","Uitnodiging versturen faalde: "+e.message);
@@ -1848,9 +1834,22 @@ function renderPartners(){
         ${PP_TALEN.map(t => `<option value="${t[0]}"${d.taal===t[0]?" selected":""}>${t[0].toUpperCase()}</option>`).join("")}
       </select></td>
       <td data-l="Status"><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"geblokkeerd"}</span></td>
-      <td data-l="Acties" class="acties"><!-- Eén knop (Gerrit, 16 okt 2026): Uitnodigen opent het venster met alle
-           stappen; inloglink, wachtwoord, blokkeren en verwijderen staan onderin dat venster. -->
-        <button class="btn solid kaartD" data-i="${i}" type="button" title="Gegevens, adviseur, taal en de uitnodiging per mail, in één venster">Uitnodigen</button></td>
+      <td data-l="Acties" class="acties"><!-- Gerrit (16 okt 2026): nog niet uitgenodigd = de knop Uitnodigen (opent
+           het venster met alle stappen); uitgenodigd of al ingelogd = dat staat er, met
+           de drie puntjes ernaast voor bewerken, opnieuw uitnodigen en de rest. -->
+        ${d.pw ? `<span class="pill on" title="Deze relatie heeft een wachtwoord gekozen en kan inloggen">✓ ${ENG() ? "Account active" : "Account actief"}</span>`
+          : d.uitgenodigd ? `<span class="pill" style="background:#dbeafe;color:#1d4ed8" title="Uitnodiging verstuurd; de relatie heeft nog geen wachtwoord gekozen">${ENG() ? "Invited" : "Uitgenodigd"} ${esc(new Date(d.uitgenodigd).toLocaleDateString(ENG() ? "en-GB" : "nl-NL", { day: "numeric", month: "short" }))}</span>`
+          : `<button class="btn solid kaartD" data-i="${i}" type="button" title="Gegevens, adviseur, taal en de uitnodiging per mail, in één venster">${ENG() ? "Invite" : "Uitnodigen"}</button>`}<button class="rmv meerD" data-i="${i}" type="button" aria-haspopup="menu" title="Bewerken, opnieuw uitnodigen, inloglink, wachtwoord, blokkeren of verwijderen">&#8943;</button>
+        <template class="meerInhoud">
+          <button class="rmv kaartD" data-i="${i}">${ENG() ? "Edit" : "Bewerken"}</button>
+          <button class="rmv advD" data-i="${i}">${ENG() ? "Choose adviser" : "Adviseur kiezen"}${d.adviseur ? " (" + esc(adviseurNaam(d.adviseur)) + ")" : ""}</button>
+          <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig.">${d.uitgenodigd || d.pw ? (ENG() ? "Invite again" : "Opnieuw uitnodigen") : (ENG() ? "Send invitation" : "Uitnodiging sturen")}</button>
+          <button class="rmv lnkD" data-i="${i}" title="Een inloglink zonder mail, bijvoorbeeld voor WhatsApp. 7 dagen geldig, eenmalig.">${ENG() ? "Create login link" : "Inloglink maken"}</button>
+          <button class="rmv pwD" data-i="${i}" title="Zelf een wachtwoord zetten, bijvoorbeeld om telefonisch door te geven.">${ENG() ? "Set password" : "Wachtwoord zetten"}</button>
+          <button class="rmv togAct" data-i="${i}">${d.active!==false ? (ENG() ? "Block" : "Blokkeren") : (ENG() ? "Allow again" : "Weer toelaten")}</button>
+          <hr>
+          <button class="rmv weg delD" data-i="${i}">${WEG_ICOON}${ENG() ? "Delete" : "Verwijderen"}</button>
+        </template></td>
     </tr>`).join("") || '<tr><td colspan="8" style="color:var(--muted)">Voeg de eerste dealer of partner toe.</td></tr>';
   document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   document.querySelectorAll(".meerD").forEach(b=>b.addEventListener("click",(e)=>{
@@ -1876,6 +1875,16 @@ function renderPartners(){
 /* Klik ernaast of scrollen sluit het menu. */
 document.addEventListener("click", (e) => { const m = document.querySelector(".actiemenu"); if (m && !m.contains(e.target)) m.remove(); });
 addEventListener("scroll", () => { const m = document.querySelector(".actiemenu"); if (m) m.remove(); }, true);
+/* De worker zet 'uitgenodigd' bij het account; hier meteen ook, zodat de lijst
+   niet pas na herladen "Uitgenodigd" laat zien. De basis gaat mee, zodat dit
+   bij Bewaren niet als eigen wijziging telt. */
+function markeerUitgenodigd(email){
+  const e = String(email || "").toLowerCase(), nu = new Date().toISOString();
+  for (const lijst of [accounts.dealers || [], ((BASIS["dealer-accounts"] || {}).dealers) || []]) {
+    const x = lijst.find(y => String(y.email || "").toLowerCase() === e); if (x) x.uitgenodigd = nu;
+  }
+  try { renderPartners(); } catch (er) {}
+}
 function koppelRijActies(waar){
   waar.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   /* De adviseur los kiezen, zonder de hele relatiekaart. Bij de bestaande
@@ -1927,6 +1936,7 @@ function koppelRijActies(waar){
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
       try{ if(window.fpLog) window.fpLog("uitnodiging-verstuurd", d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
+      markeerUitgenodigd(d.email);
       setStatus("ok", "Welkomstmail verstuurd naar "+d.email+". De relatie kiest zelf een wachtwoord; de link is "+(j.validDays||7)+" dagen geldig.");
     } catch(e){ setStatus("bad","Uitnodiging versturen faalde: "+e.message); }
     b.disabled = false; b.textContent = "uitnodiging";

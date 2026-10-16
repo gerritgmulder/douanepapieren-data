@@ -363,7 +363,7 @@ function dpMailShell(env, url, binnen) {
     '<span style="font-size:30px;font-weight:bold;letter-spacing:3px;color:#111111;">passion</span>' +
     '<br><span style="font-size:13px;color:#c8102e;font-weight:bold;letter-spacing:2px;">SPAS</span>' +
     '<span style="font-size:13px;color:#9ca3af;"> &nbsp;|&nbsp; love your senses</span></td></tr>' +
-    '<tr><td style="padding:26px 30px;color:#1f2937;font-size:15px;line-height:24px;' + lettertype + '">' + dpMailKnoppen(binnen) + '</td></tr>' +
+    '<tr><td style="padding:26px 30px;color:#1f2937;font-size:15px;line-height:24px;' + lettertype + '"><!--pp-binnen-->' + dpMailKnoppen(binnen) + '<!--/pp-binnen--></td></tr>' +
     '<tr><td align="center" style="padding:16px 30px 24px;border-top:1px solid #eeeeec;color:#9ca3af;font-size:12px;line-height:20px;' + lettertype + '">' +
     'Passion Partners<br><a href="' + dpPad(env, url) + '" style="color:#c8102e;text-decoration:none;">' + site + '</a>' +
     '<br>Questions? Just reply to this email.</td></tr></table></td></tr></table>';
@@ -438,6 +438,7 @@ async function dpCcAdviseur(env, email) {
   try { return dpAdviseurVan(await dpGetAccounts(env), email); } catch (e) { return null; }
 }
 
+const PP_ENGELS_KOP = '<div style="margin:30px 0 16px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;letter-spacing:1px;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif">English version</div>';
 async function dpSendEmail(env, to, subject, html, replyTo, cc, vanNaam) {
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) {
     console.log("[dp-mail] niet geconfigureerd (RESEND_API_KEY/MAIL_FROM ontbreekt)");
@@ -451,7 +452,15 @@ async function dpSendEmail(env, to, subject, html, replyTo, cc, vanNaam) {
     const acc = await dpGetAccounts(env);
     const d = (acc.dealers || []).find(x => String(x.email || "").toLowerCase() === String(to || "").toLowerCase());
     const taal = d && d.taal;
-    if (taal && PP_MAIL_TALEN.includes(taal)) { subject = ppMailVertaal(taal, subject); html = ppMailVertaal(taal, html); }
+    if (taal && PP_MAIL_TALEN.includes(taal)) {
+      /* Met de Engelse versie eronder, in hetzelfde bericht (Gerrit, 16 okt
+         2026). In de Passion-jas komt het Engels in hetzelfde vak onder een
+         streep; een mail zonder die jas krijgt hem gewoon eronder. */
+      const engels = html;
+      subject = ppMailVertaal(taal, subject); html = ppMailVertaal(taal, html);
+      const binnenEn = (engels.match(/<!--pp-binnen-->([\s\S]*?)<!--\/pp-binnen-->/) || [])[1];
+      html = binnenEn ? html.replace("<!--/pp-binnen-->", PP_ENGELS_KOP + binnenEn + "<!--/pp-binnen-->") : html + PP_ENGELS_KOP + engels;
+    }
   } catch (e) { console.log("[dp-mail] vertalen: " + String(e.message || e)); }
   /* Zelfde adres, andere naam erboven. Een mail aan Audrey over de wire hoort
      niet van "Passion Partners" te komen; dat is het portaal voor dealers. */
@@ -4094,9 +4103,42 @@ async function dpWelkomMail(env, url, accounts, dealer, door) {
     (accounts.contactEmail || undefined), dpAdviseurVan(accounts, email));
   await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
     (sent.ok ? "welkomstmail" : "MAIL FAALDE") + (door ? " (" + door + ")" : ""));
+  /* Bij het account onthouden dat hij is uitgenodigd, zodat Beheer "Uitgenodigd"
+     laat zien in plaats van weer een knop Uitnodigen (Gerrit, 16 okt 2026).
+     Vers lezen en alleen dit veld zetten; Beheer voegt per veld samen. */
+  if (sent.ok) await dpZetUitgenodigd(env, email, new Date().toISOString(), door).catch(() => {});
   return { ok: !!sent.ok, link, reden: sent.ok ? null : (sent.reden || "mail-versturen-faalde") };
 }
 
+async function dpZetUitgenodigd(env, email, ts, door) {
+  const acc = await dpGetAccounts(env);
+  const d = (acc.dealers || []).find(x => String(x.email || "").toLowerCase() === email);
+  if (!d) return false;
+  d.uitgenodigd = ts; if (door) d.uitgenodigdDoor = String(door).slice(0, 80);
+  await env.FONTEYN_DATA.put("dealer-accounts", JSON.stringify(acc));
+  return true;
+}
+/* Eenmalig: wie er vóór 16 okt 2026 al was uitgenodigd, staat alleen in het
+   partnerlogboek. Zet die datum bij het account als hij er nog niet staat. */
+async function dpUitgenodigdAanvullen(env) {
+  const laatst = {};
+  for (const maand of ["2026-08", "2026-09", "2026-10"]) {
+    for (const ev of ((await actLees(env, "partner", maand)) || {}).events || []) {
+      if (ev.action === "uitnodiging-verstuurd" && /welkomstmail/.test(ev.detail || "") && ev.email) {
+        const e = String(ev.email).toLowerCase();
+        if (!laatst[e] || ev.ts > laatst[e]) laatst[e] = ev.ts;
+      }
+    }
+  }
+  const acc = await dpGetAccounts(env);
+  let gezet = 0;
+  for (const d of acc.dealers || []) {
+    const e = String(d.email || "").toLowerCase();
+    if (laatst[e] && !d.uitgenodigd) { d.uitgenodigd = laatst[e]; gezet++; }
+  }
+  if (gezet) await env.FONTEYN_DATA.put("dealer-accounts", JSON.stringify(acc));
+  return { ok: true, inLogboek: Object.keys(laatst).length, gezet };
+}
 async function dpAdminUitnodigen(request, env, url) {
   let body = {};
   try { body = await request.json(); } catch {}
@@ -8764,6 +8806,9 @@ const PC_KEY = "partnercontainers";
 const PC_GROET = {
   nl: "Met vriendelijke groet,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel\nT +31 577 456040",
   en: "Kind regards,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel, The Netherlands\nT +31 577 456040",
+  de: "Mit freundlichen Grüßen,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel, Niederlande\nT +31 577 456040",
+  fr: "Cordialement,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel, Pays-Bas\nT +31 577 456040",
+  it: "Cordiali saluti,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel, Paesi Bassi\nT +31 577 456040",
 };
 /* De standaardteksten zijn die van Chantal (25 sep 2026: "Tekst deposit
    betaling vragen" en "Tekst balance betaling vragen"), netter opgeschreven;
@@ -8773,6 +8818,9 @@ const PC_GROET = {
 const PC_BANK = {
   en: "Our bank details\nAccount name: Fonteyn\nAddress: Meervelderweg 52, Uddel, The Netherlands\nIBAN: NL54 INGB 0020 1016 19\nSWIFT/BIC: INGBNL2A\nBank: ING Bank, Friesewal 1, Zwolle, The Netherlands\nReference: order {order}",
   nl: "Onze bankgegevens\nNaam rekening: Fonteyn\nAdres: Meervelderweg 52, Uddel\nIBAN: NL54 INGB 0020 1016 19\nSWIFT/BIC: INGBNL2A\nBank: ING Bank, Friesewal 1, Zwolle\nOmschrijving: order {order}",
+  de: "Unsere Bankverbindung\nKontoinhaber: Fonteyn\nAdresse: Meervelderweg 52, Uddel, Niederlande\nIBAN: NL54 INGB 0020 1016 19\nSWIFT/BIC: INGBNL2A\nBank: ING Bank, Friesewal 1, Zwolle, Niederlande\nVerwendungszweck: Auftrag {order}",
+  fr: "Nos coordonnées bancaires\nTitulaire du compte : Fonteyn\nAdresse : Meervelderweg 52, Uddel, Pays-Bas\nIBAN : NL54 INGB 0020 1016 19\nSWIFT/BIC : INGBNL2A\nBanque : ING Bank, Friesewal 1, Zwolle, Pays-Bas\nRéférence : commande {order}",
+  it: "I nostri dati bancari\nIntestatario: Fonteyn\nIndirizzo: Meervelderweg 52, Uddel, Paesi Bassi\nIBAN: NL54 INGB 0020 1016 19\nSWIFT/BIC: INGBNL2A\nBanca: ING Bank, Friesewal 1, Zwolle, Paesi Bassi\nCausale: ordine {order}",
 };
 const PC_TEKST_STANDAARD = {
   deposit: {
@@ -8803,7 +8851,36 @@ const PC_JAZZI_TEKST = {
   "jazzi-order": { onderwerp: "New order - container {container} (order {order})",
            tekst: "Dear Jazzi team,\n\nPlease find below a new container order (our order {order}, for {dealer}).\n\n{regels}\n\nCould you please send us the proforma invoice for this container?\n\nThank you in advance." },
 };
-for (const [s, v] of Object.entries(PC_JAZZI_TEKST)) PC_TEKST_STANDAARD[s] = { en: v, nl: v };
+for (const [s, v] of Object.entries(PC_JAZZI_TEKST)) PC_TEKST_STANDAARD[s] = { en: v, nl: v, de: v, fr: v, it: v };
+/* De dealermails ook in het Duits, Frans en Italiaans (Gerrit, 16 okt 2026:
+   de mails in de taal van de partner, met de Engelse eronder). Zelfde
+   opbouw als de Engelse en Nederlandse van Chantal, zakelijk (Sie, vous, Lei). */
+Object.assign(PC_TEKST_STANDAARD.deposit, {
+  de: { onderwerp: "Auftragsbestätigung und Anzahlung - Container {container}",
+        tekst: "Guten Tag {dealer},\n\nvielen Dank für Ihre Bestellung! Im Anhang finden Sie die Auftragsbestätigung für Container {container} (Auftrag {order}).\n\nUm die Produktion zu starten, bitten wir Sie freundlich, die Anzahlung von {percentage}% zu leisten: {bedrag}.\n\n" + PC_BANK.de + "\n\nSenden Sie uns nach der Zahlung bitte die Zahlungsbestätigung. Sobald wir sie erhalten, starten wir sofort mit der Produktion.\n\nWir freuen uns darauf, diesen Auftrag gemeinsam mit Ihnen umzusetzen." },
+  fr: { onderwerp: "Confirmation de commande et acompte - conteneur {container}",
+        tekst: "Bonjour {dealer},\n\nMerci pour votre commande ! Vous trouverez en pièce jointe la confirmation de commande du conteneur {container} (commande {order}).\n\nPour lancer la production, nous vous remercions de régler l'acompte de {percentage} % : {bedrag}.\n\n" + PC_BANK.fr + "\n\nUne fois le paiement effectué, merci de nous envoyer la confirmation de paiement. Dès sa réception, nous lançons la production.\n\nNous nous réjouissons de réaliser cette commande avec vous." },
+  it: { onderwerp: "Conferma d'ordine e acconto - container {container}",
+        tekst: "Buongiorno {dealer},\n\ngrazie per il Suo ordine! In allegato trova la conferma d'ordine per il container {container} (ordine {order}).\n\nPer avviare la produzione, La preghiamo gentilmente di versare l'acconto del {percentage}%: {bedrag}.\n\n" + PC_BANK.it + "\n\nUna volta effettuato il pagamento, ci invii per favore la conferma di pagamento. Appena la riceviamo, avviamo subito la produzione.\n\nSiamo lieti di realizzare questo ordine insieme a Lei." },
+});
+Object.assign(PC_TEKST_STANDAARD.balance, {
+  de: { onderwerp: "Restzahlung - Container {container}",
+        tekst: "Guten Tag {dealer},\n\ngute Nachricht: Ihr Container {container} (Auftrag {order}) ist in der Fabrik fast fertig, um den {cargoReady}. Im Anhang finden Sie die Bestätigung.\n\nWir bitten Sie freundlich, die Restzahlung von {percentage}% zu leisten: {bedrag}.\n\n" + PC_BANK.de + "\n\nBitte zahlen Sie umgehend und senden Sie uns die Zahlungsbestätigung innerhalb von 24 Stunden. Sobald wir sie erhalten, organisieren wir die nächsten Schritte für den Versand.\n\nVielen Dank für Ihre schnelle Rückmeldung." },
+  fr: { onderwerp: "Solde - conteneur {container}",
+        tekst: "Bonjour {dealer},\n\nBonne nouvelle : votre conteneur {container} (commande {order}) est presque prêt à l'usine, vers le {cargoReady}. Vous trouverez la confirmation en pièce jointe.\n\nNous vous remercions de régler le solde de {percentage} % : {bedrag}.\n\n" + PC_BANK.fr + "\n\nMerci d'effectuer le paiement dès maintenant et de nous envoyer la confirmation de paiement dans les 24 heures. Dès sa réception, nous organisons les prochaines étapes de l'expédition.\n\nMerci pour votre réactivité." },
+  it: { onderwerp: "Saldo - container {container}",
+        tekst: "Buongiorno {dealer},\n\nottime notizie: il Suo container {container} (ordine {order}) è quasi pronto in fabbrica, intorno al {cargoReady}. In allegato trova la conferma.\n\nLa preghiamo gentilmente di versare il saldo del {percentage}%: {bedrag}.\n\n" + PC_BANK.it + "\n\nLa preghiamo di effettuare subito il pagamento e di inviarci la conferma entro 24 ore. Appena la riceviamo, organizziamo i prossimi passi per la spedizione.\n\nGrazie per la Sua rapidità." },
+});
+Object.assign(PC_TEKST_STANDAARD.herinnering, {
+  de: { onderwerp: "Erinnerung: Restzahlung - Container {container}",
+        tekst: "Guten Tag {dealer},\n\neine freundliche Erinnerung an die Restzahlung von {bedrag} für Container {container} (Auftrag {order}). Ihr Container ist um den {cargoReady} in der Fabrik bereit.\n\n" + PC_BANK.de + "\n\nBitte zahlen Sie umgehend und senden Sie uns die Zahlungsbestätigung. Sobald wir sie erhalten, organisieren wir den Versand zu Ihnen. Wurde die Zahlung gerade erledigt? Dann vielen Dank, und unsere Nachrichten haben sich gekreuzt.\n\nVielen Dank für Ihre schnelle Rückmeldung." },
+  fr: { onderwerp: "Rappel : solde - conteneur {container}",
+        tekst: "Bonjour {dealer},\n\nUn petit rappel concernant le solde de {bedrag} pour le conteneur {container} (commande {order}). Votre conteneur est prêt à l'usine vers le {cargoReady}.\n\n" + PC_BANK.fr + "\n\nMerci d'effectuer le paiement dès maintenant et de nous envoyer la confirmation de paiement. Dès sa réception, nous organisons l'expédition vers vous. Le paiement vient d'être effectué ? Alors merci beaucoup, nos messages se sont croisés.\n\nMerci pour votre réactivité." },
+  it: { onderwerp: "Promemoria: saldo - container {container}",
+        tekst: "Buongiorno {dealer},\n\nun gentile promemoria sul saldo di {bedrag} per il container {container} (ordine {order}). Il Suo container è pronto in fabbrica intorno al {cargoReady}.\n\n" + PC_BANK.it + "\n\nLa preghiamo di effettuare subito il pagamento e di inviarci la conferma. Appena la riceviamo, organizziamo la spedizione verso di Lei. Il pagamento è appena stato effettuato? Allora grazie mille, i nostri messaggi si sono incrociati.\n\nGrazie per la Sua rapidità." },
+});
+const PC_TALEN = ["nl", "en", "de", "fr", "it"];
+const PC_LOCALE = { nl: "nl-NL", en: "en-GB", de: "de-DE", fr: "fr-FR", it: "it-IT" };
 const PC_SOORTEN = ["deposit", "balance", "herinnering", "jazzi", "jazzi-order"];
 /* De containermensen bij Jazzi; de mails gaan altijd naar alle vier tegelijk
    (Chantal, 7 okt 2026). */
@@ -8815,9 +8892,9 @@ const PC_DEPOSIT_PCT = 30;
 function pcUsd(eur) { return Math.round((Number(eur) || 0) * AMERIKA_KOERS * 100) / 100; }
 function pcDollar(v, taal) {
   const n = Number(v) || 0;
-  return taal === "nl"
-    ? "$ " + n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (taal && taal !== "en" && PC_LOCALE[taal])
+    return "$ " + n.toLocaleString(PC_LOCALE[taal], { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function pcDatum(d) { return d ? String(d).slice(0, 10).split("-").reverse().join("-") : ""; }
 function pcPlusMaanden(d, n) {
@@ -8930,7 +9007,10 @@ async function pcOntvanger(env, debtorId) {
   const naar = String((dealer && dealer.email) || l4.herinneringMail || l4.factuurMail || l4.email || "").trim().toLowerCase();
   const iso = String(l4.iso || (dealer && dealer.land) || "").toUpperCase();
   const cc = dealer ? dpAdviseurVan(accounts, dealer.email) : null;
-  return { naar, cc, taal: /^(NL|BE)$/.test(iso) ? "nl" : "en", bedrijf: (dealer && dealer.company) || l4.bedrijf || l4.naam || "" };
+  /* De taal die in Passion Partners voor deze partner is gekozen (Beheer, stap 3).
+     Zonder keuze: Nederlands voor NL en BE, anders Engels. */
+  const taal = dealer && ["nl", "en", "de", "fr", "it"].includes(dealer.taal) ? dealer.taal : (/^(NL|BE)$/.test(iso) ? "nl" : "en");
+  return { naar, cc, taal, bedrijf: (dealer && dealer.company) || l4.bedrijf || l4.naam || "" };
 }
 async function pcHandle(request, env, url) {
   const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
@@ -9019,17 +9099,26 @@ async function pcHandle(request, env, url) {
     const percentage = soort === "deposit" ? PC_DEPOSIT_PCT
       : (totaalEur > 0 ? Math.round((t.openstaand / totaalEur) * 100) : 70);
     const ontv = await pcOntvanger(env, o.debtorId);
-    const taal = naarJazzi ? "en" : (b.taal === "nl" || b.taal === "en" ? b.taal : ontv.taal);
-    const sjabloon = teksten()[soort][taal];
-    const w = { dealer: ontv.bedrijf || o.naam, container: o.containerNr || o.referentie || ("order " + o.ordernr), order: o.ordernr,
-                cargoReady: t.cargoReady ? new Date(t.cargoReady + "T12:00:00Z").toLocaleDateString(taal === "nl" ? "nl-NL" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "",
-                bedrag: pcDollar(bedragUsd, taal), openstaand: pcDollar(bedragUsd, taal), percentage,
-                regels: ((live && live.regels) || []).map(r => "- " + r.aantal + " x " + (r.omschrijving || r.code) + (r.code ? " (" + r.code + ")" : "")).join("\n") || "(see the attached order)" };
+    const taal = naarJazzi ? "en" : (PC_TALEN.includes(b.taal) ? b.taal : ontv.taal);
+    const sjabloon = teksten()[soort][taal] || teksten()[soort].en;
+    const vulWaarden = (tl) => ({ dealer: ontv.bedrijf || o.naam, container: o.containerNr || o.referentie || ("order " + o.ordernr), order: o.ordernr,
+                cargoReady: t.cargoReady ? new Date(t.cargoReady + "T12:00:00Z").toLocaleDateString(PC_LOCALE[tl] || "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "",
+                bedrag: pcDollar(bedragUsd, tl), openstaand: pcDollar(bedragUsd, tl), percentage,
+                regels: ((live && live.regels) || []).map(r => "- " + r.aantal + " x " + (r.omschrijving || r.code) + (r.code ? " (" + r.code + ")" : "")).join("\n") || "(see the attached order)" });
+    const w = vulWaarden(taal);
     if (naarJazzi) { ontv.naar = data.jazziMail || PC_JAZZI_MAILS.join(", "); ontv.cc = BERICHT_CHANTAL; }
     const onderwerp = pcVul(b.onderwerp || sjabloon.onderwerp, w);
     const tekst = pcVul(b.tekst || sjabloon.tekst, w);
     const naar = b.test ? wie : String(b.naar || ontv.naar || "").trim().toLowerCase();
-    const html = pcMailHtml(tekst, PC_GROET[taal]);
+    /* Niet in het Engels? Dan staat de Engelse versie eronder, in hetzelfde
+       bericht (Gerrit, 16 okt 2026: "zodat voor de zekerheid het bericht ook
+       altijd in Engels wordt meegestuurd"). Dat is de Engelse tekst van deze
+       mail, met dezelfde bedragen en datums. */
+    let html = pcMailHtml(tekst, PC_GROET[taal] || PC_GROET.en);
+    if (!naarJazzi && taal !== "en") {
+      const en = teksten()[soort].en;
+      html += PP_ENGELS_KOP + pcMailHtml(pcVul(en.tekst, vulWaarden("en")), PC_GROET.en);
+    }
     if (b.proef) return reply(200, { ok: true, proef: true, naar, cc: ontv.cc, taal, onderwerp, tekst, html, standaardNaar: ontv.naar, bedragUsd });
     /* Een bijlage (de orderbevestiging van Fonteyn) mag mee. Base64, zoals
        Resend hem wil; maximaal ongeveer 10 MB. */
@@ -18313,6 +18402,10 @@ const FP_WORKER = {
       if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const b = await request.json().catch(() => ({}));
       return reply(200, await relZoek(env, b.q).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/beheer/pp-uitgenodigd-aanvullen" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return reply(200, await dpUitgenodigdAanvullen(env));
     }
     /* Wat Logic4 van een klant weet over taal en vertegenwoordiger. Alleen
        lezen. Het partnervenster in Beheer zet het erbij als voorstel (Gerrit,
