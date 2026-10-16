@@ -7388,6 +7388,13 @@ async function sha256Hex(tekst) {
    hooguit één vraag per seconde, dus per aanroep maximaal 8 nieuwe adressen;
    wat dan nog open is komt bij de volgende aanroep. */
 const RIJ_START = "Meervelderweg 52, 3888 NK Uddel, Nederland";
+/* OSRM rekent met voorzichtige snelheden (op de snelweg zo'n 80% van wat er
+   mag), Google Maps met wat er echt gereden wordt. Kevin (16 okt 2026):
+   Uddel - Sellingen - Wildervank - Uddel, 331 km, gaf hier 4u43 en in Google
+   3u59. Dat is een factor 0,845; daarmee lopen de tijden gelijk met Google.
+   In rijtijd_cache staat de ruwe OSRM-tijd, zodat deze factor later nog bij
+   te stellen is zonder alles opnieuw op te vragen. */
+const RIJ_FACTOR = 239 / 283;
 function rijNorm(a) { return String(a || "").toLowerCase().replace(/\s+/g, " ").replace(/\s*,\s*/g, ", ").trim().slice(0, 200); }
 async function rijtijdHandle(request, env) {
   const b = await request.json().catch(() => ({}));
@@ -7454,7 +7461,7 @@ async function rijtijdHandle(request, env) {
       res = { min: Math.round(route.duration / 60), km: Math.round(route.distance / 1000) };
       await db.prepare("INSERT OR REPLACE INTO rijtijd_cache (sleutel, min, km, ts) VALUES (?1, ?2, ?3, ?4)").bind(sleutel, res.min, res.km, Date.now()).run();
     }
-    uit[r.k] = { min: res.min, km: res.km, onbekend };
+    uit[r.k] = { min: Math.round(res.min * RIJ_FACTOR), km: res.km, onbekend };
   }
   return reply(200, { ok: true, routes: uit });
 }

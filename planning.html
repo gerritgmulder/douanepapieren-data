@@ -900,7 +900,7 @@ async function rijtijdVullen(rtAdressen, poging){
       var x = rijCache[sleutelVan[el.dataset.rt]];
       var tx = rijTekst(x);
       if (el.textContent !== tx) el.textContent = tx;
-      el.title = x && x.onbekend ? x.onbekend+" adres(sen) nog zonder plek op de kaart; de tijd is berekend zonder die stops" : (tx ? "Rijtijd vanuit Uddel langs de stops en terug" : "");
+      el.title = x && x.onbekend ? x.onbekend+" adres(sen) nog zonder plek op de kaart; de tijd is berekend zonder die stops" : (tx ? "Rijtijd vanuit Uddel langs de stops en terug, zonder de tijd bij de klant (gelijk aan Google Maps)" : "");
     });
   };
   zet();

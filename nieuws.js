@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "planning.html", soort: "hersteld",
+      titel: "Rijtijden gelijk aan Google Maps",
+      wat:   "De rijtijd onder een route kwam hoger uit dan in Google Maps, omdat de kaart met voorzichtige snelheden rekende. Nu is de tijd gelijk aan die van Google Maps; de kilometers klopten al."
+    },
+    {
       datum: "2026-10-16", bestand: "planning.html", soort: "beter",
       titel: "Planning over de hele breedte",
       wat:   "Het tijdraster en de routes gebruiken nu bijna het hele scherm, zodat alles groter en beter leesbaar is."
