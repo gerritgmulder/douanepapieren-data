@@ -76,6 +76,15 @@
          eigen maat van een tegel (Planning stond daardoor nog op 1800). Nu
          de volle breedte, met alleen de eigen rand van de tegel. */
       (dashboard ? "" : "main,body>.wrap{max-width:none!important}") +
+      /* Nooit meer een kale browserknop (Gerrit, 16 okt 2026: de knop 'mail
+         klant' in Voorraadbeheer zag er "echt gruwelijk lelijk" uit). Een knop
+         zonder eigen opmaak kreeg de grijze standaardknop van de browser. Dit
+         is de Dashboard-stijl als ondergrens; :where() telt voor nul, dus elke
+         eigen regel van een tegel gaat er altijd boven. */
+      ":where(button,input[type=button],input[type=submit],input[type=reset]){font-family:inherit;font-weight:600;line-height:1.3;" +
+        "background:#fff;color:#144734;border:1px solid #c7d2cc;border-radius:8px;padding:5px 11px;cursor:pointer}" +
+      ":where(button,input[type=button],input[type=submit],input[type=reset]):hover{border-color:#144734}" +
+      ":where(button,input[type=button],input[type=submit],input[type=reset]):disabled{opacity:.55;cursor:default}" +
       "table{width:100%;max-width:100%}" +
       "table td,table th{white-space:normal;overflow-wrap:break-word;min-width:0}" +
       "table th{overflow-wrap:normal;word-break:keep-all;hyphens:none}" +

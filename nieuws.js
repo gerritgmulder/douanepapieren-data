@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", groep: "bakwagen-planning", soort: "beter",
+      titel: "Bakwagenroute: ritten klaarzetten",
+      wat:   "Druk op Ritten ophalen: dan zie je alle eigen ritten uit het Rittenoverzicht van Logic4 vanaf vandaag. Klik een rit aan, controleer de stops en de paklijst en geef akkoord voor Dani, Jordy of Johny. Pas dan ziet de chauffeur de rit, op de dag zelf."
+    },
+    {
+      datum: "2026-10-16", iedereen: true, soort: "beter",
+      titel: "Knoppen overal in dezelfde stijl",
+      wat:   "Een paar knoppen stonden er nog in de kale stijl van de browser, zoals 'mail klant' in Voorraadbeheer. Elke knop heeft nu de Dashboard-stijl."
+    },
+    {
       datum: "2026-10-16", bestand: "bakwagen.html", soort: "nieuw",
       titel: "Bakwagenroute",
       wat:   "De eigen ritten uit Logic4 per chauffeur, per dag. Per stop het ordernummer, de klant, het telefoonnummer, de chauffeursinfo en wat er mee moet. De klant tekent op de telefoon voor ontvangst of voor een retour, en de chauffeur zet er een opmerking bij als er iets mis is; die komt bij Manon."

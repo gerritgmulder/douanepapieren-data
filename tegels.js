@@ -77,7 +77,7 @@
     /* Bakwagenroute: de eigen ritten per chauffeur, met handtekening van de
        klant en een opmerking (Gerrit, 16 okt 2026). Vooral op de telefoon. */
     { telefoon:true, bestand:"bakwagen.html",       groep:"bakwagen",         ic:"🚛",  naam:"Bakwagenroute",
-      uit:"Ritten per chauffeur, met handtekening van de klant", mobiel:"goed", tile:"tileBakwagen" },
+      uit:"Ritten klaarzetten en afmelden met handtekening", mobiel:"goed", tile:"tileBakwagen" },
     { bestand:"transport.html",      groep:"logistiek",        ic:"🚚",  naam:"Transport laden",
       uit:"Ritten en ladingen",                                    mobiel:"krap", tile:"tileTransport" },
     { bestand:"rapportage.html",     groep:"rapportage",       ic:"📈",  naam:"Rapportage",
