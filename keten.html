@@ -144,12 +144,12 @@ function teken(){
         (m.uitgesteld ? '<button class="klein" data-terug="' + esc(m.id) + '">Weer tonen</button>' : '<button class="klein" data-uitstel="' + esc(m.id) + '">Uitstellen</button><button class="klein" data-af="' + esc(m.id) + '">Afgehandeld</button>') + '</div></div>' +
     '</div>').join("") : '<p class="leeg">Alles in deze groep loopt op tijd.</p>';
   $("lijst").querySelectorAll("[data-af]").forEach(b => b.addEventListener("click", async () => {
-    const n = prompt("Afgehandeld. Wil je er iets bij zetten (mag leeg)?", ""); if (n === null) return;
+    const n = await fpVraag("Afgehandeld. Wil je er iets bij zetten (mag leeg)?", "", { knop: "Afgehandeld" }); if (n === null) return;
     await api("/keten/status", { method: "POST", body: JSON.stringify({ id: b.dataset.af, actie: "afgehandeld", notitie: n }) }); laad();
   }));
   $("lijst").querySelectorAll("[data-uitstel]").forEach(b => b.addEventListener("click", async () => {
-    const tot = prompt("Uitstellen tot (jjjj-mm-dd)", new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)); if (!tot) return;
-    const n = prompt("Waarom (mag leeg)?", "") || "";
+    const tot = await fpVraag("Uitstellen tot", new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), { type: "date", knop: "Verder" }); if (!tot) return;
+    const n = (await fpVraag("Waarom (mag leeg)?", "", { knop: "Uitstellen" })) || "";
     await api("/keten/status", { method: "POST", body: JSON.stringify({ id: b.dataset.uitstel, actie: "uitstellen", tot, notitie: n }) }); laad();
   }));
   $("lijst").querySelectorAll("[data-terug]").forEach(b => b.addEventListener("click", async () => {

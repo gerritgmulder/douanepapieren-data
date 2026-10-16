@@ -51,6 +51,31 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", iedereen: true, soort: "beter",
+      titel: "Alle tegels over de hele breedte",
+      wat:   "Elke tegel gebruikt nu de hele breedte van je scherm. Tabellen en lijsten hebben meer ruimte, zodat je meer tegelijk kunt lezen."
+    },
+    {
+      datum: "2026-10-16", bestand: "werkplaats.html", soort: "hersteld",
+      titel: "Ordernummer toevoegen werkt",
+      wat:   "De knop Ordernummer toevoegen opent nu een venster waarin je het nummer typt. Daarna staat de order meteen in de lijst."
+    },
+    {
+      datum: "2026-10-16", bestand: "bank.html", soort: "hersteld",
+      titel: "Nummer invullen werkt weer",
+      wat:   "Een factuur- of ordernummer opgeven, een reden voor elders boeken en een naam laten onthouden gaan nu via een venster in de tegel. Bij onthouden kies je de tussenrekening met één klik."
+    },
+    {
+      datum: "2026-10-16", bestand: "keten.html", soort: "hersteld",
+      titel: "Afhandelen en uitstellen werken",
+      wat:   "Afgehandeld en Uitstellen openen nu een venster in de tegel, met een kalender voor de datum."
+    },
+    {
+      datum: "2026-10-16", bestand: "uitbetalingen.html", soort: "hersteld",
+      titel: "Ordernummer invullen werkt",
+      wat:   "Een ordernummer bij een regel opgeven gaat nu via een venster in de tegel."
+    },
+    {
       datum: "2026-10-16", bestand: "planning.html", soort: "hersteld",
       titel: "Rijtijden gelijk aan Google Maps",
       wat:   "De rijtijd onder een route kwam hoger uit dan in Google Maps, omdat de kaart met voorzichtige snelheden rekende. Nu is de tijd gelijk aan die van Google Maps; de kilometers klopten al."

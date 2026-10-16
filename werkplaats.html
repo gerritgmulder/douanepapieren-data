@@ -299,7 +299,7 @@ async function bewaar(regelId, velden, logActie, logTekst){
     wp.regels = alles;
     await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: alles, extra: (vers && vers.extra) || wp.extra || {}, updated: new Date().toISOString() }) });
     try{ if (window.fpLog) window.fpLog(logActie, logTekst); }catch(e){}
-  }catch(e){ alert("Bewaren vraagt nog een poging: " + e.message); laad(); }
+  }catch(e){ fpMelding("Bewaren vraagt nog een poging: " + e.message); laad(); }
 }
 function zetGetest(regelId, aan){
   var x = regels.find(function(y){ return y.r.regelId === regelId; });
@@ -317,7 +317,8 @@ document.querySelectorAll(".tab").forEach(function(b){ b.addEventListener("click
    Ordernummer toevoegen, en dat hij dan automatisch zoals de andere spa's in
    de lijst komt." Blijft staan tot de spa getest én afgeleverd is. */
 $("extraKnop").addEventListener("click", async function(){
-  var nr = String(prompt("Welk ordernummer wil je in de werkplaatslijst zetten?") || "").replace(/\D/g, "");
+  // Eigen venster: prompt() bestaat niet in de app, de knop deed daardoor niets (Gerrit, 16 okt 2026).
+  var nr = String((await fpVraag("Welk ordernummer wil je in de werkplaatslijst zetten?", "", { knop: "Toevoegen", type: "number" })) || "").replace(/\D/g, "");
   if (!nr) return;
   $("extraKnop").disabled = true;
   try{
@@ -327,8 +328,8 @@ $("extraKnop").addEventListener("click", async function(){
     await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: (vers && vers.regels) || {}, extra: extra, updated: new Date().toISOString() }) });
     try{ if (window.fpLog) window.fpLog("werkplaats-order-toegevoegd", "order " + nr); }catch(e){}
     await laad();
-    if (!regels.some(function(x){ return String(x.r.ordernr) === nr; })) alert("Order " + nr + " is vastgelegd; de spa's op deze order staan al geleverd. Controleer het nummer in Logic4.");
-  }catch(e){ alert("Toevoegen vraagt nog een poging: " + e.message); }
+    if (!regels.some(function(x){ return String(x.r.ordernr) === nr; })) await fpMelding("Order " + nr + " is vastgelegd; de spa's op deze order staan al geleverd. Controleer het nummer in Logic4.");
+  }catch(e){ fpMelding("Toevoegen vraagt nog een poging: " + e.message); }
   $("extraKnop").disabled = false;
 });
 $("zoek").addEventListener("input", function(){ zoek = $("zoek").value; teken(); });

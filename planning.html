@@ -68,10 +68,9 @@ header a.knop,header button.knop{background:transparent;color:#fff;border:1px so
        border-radius:8px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer;text-decoration:none}
 header .wie{font-size:11px;opacity:.75}
 
-/* Minstens 95% van het scherm (Gerrit, 16 okt 2026: "ik wil veel meer van het
-   beeldscherm benutten"). Tot dan was het hoogstens 1.500 pixels, op een groot
-   scherm ongeveer 70%. Op een kleiner scherm blijft het gewoon de volle breedte. */
-main{max-width:max(1500px,95vw);margin:0 auto;padding:14px;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+/* De volle breedte van het scherm (Gerrit, 16 okt 2026: "ik wil veel meer van
+   het beeldscherm benutten"); breedte.js zet dat voor alle tegels. */
+main{max-width:none;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 
 /* ── weekbalk ── */
 .weekbalk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}

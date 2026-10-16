@@ -397,7 +397,7 @@ function teken(){
   $("lijst").querySelectorAll("[data-los]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.los]; delete r.keuze; delete r.keuzeDoor; bewaarWerk(); teken(); }); });
   $("lijst").querySelectorAll("[data-nr]").forEach(function(b){ b.addEventListener("click", function(){ nummer(b.dataset.nr); }); });
   $("lijst").querySelectorAll("[data-tussen]").forEach(function(b){ b.addEventListener("click", function(){ leer(b.dataset.tussen); }); });
-  $("lijst").querySelectorAll("[data-nee]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.nee]; var reden = prompt("Waarom elders boeken? (korte reden, komt in de lijst te staan)"); if (reden === null) return; r.status = "genegeerd"; r.reden = reden; r.door = ik; bewaarWerk(); teken(); }); });
+  $("lijst").querySelectorAll("[data-nee]").forEach(function(b){ b.addEventListener("click", async function(){ var r = werk.regels[b.dataset.nee]; var reden = await fpVraag("Waarom elders boeken? (korte reden, komt in de lijst te staan)", "", { knop: "Bewaren" }); if (reden === null) return; r.status = "genegeerd"; r.reden = reden; r.door = ik; bewaarWerk(); teken(); }); });
   $("lijst").querySelectorAll("[data-terug]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.terug]; r.status = "nieuw"; delete r.reden; bewaarWerk(); teken(); }); });
   document.querySelectorAll(".kpi[data-f]").forEach(function(k){ k.addEventListener("click", function(){ fKlaar = k.dataset.f === "klaar"; $("fKlaar").checked = fKlaar; teken(); }); });
 }
@@ -423,9 +423,9 @@ function kies(id, i){
   r.keuzeDoor = ik;
   bewaarWerk(); teken();
 }
-function nummer(id){
+async function nummer(id){
   var r = werk.regels[id]; if (!r) return;
-  var nr = String(prompt("Factuur- of ordernummer waar deze betaling op hoort:") || "").replace(/\D/g, "");
+  var nr = String((await fpVraag("Factuur- of ordernummer waar deze betaling op hoort:", "", { knop: "Bewaren", type: "number" })) || "").replace(/\D/g, "");
   if (!nr) return;
   var post = openIndex && openIndex.perFactuur ? openIndex.perFactuur[nr] : null;
   if (post) r.keuze = { type: "factuur", invoiceId: post.InvoiceId, orderNr: post.OrderNumber || null, debtorId: post.DebtorId, open: post.AmountOutstanding, uitleg: "factuurnummer zelf opgegeven", zeker: true };
@@ -437,13 +437,12 @@ function nummer(id){
    alle open regels met dezelfde naam. */
 async function leer(id){
   var r = werk.regels[id]; if (!r) return;
-  var opties = Object.keys(TUSSEN).map(function(k){ return k + " = " + TUSSEN[k].naam + " (" + TUSSEN[k].rekening + ")"; }).concat(["kruispost = eigen rekening"]);
-  var keus = prompt("'" + (r.wie || r.omschrijving.slice(0,40)) + "' voortaan altijd zien als:\n\n" + opties.join("\n") + "\n\nTyp het woord vóór het =-teken:", "");
+  // Kiezen met een knop per tussenrekening in plaats van een woord typen.
+  var keuzes = Object.keys(TUSSEN).map(function(k){ return { waarde: k, label: TUSSEN[k].naam + " (" + TUSSEN[k].rekening + ")" }; }).concat([{ waarde: "kruispost", label: "Eigen rekening (kruispost)" }]);
+  var keus = await fpVraag("'" + (r.wie || r.omschrijving.slice(0,40)) + "' voortaan altijd zien als:", "", { keuzes: keuzes });
   if (!keus) return;
-  keus = keus.trim().toLowerCase();
-  if (!TUSSEN[keus] && keus !== "kruispost") { alert("Kies een van de woorden uit de lijst."); return; }
   var sl = window.fpBankMatch.naamSleutel ? window.fpBankMatch.naamSleutel(r.wie||"") : String(r.wie||"").toLowerCase();
-  if (!sl) { alert("Onthouden gaat op naam, en deze regel is zonder naam."); return; }
+  if (!sl) { fpMelding("Onthouden gaat op naam, en deze regel is zonder naam."); return; }
   geleerd.namen[sl] = { soort: keus, door: ik, ts: new Date().toISOString(), voorbeeld: r.wie };
   await bewaarGeleerd();
   Object.values(werk.regels).forEach(function(x){ if (x.status !== "klaar" && x.status !== "genegeerd"){ var s2 = window.fpBankMatch.naamSleutel ? window.fpBankMatch.naamSleutel(x.wie||"") : ""; if (s2 === sl){ delete x.keuze; delete x.voorstel; } } });
@@ -459,7 +458,7 @@ $("boek").addEventListener("click", async function(){
   var boeken = lijst.filter(function(r){ var v = r.keuze || r.voorstel; return v.type === "factuur" || v.type === "order"; });
   var rest = lijst.filter(function(r){ return boeken.indexOf(r) < 0; });
   if (boeken.length && !inst.bankWerkDagboek){ $("instelKaart").style.display = ""; msg($("boekMsg"), "Kies eerst het tussenrekening-dagboek bij Instellingen; daar komen de betalingen op orders en facturen.", "bad"); return; }
-  if (!confirm(boeken.length + " betaling(en) op orders en facturen naar Logic4, en " + rest.length + " regel(s) op klaar zetten met de toewijzing erbij.\n\nDoorgaan?")) return;
+  if (!(await fpBevestig(boeken.length + " betaling(en) op orders en facturen naar Logic4, en " + rest.length + " regel(s) op klaar zetten met de toewijzing erbij.\n\nDoorgaan?", { knop: "Naar Logic4" }))) return;
   $("boek").disabled = true; msg($("boekMsg"), "Bezig…", "info");
   var gelukt = 0, fouten = [];
   for (var i = 0; i < boeken.length; i += 30){

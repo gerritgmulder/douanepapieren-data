@@ -244,7 +244,7 @@ function tekenMollie(){
       (open ? mRegelsHtml(s) : '') + '</div>';
   }).join("") : '<p class="lead" style="padding:4px 2px">Sleep een settlement naar boven om te beginnen.</p>';
   $("mLijst").querySelectorAll("[data-open]").forEach(function(b){ b.addEventListener("click", function(){ mOpen[b.dataset.open] = !mOpen[b.dataset.open]; tekenMollie(); }); });
-  $("mLijst").querySelectorAll("[data-weg]").forEach(function(b){ b.addEventListener("click", function(){ if (!confirm("Dit settlement uit de lijst halen?")) return; delete mWerk.settlements[b.dataset.weg]; bewaarMollie(); tekenMollie(); }); });
+  $("mLijst").querySelectorAll("[data-weg]").forEach(function(b){ b.addEventListener("click", async function(){ if (!(await fpBevestig("Dit settlement uit de lijst halen?", { knop: "Weghalen" }))) return; delete mWerk.settlements[b.dataset.weg]; bewaarMollie(); tekenMollie(); }); });
   $("mLijst").querySelectorAll("[data-boek]").forEach(function(b){ b.addEventListener("click", function(){ mBoek(b.dataset.boek, b); }); });
   $("mLijst").querySelectorAll("[data-kies]").forEach(function(sel){ sel.addEventListener("change", function(){
     var s = mWerk.settlements[sel.dataset.s], r = s.regels[Number(sel.dataset.i)]; var v = sel.value; if (v === "") return;
@@ -252,8 +252,8 @@ function tekenMollie(){
     else { var k = r.match.kandidaten[Number(v)]; r.keuze = { soort: r.match.soort === "terugbetaling" ? "terugbetaling" : "betaling", orderNr: k.OrderNumber || null, invoiceId: k.InvoiceId, reden: "zelf gekozen: " + (k.naam||"") + " factuur " + k.InvoiceId }; }
     r.keuzeDoor = ik; bewaarMollie(); tekenMollie();
   }); });
-  $("mLijst").querySelectorAll("[data-nr]").forEach(function(b){ b.addEventListener("click", function(){
-    var s = mWerk.settlements[b.dataset.s], r = s.regels[Number(b.dataset.nr)]; var nr = String(prompt("Ordernummer waar deze regel op hoort:")||"").replace(/\D/g, ""); if (!nr) return;
+  $("mLijst").querySelectorAll("[data-nr]").forEach(function(b){ b.addEventListener("click", async function(){
+    var s = mWerk.settlements[b.dataset.s], r = s.regels[Number(b.dataset.nr)]; var nr = String((await fpVraag("Ordernummer waar deze regel op hoort:", "", { knop: "Bewaren", type: "number" }))||"").replace(/\D/g, ""); if (!nr) return;
     r.keuze = { soort: (r.match && r.match.soort === "terugbetaling") ? "terugbetaling" : "betaling", orderNr: nr, reden: "ordernummer zelf opgegeven" }; r.keuzeDoor = ik; bewaarMollie(); tekenMollie();
   }); });
   $("mLijst").querySelectorAll("[data-los]").forEach(function(b){ b.addEventListener("click", function(){ var s = mWerk.settlements[b.dataset.s], r = s.regels[Number(b.dataset.los)]; delete r.keuze; delete r.keuzeDoor; bewaarMollie(); tekenMollie(); }); });
@@ -288,7 +288,7 @@ async function mBoek(sleutel, knop){
     else if (k.soort === "uitbetaling") memoriaal.push({ r: r, rekening: MOLLIE.kruis, bedrag: Math.abs(r.bedrag), uit: true, datum: r.datum, omschrijving: ("Mollie uitbetaling " + s.bestand).slice(0, 140), referentie: ("Mollie " + s.bestand).slice(0, 60) });
     else memoriaal.push({ r: r, rekening: (k.rekening || MOLLIE.retour), bedrag: Math.abs(r.bedrag), uit: r.bedrag < 0, datum: r.datum, omschrijving: r.omschrijving.slice(0, 140), referentie: ("Mollie " + s.bestand).slice(0, 60) });
   });
-  if (!confirm(opOrder.length + " betaling(en) op orders en " + memoriaal.length + " memoriaalregel(s) naar Logic4 voor " + sleutel + "?\n\nLet op: dit is definitief.")) return;
+  if (!(await fpBevestig(opOrder.length + " betaling(en) op orders en " + memoriaal.length + " memoriaalregel(s) naar Logic4 voor " + sleutel + "?\n\nLet op: dit is definitief.", { knop: "Boeken" }))) return;
   knop.disabled = true; if (m) m.textContent = "Bezig…";
   var gelukt = 0, fouten = [];
   if (opOrder.length){
@@ -372,7 +372,7 @@ function tekenAmerika(){
   }).join("") : '<p class="lead">0 batches gevonden.</p>';
   $("aLijst").querySelectorAll("[data-aboek]").forEach(function(k){ k.addEventListener("click", async function(){
     var b = aBatches.find(function(x){ return String(x.id) === k.dataset.aboek; });
-    if (!confirm("Batch van " + datumNL(b.datum) + " boeken: orders bruto afboeken " + usd(b.bruto) + ", bankkosten " + usd(b.kosten) + " op 4630?\n\nLet op: dit is definitief.")) return;
+    if (!(await fpBevestig("Batch van " + datumNL(b.datum) + " boeken: orders bruto afboeken " + usd(b.bruto) + ", bankkosten " + usd(b.kosten) + " op 4630?\n\nLet op: dit is definitief.", { knop: "Boeken" }))) return;
     k.disabled = true; var m = document.querySelector("[data-amsg='" + CSS.escape(k.dataset.aboek) + "']"); if (m) m.textContent = "Bezig…";
     try{ var j = await api("/amerika/qb/boeken", { wireId: k.dataset.aboek, bevestigd: true, user: ik }); var r = (j.batches||[])[0] || {};
       if (m) m.innerHTML = r.klaar ? '<span style="color:#166534">geboekt: ' + r.geboekt + ' orders' + (r.bankkosten && r.bankkosten.status === "geboekt" ? ' en de bankkosten' : '') + '</span>' : '<span style="color:var(--rood)">' + (r.fout||0) + ' nog te boeken; zie de tegel Amerika</span>';

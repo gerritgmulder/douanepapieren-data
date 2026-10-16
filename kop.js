@@ -285,4 +285,93 @@
 
   global.fpKop = { vul: vul };
 
+  /* ── VENSTER IN DE PAGINA: vragen, bevestigen, melden ───────────────────
+     window.prompt() bestaat niet in de app (Electron): de knop deed dan
+     helemaal niets (Gerrit, 16 okt 2026, Werkplaats: "Je kunt erop klikken
+     tot je een ons weegt"). En na alert() of confirm() blokkeert op Windows
+     het typen. Daarom één eigen venster voor elke tegel:
+
+       var nr = await fpVraag("Welk ordernummer?", "", { knop: "Toevoegen" });
+                 -> de ingetypte tekst, of null bij Annuleren / Esc
+       var k  = await fpVraag("Zien als:", "", { keuzes: [{ waarde: "a", label: "A" }] });
+                 -> de waarde van de gekozen knop, of null
+       if (!(await fpBevestig("Doorgaan?", { knop: "Boeken" }))) return;
+       await fpMelding("Gelukt.");
+
+     type: "text" (standaard), "date" of "number". Enter = bevestigen. */
+  function vensterStijl() {
+    if (doc.getElementById("fpVensterStijl")) return;
+    var st = doc.createElement("style"); st.id = "fpVensterStijl";
+    st.textContent =
+      ".fp-venster{position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px}" +
+      ".fp-venster .fpv-kaart{background:#fff;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.25);width:100%;max-width:440px;padding:18px 18px 14px;font:14px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif;color:#1f2937}" +
+      ".fp-venster .fpv-tekst{white-space:pre-line;margin:0 0 12px}" +
+      ".fp-venster input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:9px;padding:9px 11px;font:inherit;font-size:15px;margin-bottom:12px}" +
+      ".fp-venster .fpv-keuzes{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}" +
+      ".fp-venster .fpv-keuzes button{text-align:left;border:1px solid #cbd5e1;background:#f8fafc;border-radius:9px;padding:9px 11px;font:inherit;cursor:pointer}" +
+      ".fp-venster .fpv-keuzes button:hover{border-color:#1f5d3a;background:#eef6f0}" +
+      ".fp-venster .fpv-knoppen{display:flex;justify-content:flex-end;gap:8px}" +
+      ".fp-venster .fpv-knoppen button{border-radius:9px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#1f2937}" +
+      ".fp-venster .fpv-knoppen .fpv-ok{background:#1f5d3a;border-color:#1f5d3a;color:#fff}";
+    (doc.head || doc.documentElement).appendChild(st);
+  }
+  function venster(tekst, opt) {
+    opt = opt || {};
+    vensterStijl();
+    return new Promise(function (klaar) {
+      var vorige = doc.activeElement;
+      var bak = doc.createElement("div"); bak.className = "fp-venster"; bak.setAttribute("role", "dialog"); bak.setAttribute("aria-modal", "true");
+      var kaart = doc.createElement("div"); kaart.className = "fpv-kaart"; bak.appendChild(kaart);
+      var p = doc.createElement("p"); p.className = "fpv-tekst"; p.textContent = String(tekst || ""); kaart.appendChild(p);
+      var veld = null;
+      if (opt.vraag && !opt.keuzes) {
+        // Een nummer als gewoon tekstveld met cijfertoetsenbord: zonder de pijltjes van type=number.
+        veld = doc.createElement("input"); veld.type = opt.type === "number" ? "text" : (opt.type || "text");
+        if (opt.type === "number") veld.inputMode = "numeric";
+        veld.value = opt.standaard == null ? "" : String(opt.standaard);
+        kaart.appendChild(veld);
+      }
+      var sluit = function (waarde) {
+        doc.removeEventListener("keydown", toets, true);
+        if (bak.parentNode) bak.parentNode.removeChild(bak);
+        try { if (vorige && vorige.focus) vorige.focus(); } catch (e) {}
+        klaar(waarde);
+      };
+      if (opt.keuzes) {
+        var lijst = doc.createElement("div"); lijst.className = "fpv-keuzes";
+        opt.keuzes.forEach(function (k) {
+          var b = doc.createElement("button"); b.type = "button"; b.textContent = k.label || k.waarde;
+          b.addEventListener("click", function () { sluit(k.waarde); });
+          lijst.appendChild(b);
+        });
+        kaart.appendChild(lijst);
+      }
+      var rij = doc.createElement("div"); rij.className = "fpv-knoppen";
+      var nee = null;
+      if (!opt.melding) {
+        nee = doc.createElement("button"); nee.type = "button"; nee.textContent = opt.annuleer || "Annuleren";
+        nee.addEventListener("click", function () { sluit(opt.vraag ? null : false); });
+        rij.appendChild(nee);
+      }
+      var ok = null;
+      if (!opt.keuzes) {
+        ok = doc.createElement("button"); ok.type = "button"; ok.className = "fpv-ok"; ok.textContent = opt.knop || "OK";
+        ok.addEventListener("click", function () { sluit(opt.vraag ? (veld ? veld.value : "") : true); });
+        rij.appendChild(ok);
+      }
+      kaart.appendChild(rij);
+      var toets = function (e) {
+        if (e.key === "Escape") { e.preventDefault(); sluit(opt.melding ? undefined : (opt.vraag ? null : false)); }
+        else if (e.key === "Enter" && ok && (!veld || doc.activeElement === veld || doc.activeElement === ok)) { e.preventDefault(); ok.click(); }
+      };
+      doc.addEventListener("keydown", toets, true);
+      bak.addEventListener("mousedown", function (e) { if (e.target === bak && !opt.melding) sluit(opt.vraag ? null : false); });
+      (doc.body || doc.documentElement).appendChild(bak);
+      setTimeout(function () { try { (veld || ok || kaart.querySelector("button")).focus(); if (veld) veld.select(); } catch (e) {} }, 0);
+    });
+  }
+  global.fpVraag = function (tekst, standaard, opt) { opt = Object.assign({}, opt || {}, { vraag: true, standaard: standaard }); return venster(tekst, opt); };
+  global.fpBevestig = function (tekst, opt) { return venster(tekst, Object.assign({}, opt || {})); };
+  global.fpMelding = function (tekst, opt) { return venster(tekst, Object.assign({ knop: "OK" }, opt || {}, { melding: true })); };
+
 })(typeof window !== "undefined" ? window : globalThis);

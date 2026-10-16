@@ -70,7 +70,12 @@
     var dashboard = !!doc.getElementById("dashView");   // het dashboard zelf houdt zijn eigen maat
     st.textContent =
       "html,body{max-width:100%}" +
-      (dashboard ? "" : "main{max-width:1800px}") +
+      /* Gerrit (16 okt 2026): "Ik wil dat je bij alle tegels de breedte naar
+         100% zet. Ik wil zoveel mogelijk kunnen lezen." Tot dan stond hier
+         1800px; op een scherm van 2560 is dat 70%, en het won ook van de
+         eigen maat van een tegel (Planning stond daardoor nog op 1800). Nu
+         de volle breedte, met alleen de eigen rand van de tegel. */
+      (dashboard ? "" : "main,body>.wrap{max-width:none!important}") +
       "table{width:100%;max-width:100%}" +
       "table td,table th{white-space:normal;overflow-wrap:break-word;min-width:0}" +
       "table th{overflow-wrap:normal;word-break:keep-all;hyphens:none}" +
