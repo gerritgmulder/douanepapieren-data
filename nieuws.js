@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "voorraad.html", soort: "beter",
+      titel: "Zoeken op kleur, kleurgroepen en Reserveringen op het hele scherm",
+      wat:   "De zoekbalk bovenin zoekt nu op losse woorden: 'Renew Sterling' vindt de Renew in Sterling White en Sterling Silver, en laat uitgelicht zien op welk schip hij zit. Bij de kleurkeuze kies je bovenaan een hele kleurgroep, zoals Alle Mystic Mountain. In Reserveringen scrolt de lijst over het hele scherm en blijft de rode kopregel bovenaan staan."
+    },
+    {
       datum: "2026-10-16", groep: "bakwagen-planning", soort: "beter",
       titel: "Bakwagenroute: ritten klaarzetten",
       wat:   "Druk op Ritten ophalen: dan zie je alle eigen ritten uit het Rittenoverzicht van Logic4 vanaf vandaag. Klik een rit aan, controleer de stops en de paklijst en geef akkoord voor Dani, Jordy of Johny. Pas dan ziet de chauffeur de rit, op de dag zelf."

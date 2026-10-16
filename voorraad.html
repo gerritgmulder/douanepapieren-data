@@ -427,6 +427,21 @@
 /* Particulier: geen scrollvak in een scrollvak (Kevin, 6 okt 2026); de pagina
    zelf scrollt. */
 #tab-particulier .tablewrap{max-height:none!important;overflow:visible!important}
+/* Reserveringen over het hele scherm (Gerrit, 16 okt 2026): "Ik kan nu niet
+   verder scrollen om meer te zien maar ik moet in dat venster (wat klein
+   blijft) scrollen." Geen scrollvak meer; de pagina zelf scrollt. De kopregel
+   van de reserveringen (Order, Klant, Type...) blijft vast bovenaan het
+   scherm, zonder kier erboven, in Passion-rood zodat hij goed leesbaar is. */
+#resvOverview .tablewrap{max-height:none!important;overflow:visible!important}
+/* De cel om de uitgeklapte lijst knipte af (overflow:hidden); dan blijft een
+   kopregel nergens aan vastplakken. */
+#resvOverview td{overflow:visible!important}
+#resvOverview > table.grid > thead th{position:static}
+#resvOverview table.resvDetail > thead th{position:sticky;top:0;z-index:5;background:#c8102e;color:#fff;font-size:11px;
+  letter-spacing:.04em;padding-top:9px;padding-bottom:9px;box-shadow:0 2px 4px rgba(0,0,0,.18)}
+mark.zoekRaak{background:#fde68a;color:inherit;padding:0 2px;border-radius:3px}
+.zoekSchip{border:2px solid #f59e0b;background:#fffbeb;border-radius:10px;padding:10px 12px;margin:0 0 12px}
+.zoekSchip h4{margin:0 0 6px;font-size:13px;color:#92400e}
 @media (max-width:700px){
   table.grid thead{display:none}
   table.grid,table.grid tbody,table.grid tr{display:block;width:100%}
@@ -1649,16 +1664,49 @@ function zoekPlek(r){
   if(n.afroep)     return {tekst:"op afroep", kleur:"#6d28d9", tab:isZakelijk(r)?"partner":"particulier"};
   return {tekst:"gereserveerd", kleur:"#1d4ed8", tab:r.container?"partnercont":(isZakelijk(r)?"partner":"particulier")};
 }
-let zoekTimer=null;
+let zoekTimer=null, zoekLaadt=false, zoekGeladen=false;
 function zoekAllesNu(){
   const q=(document.getElementById("zoekAlles").value||"").trim().toLowerCase();
   const uit=document.getElementById("zoekAllesUit");
   if(q.length<2){ uit.innerHTML=""; return; }
+  /* De reserveringen en schepen laden pas als je hun tabblad opent; de
+     zoekbalk wacht er nu op in plaats van "0 treffers" te zeggen. */
+  if(!zoekGeladen && (!Object.keys(resvData.byModel||{}).length || !(shipsData.ships||[]).length)){
+    if(zoekLaadt) return;
+    zoekLaadt=true; uit.innerHTML="<p class='lead' style='margin:0'>Even de reserveringen en schepen ophalen\u2026</p>";
+    Promise.all([
+      Object.keys(resvData.byModel||{}).length ? null : loadReserveringen().catch(function(){}),
+      (shipsData.ships||[]).length ? null : loadSchepen().catch(function(){})
+    ]).then(function(){ zoekLaadt=false; zoekGeladen=true; zoekAllesNu(); });
+    return;
+  }
+  /* Op losse woorden: "Renew Sterling" vindt het model Renew in de kleur
+     Sterling White (Gerrit, 16 okt 2026). Elk woord moet ergens in de regel
+     staan. Daarboven, uitgelicht: op welk schip die spa in die kleur zit. */
+  const woorden=q.split(/\s+/).filter(Boolean);
+  const past=t=>{ const s=String(t||"").toLowerCase(); return woorden.every(w=>s.includes(w)); };
   const treffers=resvAlleRegels().filter(function(r){
-    return [r.ordernr,r.model,r.naam,r.kleur,r.adviseur].some(function(v){
-      return String(v||"").toLowerCase().includes(q);
-    });
+    return past([r.ordernr,r.model,r.naam,r.kleur,r.adviseur].join(" "));
   }).slice(0,40);
+  const opSchip=[], maandTerug=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  (shipsData.ships||[]).forEach(function(s){
+    if(s.eta && s.eta<maandTerug) return;   // al lang binnen (er stond nog een schip uit 2021 tussen)
+    const mc=s.modelColors||{};
+    Object.keys(mc).forEach(function(model){
+      Object.keys(mc[model]||{}).forEach(function(kleur){
+        if(past(model+" "+kleur)) opSchip.push({s:s, model:model, kleur:kleur, n:mc[model][kleur]});
+      });
+    });
+  });
+  opSchip.sort((a,b)=>String(a.s.eta||"9999").localeCompare(String(b.s.eta||"9999")));
+  const markeer=t=>{ let h=esc(t||""); woorden.forEach(function(w){ if(w.length<2) return; h=h.replace(new RegExp("("+w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig"),"<mark class='zoekRaak'>$1</mark>"); }); return h; };
+  const schipHtml=opSchip.length
+    ? "<div class='zoekSchip'><h4>🚢 Op een schip: "+opSchip.reduce((n,x)=>n+x.n,0)+" stuks</h4><table class='grid' style='margin:0;background:transparent'><thead><tr><th>Schip / reis</th><th>ETA</th><th>Spa</th><th>Kleur</th><th>Aantal</th></tr></thead><tbody>"+
+      opSchip.map(function(x){ return "<tr><td><b>"+esc(x.s.vessel||x.s.ref||"schip")+"</b>"+(x.s.ref&&x.s.vessel?"<div style='font-size:11px;color:var(--muted)'>"+esc(x.s.ref)+"</div>":"")+(x.s.dealerContainer?" <span class='pill' style='background:#ffedd5;color:#c2410c;font-size:10px'>naar dealer</span>":"")+"</td>"+
+        "<td><b>"+(x.s.eta?esc(datumNL(x.s.eta)):"volgt")+"</b>"+(zendingBinnen({eta:x.s.eta})?" <span style='font-size:11px;color:#15803d'>binnen</span>":"")+"</td><td>"+markeer(x.model)+"</td><td>"+markeer(x.kleur)+"</td><td><b>"+x.n+"</b></td></tr>"; }).join("")+
+      "</tbody></table></div>"
+    : "";
+  if(!treffers.length&&schipHtml){ uit.innerHTML=schipHtml+"<p class='lead' style='margin:0'>Op dit moment zonder reservering.</p>"; return; }
   if(!treffers.length){
     uit.innerHTML="<p class='lead' style='margin:0'>0 treffers voor \u201c"+esc(q)+"\u201d."+
       (/^\d{6,9}$/.test(q)?" <button class='btn' type='button' id='zoekUitleg'>Vraag Logic4 waar deze order staat</button>":"")+"</p>";
@@ -1666,20 +1714,20 @@ function zoekAllesNu(){
     if(k) k.addEventListener("click",function(){ zoekOrderUitleg(q,uit); });
     return;
   }
-  uit.innerHTML="<div class='tablewrap' style='max-height:46vh'><table class='grid'><thead><tr>"+
+  uit.innerHTML=schipHtml+"<div class='tablewrap' style='max-height:46vh'><table class='grid'><thead><tr>"+
     "<th>Order</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Waar staat hij</th>"+
     "<th>Verwachte levering</th><th></th></tr></thead><tbody>"+
     treffers.map(function(r){
       const p=zoekPlek(r), n=notitie(r);
-      return "<tr><td><b>"+esc(r.ordernr)+"</b></td>"+
-        "<td>"+esc(r.model||"")+"</td>"+
-        "<td>"+esc(r.kleur||"")+"</td>"+
+      return "<tr><td><b>"+markeer(r.ordernr)+"</b></td>"+
+        "<td>"+markeer(r.model||"")+"</td>"+
+        "<td>"+markeer(r.kleur||"")+"</td>"+
         "<td>"+(r.qty||"")+"</td>"+
         "<td>"+esc(r.naam||"")+"</td>"+
         "<td><b style='color:"+p.kleur+"'>"+esc(p.tekst)+"</b>"+
           (r.container?" <span class='pill' style='background:#e0e7ff;color:#3730a3;font-size:10px'>container</span>":"")+
           (n.opmerking?"<div style='font-size:11px;color:var(--muted)'>"+esc(n.opmerking)+"</div>":"")+"</td>"+
-        "<td style='font-size:12px'>"+verwachtCel(r)+"</td>"+
+        "<td style='font-size:12px'>"+(verwachtVanRegel(r).schip?"<mark class='zoekRaak'>"+verwachtCel(r)+"</mark>":verwachtCel(r))+"</td>"+
         "<td>"+(p.tab?"<button class='btn zoekGa' type='button' data-tab='"+p.tab+"' data-nr='"+esc(r.ordernr)+"' style='padding:2px 8px;font-size:11px'>toon</button>":"")+"</td></tr>";
     }).join("")+"</tbody></table></div>"+
     "<p class='lead' style='font-size:11.5px;margin:7px 0 0'>"+treffers.length+" treffer(s)"+
@@ -2470,7 +2518,7 @@ function renderReserveringen(){
       "<td style='color:#15803d'>"+bet+"</td><td style='color:#92400e'>"+wacht+"</td></tr>";
     if(open){
       html+="<tr><td colspan='4' style='padding:0;background:#fafafa'><div class='tablewrap' style='padding:8px 10px'>"+
-        "<table class='grid' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th><th>Verwachte levering</th></tr></thead><tbody>"+
+        "<table class='grid resvDetail' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th><th>Verwachte levering</th></tr></thead><tbody>"+
         resvRows(lines)+
         "</tbody></table></div></td></tr>";
     }
@@ -3060,14 +3108,32 @@ function vulKleurKeuze(id,regels){
   // Een gekozen kleur die na filteren even niet voorkomt tóch laten staan,
   // anders springt de keuzelijst tijdens het typen in het zoekveld terug.
   if(gekozen&&!perSleutel[gekozen]) opts.push(gekozen);
+  // Bovenaan de kleurgroepen, de meest gekozen eerst; daaronder elke kleur apart.
+  const groepen={};
+  for(const s of Object.keys(perSleutel)){ const g=kleurGroep(s); if(!g) continue; (groepen[g]=groepen[g]||{n:0,soorten:0}); groepen[g].n+=perSleutel[s].n; groepen[g].soorten++; }
+  const groepLijst=Object.keys(groepen).sort((a,b)=>groepen[b].n-groepen[a].n||a.localeCompare(b,"nl"));
+  if(gekozen.indexOf("groep:")===0&&!groepen[gekozen.slice(6)]) { groepen[gekozen.slice(6)]={n:0,soorten:0}; groepLijst.push(gekozen.slice(6)); }
+  const groepLabel=g=>kleurLabel(g);
   sel.innerHTML="<option value=''>alle kleuren</option>"+
-    opts.map(function(s){
+    "<optgroup label='Kleurgroep (alle uitvoeringen)'>"+groepLijst.map(function(g){
+      const v="groep:"+g;
+      return "<option value='"+esc(v)+"'"+(v===gekozen?" selected":"")+">Alle "+esc(groepLabel(g))+(groepen[g].n?" ("+groepen[g].n+")":"")+"</option>";
+    }).join("")+"</optgroup>"+
+    "<optgroup label='Precieze kleur'>"+opts.map(function(s){
       const o=perSleutel[s]||{label:s,n:0};
       return "<option value='"+esc(s)+"'"+(s===gekozen?" selected":"")+">"+esc(o.label)+(o.n?" ("+o.n+")":"")+"</option>";
-    }).join("");
+    }).join("")+"</optgroup>";
   return gekozen;
 }
-function kleurMatch(r,gekozen){ return !gekozen||kleurSleutel(r.kleur)===gekozen; }
+/* Kleurgroep: alles vóór "with" in de kleurnaam ("Mystic Mountain with
+   OAK/grey trim" hoort bij Mystic Mountain). Gerrit (16 okt 2026): "ik wil
+   ook gewoon ALLE Mystic Mountains in een keer kunnen zien." */
+function kleurGroep(sleutel){ return String(sleutel||"").split(/\s+with\s+/)[0].trim(); }
+function kleurMatch(r,gekozen){
+  if(!gekozen) return true;
+  if(gekozen.indexOf("groep:")===0) return kleurGroep(kleurSleutel(r.kleur))===gekozen.slice(6);
+  return kleurSleutel(r.kleur)===gekozen;
+}
 
 function sorteerWaarde(r,kolom){
   if(kolom==="model")    return String(r.model||"");
