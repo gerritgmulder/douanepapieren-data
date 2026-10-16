@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "externen.html", soort: "beter",
+      titel: "Account zonder mailadres",
+      wat:   "Een eigen inlog kan nu ook zonder mailadres. Laat het e-mailveld leeg; je krijgt dan de link om het wachtwoord te kiezen hier in beeld, om zelf te openen of door te geven."
+    },
+    {
       datum: "2026-10-16", bestand: "dealerportaal.html", soort: "beter",
       titel: "Een partner toegang geven in één venster",
       wat: "Per partner staat er nu een knop Uitnodigen; na het uitnodigen staat er Uitgenodigd met de datum, en zodra de partner een wachtwoord koos Account actief. De knop opent één venster met vier stappen: 1 Gegevens, 2 Adviseur, 3 Taal, 4 Uitnodigen. Onderaan staat Bewaren en uitnodigen, dus aan het eind krijgt de partner meteen zijn welkomstmail. Per partner kies je de taal waarin Passion Partners opent; wat Logic4 als taal en vertegenwoordiger heeft, staat erbij. Bewerken, opnieuw uitnodigen, inloglink, wachtwoord, blokkeren en verwijderen staan achter de drie puntjes ernaast. In de lijst staat de kolom Taal in plaats van Afspraken."

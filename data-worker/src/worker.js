@@ -17719,11 +17719,12 @@ async function externHandle(request, env, url) {
     const email = String(b.email || "").trim().toLowerCase();
     const naam = String(b.naam || "").trim().slice(0, 80);
     if (!/^[a-z][a-z0-9.\-]{1,39}$/.test(gebruiker)) return reply(400, { ok: false, error: "Kies een gebruikersnaam van letters en cijfers, bijvoorbeeld christiaan." });
-    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)) return reply(400, { ok: false, error: "Vul een geldig e-mailadres in." });
+    // Zonder mailadres mag ook (de bakwagenchauffeurs, 16 okt 2026): dan krijgt alleen de beheerder de link.
+    if (email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)) return reply(400, { ok: false, error: "Vul een geldig e-mailadres in, of laat het leeg." });
     if (!(await toegangMag(env, "extern", gebruiker)))
       return reply(400, { ok: false, error: "Zet " + gebruiker + " eerst in de groep extern in toegang.js; daarmee krijgt hij de beperkte sleutel." });
     const d = await externAcc(env);
-    const ander = Object.values(d.accounts).find(a => a.gebruiker !== gebruiker && String(a.email || "").toLowerCase() === email);
+    const ander = email && Object.values(d.accounts).find(a => a.gebruiker !== gebruiker && String(a.email || "").toLowerCase() === email);
     if (ander) return reply(400, { ok: false, error: "Dit e-mailadres hoort al bij " + ander.gebruiker + "." });
     const a = d.accounts[gebruiker] = Object.assign({}, d.accounts[gebruiker] || {}, { gebruiker, naam, email, actief: true });
     const t = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
@@ -17731,6 +17732,7 @@ async function externHandle(request, env, url) {
     a.uitgenodigd = new Date().toISOString(); a.door = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
     await env.FONTEYN_DATA.put(EXTERN_ACC, JSON.stringify(d));
     const link = url.origin + "/extern/wachtwoord?t=" + t;
+    if (!email) return reply(200, { ok: true, gemaild: false, link, account: externOpenbaar(a) });
     const r = await dpSendEmail(env, email, "Je toegang tot het Fonteyn Dashboard",
       "<div style='font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1f2937'>" +
       "<h2 style='color:#144734;margin:0 0 12px'>Fonteyn Dashboard</h2>" +

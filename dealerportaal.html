@@ -253,7 +253,10 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
   table.grid.partners td,table.grid.partners th{overflow-wrap:break-word}
   table.grid.partners td code{white-space:normal;overflow-wrap:break-word;word-break:break-word;display:inline-block;max-width:100%}
   table.grid.partners td input,table.grid.partners td select{width:100%!important;min-width:0;max-width:100%}
-  table.grid.partners th:last-child,table.grid.partners td.acties{width:150px}
+  /* Breed genoeg voor "Uitgenodigd 16 okt" of "✓ Account actief" met de drie
+     puntjes ernaast; bij 150px vielen de puntjes rechts buiten beeld (16 okt 2026). */
+  table.grid.partners th:last-child,table.grid.partners td.acties{width:230px;min-width:230px}
+  table.grid.partners td.acties .pill{white-space:nowrap;vertical-align:middle}
 }
 /* Inklapbare vakken: Partners en Partnerprijzen staan dicht als je Beheer
    opent (Gerrit, 2 okt 2026: "anders moet ik altijd enorm veel scrollen
@@ -351,7 +354,7 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
     <h3><span class="kopTekst">Partners (<span id="partnerCount">0</span>)</span> <span class="klaphint">klik om de lijst te openen</span></h3>
     <input id="partnerZoek" type="search" placeholder="zoek op naam, e-mail, debiteurnummer of land…" style="width:100%;max-width:420px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">
     <table class="grid partners">
-      <colgroup><col style="width:23%"><col style="width:17%"><col style="width:12%"><col style="width:10%"><col style="width:12%"><col style="width:9%"><col style="width:8%"><col style="width:150px"></colgroup>
+      <colgroup><col style="width:23%"><col style="width:17%"><col style="width:12%"><col style="width:10%"><col style="width:12%"><col style="width:9%"><col style="width:8%"><col style="width:230px"></colgroup>
       <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Taal</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>

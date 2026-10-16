@@ -77,7 +77,7 @@ code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12px}
     <div class="rij">
       <div><label>Gebruikersnaam (zoals in de toegangslijst)</label><input id="gGebruiker" placeholder="bv. christiaan" autocapitalize="off"></div>
       <div><label>Naam</label><input id="gNaam" placeholder="bv. Christiaan"></div>
-      <div style="flex:1.4 1 220px"><label>E-mailadres</label><input id="gEmail" type="email" placeholder="naam@bedrijf.de"></div>
+      <div style="flex:1.4 1 220px"><label>E-mailadres (mag leeg)</label><input id="gEmail" type="email" placeholder="naam@bedrijf.de, of leeg laten"></div>
       <div style="flex:0 0 auto"><button class="go" id="gUitnodigen">Uitnodigen</button></div>
     </div>
     <div id="gMsg" class="msg hidden"></div>
@@ -126,7 +126,15 @@ async function uitnodigen(gebruiker,naam,email,knop){
     const r=await fetch(WORKER+"/extern/uitnodigen",{method:"POST",headers:H,body:JSON.stringify({gebruiker,naam,email})});
     const j=await r.json().catch(()=>({}));
     if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
-    msg(j.gemaild?"ok":"bad", j.gemaild?("De uitnodiging is gemaild naar "+email+". De link is zeven dagen geldig."):("Het account staat klaar, maar de mail vraagt nog een poging; druk hieronder op opnieuw uitnodigen."));
+    /* Zonder mailadres (de bakwagenchauffeurs, Gerrit 16 okt 2026): het account
+       staat klaar en de link om het wachtwoord te kiezen staat hier, om zelf te
+       openen of door te geven. */
+    if(!email && j.link){
+      const v=document.getElementById("gMsg"); v.className="msg ok";
+      v.innerHTML="Het account <b>"+esc(gebruiker)+"</b> staat klaar. Open deze link en kies het wachtwoord, of geef hem door (zeven dagen geldig, één keer te gebruiken):"+
+        "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'><input readonly value='"+esc(j.link)+"' style='flex:1 1 260px;font-size:12px'>"+
+        "<a class='go' href='"+esc(j.link)+"' target='_blank' rel='noopener' style='text-decoration:none'>Wachtwoord kiezen</a></div>";
+    } else msg(j.gemaild?"ok":"bad", j.gemaild?("De uitnodiging is gemaild naar "+email+". De link is zeven dagen geldig."):("Het account staat klaar, maar de mail vraagt nog een poging; druk hieronder op opnieuw uitnodigen."));
     if(window.fpLog) window.fpLog("extern-uitgenodigd",gebruiker);
     laad();
   }catch(e){ msg("bad",e.message); }
@@ -134,7 +142,7 @@ async function uitnodigen(gebruiker,naam,email,knop){
 }
 document.getElementById("gUitnodigen").onclick=function(){
   const g=document.getElementById("gGebruiker").value.trim().toLowerCase(), n=document.getElementById("gNaam").value.trim(), e=document.getElementById("gEmail").value.trim();
-  if(!g||!e){ msg("bad","Vul de gebruikersnaam en het e-mailadres in."); return; }
+  if(!g){ msg("bad","Vul de gebruikersnaam in."); return; }
   uitnodigen(g,n,e,this);
 };
 laad();
