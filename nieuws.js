@@ -53,7 +53,7 @@
     {
       datum: "2026-10-16", bestand: "dealerportaal.html", soort: "beter",
       titel: "Een partner toegang geven in één venster",
-      wat: "Bewerken opent nu één venster met vier stappen: 1 Gegevens, 2 Adviseur, 3 Taal, 4 Uitnodigen. Onderaan staat Bewaren en uitnodigen, dus aan het eind krijgt de partner meteen zijn welkomstmail. Per partner kies je de taal waarin Passion Partners opent; wat Logic4 als taal en vertegenwoordiger heeft, staat erbij. In de lijst staat de kolom Taal in plaats van Afspraken, en het menu achter de drie puntjes staat in dezelfde volgorde."
+      wat: "Per partner staat er nu één knop: Uitnodigen. Die opent één venster met vier stappen: 1 Gegevens, 2 Adviseur, 3 Taal, 4 Uitnodigen. Onderaan staat Bewaren en uitnodigen, dus aan het eind krijgt de partner meteen zijn welkomstmail. Per partner kies je de taal waarin Passion Partners opent; wat Logic4 als taal en vertegenwoordiger heeft, staat erbij. Inloglink, wachtwoord, blokkeren en verwijderen staan onderin het venster bij Meer. In de lijst staat de kolom Taal in plaats van Afspraken."
     },
     {
       datum: "2026-10-16", bestand: "orderpicken.html", soort: "nieuw",
