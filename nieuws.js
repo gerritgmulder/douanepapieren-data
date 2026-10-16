@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "planning.html", soort: "beter",
+      titel: "Planning over de hele breedte",
+      wat:   "Het tijdraster en de routes gebruiken nu bijna het hele scherm, zodat alles groter en beter leesbaar is."
+    },
+    {
       datum: "2026-10-15", groep: "planning-bewerk", soort: "nieuw",
       titel: "Tim plant mee",
       wat:   "Tim kan nu ook routes en afspraken inplannen en wijzigen, net als Kevin en Gerwin."
