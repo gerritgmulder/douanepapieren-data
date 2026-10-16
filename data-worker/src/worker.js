@@ -19,6 +19,7 @@
 // + Logic4-credentials nodig) kan 'm zien. Dat is acceptabel voor data
 // op deze schaal (~10-30 records met persoonsgegevens).
 
+import { ppMailVertaal, PP_MAIL_TALEN } from "./pp-mailteksten.js";
 const ALLOWED_BUCKETS = new Set([
   "personeel",
   "koeien",
@@ -442,6 +443,16 @@ async function dpSendEmail(env, to, subject, html, replyTo, cc, vanNaam) {
     console.log("[dp-mail] niet geconfigureerd (RESEND_API_KEY/MAIL_FROM ontbreekt)");
     return { ok: false, error: "mail-not-configured" };
   }
+  /* In de taal van de partner (Gerrit, 16 okt 2026: "Graag de mails ook in de
+     gekozen taal doen"). De taal staat bij het account in Passion Partners
+     (Beheer, stap 3). Geen account of Engels: de mail blijft zoals hij is.
+     Interne mails gaan naar adressen zonder account en blijven dus ongemoeid. */
+  try {
+    const acc = await dpGetAccounts(env);
+    const d = (acc.dealers || []).find(x => String(x.email || "").toLowerCase() === String(to || "").toLowerCase());
+    const taal = d && d.taal;
+    if (taal && PP_MAIL_TALEN.includes(taal)) { subject = ppMailVertaal(taal, subject); html = ppMailVertaal(taal, html); }
+  } catch (e) { console.log("[dp-mail] vertalen: " + String(e.message || e)); }
   /* Zelfde adres, andere naam erboven. Een mail aan Audrey over de wire hoort
      niet van "Passion Partners" te komen; dat is het portaal voor dealers. */
   const vanAdres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
@@ -3111,6 +3122,22 @@ async function dpAdminReserveFor(request, env, url) {
   // Mail met aanbetalingsverzoek + link naar de partner/particulier
   const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const sym = currency === "USD" ? "$" : "€";
+  /* Een partner met een account krijgt dit verzoek in de opmaak van Passion
+     Partners, in het Engels en daarmee ook in zijn eigen taal (dpSendEmail
+     vertaalt). Een particulier zonder account krijgt het Nederlands van altijd. */
+  if (dpFindDealer(accounts, email)) {
+    const sentP = await dpSendEmail(env, email, "Your deposit request - " + samenvatting,
+      dpMailShell(env, url,
+        '<p>Hi ' + esc(entry.company || "") + ',</p>' +
+        '<p>Your reservation is ready for its 30% deposit: <b>' + sym + ' ' + deposit.toFixed(2) + '</b></p>' +
+        '<ul style="padding-left:18px;margin:6px 0 14px;">' + regelsUit.map(r =>
+          '<li><b>' + r.qty + '&times; ' + esc(r.model) + '</b>' + (r.variantName ? ' (' + esc(r.variantName) + ')' : '') + '</li>').join("") + '</ul>' +
+        '<p style="margin:22px 0;text-align:center;"><a href="' + pay.checkoutUrl + '" style="background:#c8102e;color:#fff;' +
+        'text-decoration:none;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:10px;display:inline-block;">Pay the deposit</a></p>' +
+        '<p style="color:#6b7280;font-size:13px;">As soon as the deposit is in, we confirm your reservation.</p>'),
+      (accounts.contactEmail || undefined), dpAdviseurVan(accounts, email));
+    return reply(200, { ok: true, deposit, currency, emailedTo: email, mailSent: sentP.ok, checkoutUrl: pay.checkoutUrl, regels: regelsUit.length });
+  }
   const sent = await dpSendEmail(env, email,
     "Aanbetalingsverzoek Fonteyn — " + samenvatting,
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
