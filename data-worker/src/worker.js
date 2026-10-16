@@ -16414,7 +16414,8 @@ async function bakwagenHandtekening(env, wie, planner, rit, order) {
      tegel vraagt door tot alles er is).
    - pickStand: beginnen (wie het eerst begint, heeft hem), tussenstand en
      afronden. De scans zelf staan in de stand: per regel hoeveel er gepakt is,
-     en op welke locatie. Er gaat nog niets terug naar Logic4. */
+     en op welke locatie. In Logic4 gaat de ritstatus mee: bij beginnen "Order
+     wordt gepicked", bij afronden "Gecontroleerd, gereed voor verzending". */
 let _pickTabel = false;
 async function pickDb(env) {
   const db = await bwDb(env);
@@ -16467,7 +16468,30 @@ async function pickStand(env, wie, b) {
   const klaar = b.actie === "klaar" ? (Number(b.klaarTs) || Date.now()) : null;
   await db.prepare("INSERT OR REPLACE INTO pick_status (rit, door, begonnen, klaar, stand, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
     .bind(id, wie, begonnen, klaar, stand, Date.now()).run();
-  return { ok: true, door: wie, begonnen, klaar };
+  /* De ritstatus in Logic4 meezetten (Gerrit, 16 okt 2026: "Ja doe maar"):
+     bij beginnen "Order wordt gepicked" (3), bij afronden "Gecontroleerd,
+     gereed voor verzending" (2). Lukt dat even niet, dan gaat het picken
+     gewoon door; het staat in het antwoord. */
+  let logic4 = null;
+  const nieuweStatus = klaar ? 2 : (!nu || !nu.begonnen) ? 3 : null;
+  if (nieuweStatus) logic4 = await pickRitStatus(env, id, nieuweStatus).catch(e => ({ ok: false, error: String(e.message || e) }));
+  return { ok: true, door: wie, begonnen, klaar, logic4 };
+}
+/* UpdateRound wil het hele object; de orders in de rit horen daar niet bij en
+   blijven dus staan. Alles overnemen zoals het is, alleen de status anders. */
+async function pickRitStatus(env, id, statusId) {
+  const l4 = await bwLogic4(env);
+  const r = (await l4("/v3/Round/GetRounds", { DateTimeCreatedFrom: pcPlusDagen(pcVandaag(), -45), TakeRecords: 800 })).find(x => String(x.Id) === String(id));
+  if (!r) return { ok: false, error: "rit staat niet meer in Logic4" };
+  if (Number(r.StatusId) === statusId) return { ok: true, status: statusId, al: true };
+  const tok = await l4Token(env);
+  const res = await fetch("https://api.logic4server.nl/v3/Round/UpdateRound", { method: "POST", headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" },
+    body: JSON.stringify({ Id: r.Id, TypeId: r.TypeId, Description: r.Description ?? null, Memo: r.Memo ?? null, DateTimePlanned: r.DateTimePlanned ?? null,
+      VehicleId: r.VehicleId ?? null, DriverId: r.DriverId ?? null, CoDriverId: r.CoDriverId ?? null, StatusId: statusId, HideInSystem: !!r.HideInSystem }) });
+  const tekst = await res.text();
+  // Logic4 antwoordt soms met een lege 200; daarom nalezen wat er nu staat.
+  const na = (await l4("/v3/Round/GetRounds", { DateTimeCreatedFrom: pcPlusDagen(pcVandaag(), -45), TakeRecords: 800 }).catch(() => [])).find(x => String(x.Id) === String(id));
+  return { ok: !!na && Number(na.StatusId) === statusId, status: na ? Number(na.StatusId) : null, http: res.status, antwoord: tekst.slice(0, 120) };
 }
 
 /* Postvak in, of een andere vaste map. Alleen de mappen die Exchange bij
