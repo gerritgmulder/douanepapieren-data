@@ -275,6 +275,12 @@
       tf.src = hier.replace(/kop\.js(\?.*)?$/, "telefoon.js");
       (doc.head || doc.documentElement).appendChild(tf);
     }
+    /* Direct een seintje als een bakwagenchauffeur iets meldt (16 okt 2026). Zie melding.js. */
+    if (hier && !global.__fpMelding) {
+      var ml = doc.createElement("script");
+      ml.src = hier.replace(/kop\.js(\?.*)?$/, "melding.js");
+      (doc.head || doc.documentElement).appendChild(ml);
+    }
     /* Ctrl+F / Cmd+F op elke tegel (Osman, 27 sep 2026). */
     if (hier && !global.__fpZoeken) {
       var zk = doc.createElement("script");

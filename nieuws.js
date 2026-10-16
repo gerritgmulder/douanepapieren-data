@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "bakwagen.html", soort: "beter",
+      titel: "Bakwagenroute: foto's, zoeken en meteen een melding",
+      wat:   "De chauffeur zet bij een stop foto's als bewijs, bijvoorbeeld als er een kussen mist. Met het nieuwe tabblad Zoeken vind je elke afgemelde stop terug op order, klant, plaats, chauffeur of datum, met de handtekening en de foto's. Zet een chauffeur een opmerking bij een stop, dan krijgen Manon en Nomi meteen een melding, in elke tegel."
+    },
+    {
       datum: "2026-10-16", bestand: "externen.html", soort: "beter",
       titel: "Account zonder mailadres",
       wat:   "Een eigen inlog kan nu ook zonder mailadres. Laat het e-mailveld leeg; je krijgt dan de link om het wachtwoord te kiezen hier in beeld, om zelf te openen of door te geven."

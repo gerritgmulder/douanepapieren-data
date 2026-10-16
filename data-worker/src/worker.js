@@ -16205,7 +16205,8 @@ async function logic4Lees(env, request, body) {
    een kussen") komt als bericht bij Manon. Er gaat niets terug naar Logic4. */
 const BW_CHAUFFEURS = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Johny", rx: /\bjoh?n+[iy]\b|\bjohn\b/i }];
 const BW_RIT = /eigen ?r?oute|bakwagen/i;
-const BW_MANON = ["manon@fonteyn.nl", "fonteyn.manon", "manon"];
+// Een opmerking van een chauffeur gaat naar Manon én Nomi (Gerrit, 16 okt 2026).
+const BW_MANON = ["manon@fonteyn.nl", "fonteyn.manon", "manon", "nomi@fonteyn.nl", "fonteyn.nomi", "nomi"];
 let _bwTabellen = false;
 async function bwDb(env) {
   const db = env.ACTIVITEIT;
@@ -16215,6 +16216,7 @@ async function bwDb(env) {
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_af (rit TEXT, orderid TEXT, soort TEXT, naam TEXT, opmerking TEXT, chauffeur TEXT, door TEXT, ts INTEGER, hand TEXT, PRIMARY KEY (rit, orderid))"),
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_rit (id TEXT PRIMARY KEY, naam TEXT, datum TEXT, soort TEXT, memo TEXT, aantal INTEGER, ts INTEGER)"),
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_akkoord (rit TEXT PRIMARY KEY, chauffeur TEXT, datum TEXT, naam TEXT, soort TEXT, memo TEXT, door TEXT, ts INTEGER)"),
+      db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_foto (id TEXT PRIMARY KEY, rit TEXT, orderid TEXT, door TEXT, chauffeur TEXT, ts INTEGER, grootte INTEGER)"),
     ]);
     _bwTabellen = true;
   }
@@ -16301,8 +16303,13 @@ async function bwStops(env, db, l4, ritten) {
     const rs = await db.prepare("SELECT rit, orderid, soort, naam, opmerking, chauffeur, door, ts, length(hand) AS hl FROM bakwagen_af WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
     for (const x of rs.results || []) af[x.rit + ":" + x.orderid] = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, door: x.door, ts: x.ts, getekend: Number(x.hl) > 0 };
   }
+  const fotos = {};
+  if (ritIds.length) {
+    const rs = await db.prepare("SELECT id, rit, orderid, door, chauffeur, ts FROM bakwagen_foto WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ") ORDER BY ts").bind(...ritIds).all();
+    for (const x of rs.results || []) (fotos[x.rit + ":" + x.orderid] = fotos[x.rit + ":" + x.orderid] || []).push({ id: x.id, ts: x.ts, door: x.door, chauffeur: x.chauffeur });
+  }
   for (const r of ritten) {
-    r.stops = r.regels.map(x => Object.assign({ regel: String(x.Id), opmerkingRit: String(x.Remarks || "").trim(), af: af[r.id + ":" + x.OrderId] || null },
+    r.stops = r.regels.map(x => Object.assign({ regel: String(x.Id), opmerkingRit: String(x.Remarks || "").trim(), af: af[r.id + ":" + x.OrderId] || null, fotos: fotos[r.id + ":" + x.OrderId] || [] },
       (bewaard[String(x.OrderId)] || {}).o || { order: String(x.OrderId), laden: true }));
     delete r.regels;
   }
@@ -16391,6 +16398,59 @@ async function bakwagenAfmelden(env, wie, planner, b) {
     }
   }
   return { ok: true, ts, chauffeur };
+}
+/* Foto's van de chauffeur bij een stop, als bewijs (Gerrit, 16 okt 2026:
+   "als er bijvoorbeeld een kussen mist van een bankstel wat de chauffeur
+   retour gaat halen"). De tegel verkleint ze eerst tot een JPEG van hooguit
+   1600 pixels; ze staan in het Archief als bakwagen/foto/<id>. */
+async function bakwagenFotoZet(env, wie, planner, b) {
+  const rit = String(b.rit || "").replace(/\D/g, ""), order = String(b.order || "").replace(/\D/g, "");
+  if (!rit || !order) return { ok: false, error: "rit en order zijn nodig" };
+  const db = await bwDb(env);
+  if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
+  const m = String(b.data || "").match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return { ok: false, error: "Alleen een foto (JPEG)." };
+  if (m[1].length > 3500000) return { ok: false, error: "De foto is te groot." };
+  const bytes = Uint8Array.from(atob(m[1]), c => c.charCodeAt(0));
+  const id = Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 10);
+  await bestandZet(env, "bakwagen/foto/" + id, bytes.buffer);
+  const chauffeur = bwChauffeurVanInlog(wie) || String(b.chauffeur || "").slice(0, 40);
+  await db.prepare("INSERT INTO bakwagen_foto (id, rit, orderid, door, chauffeur, ts, grootte) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+    .bind(id, rit, order, wie, chauffeur, Date.now(), bytes.length).run();
+  return { ok: true, id, ts: Date.now() };
+}
+async function bakwagenFotoLees(env, wie, planner, id) {
+  id = String(id || "").replace(/[^a-z0-9]/g, "");
+  const db = await bwDb(env);
+  const x = await db.prepare("SELECT rit FROM bakwagen_foto WHERE id = ?1").bind(id).first();
+  if (!x || !(await bwMagBijRit(env, db, wie, planner, x.rit))) return reply(404, { ok: false });
+  const buf = await bestandLees(env, "bakwagen/foto/" + id);
+  if (!buf) return reply(404, { ok: false });
+  return new Response(buf, { headers: { ...corsHeaders, "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" } });
+}
+/* Zoeken in alle bakwagenroutes: op order, klant, plaats, rit, chauffeur,
+   opmerking of datum. Alleen stops met een handtekening of foto's. */
+async function bakwagenZoek(env, q) {
+  const db = await bwDb(env);
+  q = String(q || "").trim().toLowerCase().slice(0, 60);
+  const woorden = q.split(/\s+/).filter(Boolean);
+  const af = (await db.prepare("SELECT a.rit, a.orderid, a.soort, a.naam, a.opmerking, a.chauffeur, a.ts, length(a.hand) AS hl, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_af a LEFT JOIN bakwagen_rit r ON r.id = a.rit LEFT JOIN bakwagen_order o ON o.id = a.orderid ORDER BY a.ts DESC LIMIT 2000").all()).results || [];
+  const ft = (await db.prepare("SELECT f.id, f.rit, f.orderid, f.chauffeur, f.ts, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_foto f LEFT JOIN bakwagen_rit r ON r.id = f.rit LEFT JOIN bakwagen_order o ON o.id = f.orderid ORDER BY f.ts DESC LIMIT 3000").all()).results || [];
+  const per = new Map();
+  const stop = (x) => {
+    const k = x.rit + ":" + x.orderid;
+    if (!per.has(k)) {
+      let o = {}; try { o = x.json ? JSON.parse(x.json) : {}; } catch (e) {}
+      per.set(k, { rit: x.rit, order: x.orderid, ritnaam: x.ritnaam || "", datum: x.datum || "", klant: o.klant || "", plaats: o.plaats || "", af: null, fotos: [] });
+    }
+    return per.get(k);
+  };
+  for (const x of af) stop(x).af = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, ts: x.ts, getekend: Number(x.hl) > 0 };
+  for (const x of ft) stop(x).fotos.push({ id: x.id, ts: x.ts, chauffeur: x.chauffeur });
+  let lijst = [...per.values()];
+  if (woorden.length) lijst = lijst.filter(s => { const t = [s.order, s.klant, s.plaats, s.ritnaam, s.datum, s.datum.split("-").reverse().join("-"), s.af && s.af.chauffeur, s.af && s.af.naam, s.af && s.af.opmerking, ...s.fotos.map(f => f.chauffeur)].join(" ").toLowerCase(); return woorden.every(w => t.includes(w)); });
+  lijst.sort((a, b) => Math.max(b.af ? b.af.ts : 0, ...b.fotos.map(f => f.ts)) - Math.max(a.af ? a.af.ts : 0, ...a.fotos.map(f => f.ts)));
+  return { ok: true, totaal: lijst.length, stops: lijst.slice(0, 60) };
 }
 async function bakwagenHandtekening(env, wie, planner, rit, order) {
   const db = await bwDb(env);
@@ -17589,14 +17649,14 @@ async function archiefVerhuis(env, prefix, max) {
    kan ook om een tweede reden niet: wat hij leest is gefilterd, en zou hij
    dat terugschrijven, dan verdwijnt voor iedereen wat voor hem verborgen was. */
 const EXTERN_LEES_GET = ["/planning/", "/herinneringen/open", "/herinneringen/log", "/vertaal/talen", "/bank/dagboeken", "/bank/grootboeken",
-                         "/bakwagen/mijn", "/bakwagen/handtekening"];
+                         "/bakwagen/mijn", "/bakwagen/handtekening", "/bakwagen/foto"];
 const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                           "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo", "/extern/logic4",
-                          /* De enige schrijfroute: de bakwagenchauffeurs (Jordy, Dani, Johny; eigen
-                             inlog zonder Logic4) melden hun eigen stops af. De worker laat dat alleen
+                          /* De enige schrijfroutes: de bakwagenchauffeurs (Jordy, Dani, Johny; eigen
+                             inlog zonder Logic4) melden hun eigen stops af en zetten er foto's bij. De worker laat dat alleen
                              toe voor een rit die voor die chauffeur klaarstaat (bwMagBijRit), en er
                              schrijft niets terug wat gefilterd is: het is een eigen nieuwe regel. */
-                          "/bakwagen/afmelden"];
+                          "/bakwagen/afmelden", "/bakwagen/foto"];
 const EXTERN_EXACT = ["/internal/teamkey"];
 const EXTERN_VAKKEN = [
   "takenlijst", "taken", "taken-ritme", "dashboard-gezien", "dashboard-indeling", "voorraad-indeling",
@@ -19149,6 +19209,11 @@ const FP_WORKER = {
         }
         if (url.pathname === "/bakwagen/afmelden" && request.method === "POST")
           return reply(200, await bakwagenAfmelden(env, wie, planner, await request.json().catch(() => ({}))));
+        if (url.pathname === "/bakwagen/foto" && request.method === "POST")
+          return reply(200, await bakwagenFotoZet(env, wie, planner, await request.json().catch(() => ({}))));
+        if (url.pathname === "/bakwagen/foto" && request.method === "GET") return bakwagenFotoLees(env, wie, planner, url.searchParams.get("id"));
+        if (url.pathname === "/bakwagen/zoek" && request.method === "GET")
+          return planner ? reply(200, await bakwagenZoek(env, url.searchParams.get("q"))) : alleenPlanner();
         if (url.pathname === "/bakwagen/handtekening" && request.method === "GET")
           return reply(200, await bakwagenHandtekening(env, wie, planner, url.searchParams.get("rit"), url.searchParams.get("order")));
       } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
