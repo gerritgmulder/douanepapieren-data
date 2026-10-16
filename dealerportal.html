@@ -436,7 +436,8 @@
     var sel = document.getElementById("taalKeuze");
     if (!sel) return;
     sel.value = taal;
-    sel.addEventListener("change", function () { try { localStorage.setItem("pp_taal", sel.value); } catch (e) {} location.reload(); });
+    // Zelf gekozen gaat voor de taal die Fonteyn voor dit account instelde.
+    sel.addEventListener("change", function () { try { localStorage.setItem("pp_taal", sel.value); localStorage.setItem("pp_taal_zelf", "1"); } catch (e) {} location.reload(); });
   });
   if (taal === "en") return;
   document.documentElement.classList.add("pp-vertalen");
@@ -895,6 +896,15 @@ async function sendLink(){
   if (!localStorage.getItem(SESS_KEY)) return;   // login-view blijft staan
   const me = await api("/dealers/api/me");
   if (me.status !== 200 || !me.data || !me.data.ok) { localStorage.removeItem(SESS_KEY); return; }
+  /* De taal die Fonteyn voor dit account koos (Beheer, stap 3). Alleen als de
+     partner nog nooit zelf een taal koos; dat gaat altijd voor. Eén keer
+     opnieuw laden, daarna staat hij goed. */
+  try {
+    const t = String(me.data.taal || "");
+    if (t && !localStorage.getItem("pp_taal_zelf") && t !== window.ppTaal && /^(en|nl|de|fr|it)$/.test(t)) {
+      localStorage.setItem("pp_taal", t); location.reload(); return;
+    }
+  } catch (e) {}
   $("loginView").classList.add("hidden");
   $("appView").classList.remove("hidden");
   $("who").textContent = (me.data.company ? me.data.company + " · " : "") + me.data.email;

@@ -431,7 +431,29 @@
     "” - probeer een ander zoekwoord.": "” will appear here - try another search term.",
     "” - probeer het met plaatsnaam erbij.": "” will appear here - try adding the city.",
     "” is uit het portaal gehaald.": "” has been removed from the portal.",
-    "” staat nu onderaan in": "” is now at the bottom of"
+    "” staat nu onderaan in": "” is now at the bottom of",
+    /* Partnervenster in vier stappen (16 okt 2026) */
+    "1. Bewerken": "1. Edit",
+    "2. Adviseur kiezen": "2. Choose adviser",
+    "3. Uitnodiging sturen": "3. Send invitation",
+    "4. Wachtwoord zetten": "4. Set password",
+    "Gegevens": "Details",
+    "Taal": "Language",
+    "Uitnodigen": "Invite",
+    "Taal van het portaal": "Portal language",
+    "Alleen bewaren": "Save only",
+    "Bewaren en uitnodigen": "Save and invite",
+    "Opnieuw uitnodigen": "Invite again",
+    "De adviseur krijgt elke mail aan deze relatie in cc en ziet de leads van deze relatie in Beheer.": "The adviser receives every e-mail to this relation in cc and sees this relation's leads in Admin.",
+    "De adviseur krijgt elke mail aan deze relatie in cc en ziet de leads van deze relatie in Beheer. In Logic4 staat": "The adviser receives every e-mail to this relation in cc and sees this relation's leads in Admin. In Logic4 the representative is",
+    "als vertegenwoordiger.": ".",
+    "In deze taal opent Passion Partners voor deze relatie. Rechtsboven kan de relatie zelf altijd een andere taal kiezen.": "Passion Partners opens in this language for this relation. They can always choose another language at the top right.",
+    "In deze taal opent Passion Partners voor deze relatie. Rechtsboven kan de relatie zelf altijd een andere taal kiezen. In Logic4 staat": "Passion Partners opens in this language for this relation. They can always choose another language at the top right. Logic4 has",
+    "Deze relatie heeft al een wachtwoord en kan inloggen. Met": "This relation already has a password and can log in. With",
+    "komen je wijzigingen erin; opnieuw uitnodigen kan met de knop ernaast.": "your changes are saved; to invite again, use the button next to it.",
+    "Met": "With",
+    "rechtsonder komt alles erin en krijgt de relatie de welkomstmail. Daarmee kiest de relatie zelf een wachtwoord en is meteen binnen. De link is zeven dagen geldig. Blijft de mail uit, dan maak je in de lijst via": "at the bottom right everything is saved and the relation receives the welcome e-mail, to choose their own password and log straight in. The link is valid for seven days. If the e-mail doesn't arrive, create a login link in the list via",
+    "een inloglink.": "."
   };
   for (var k in W) if (Object.prototype.hasOwnProperty.call(W, k)) global.fpTaal.woorden[k] = W[k];
   var DAGEN = { maandag: "Monday", dinsdag: "Tuesday", woensdag: "Wednesday", donderdag: "Thursday", vrijdag: "Friday", zaterdag: "Saturday", zondag: "Sunday" };

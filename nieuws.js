@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Een partner toegang geven in één venster",
+      wat: "Bewerken opent nu één venster met vier stappen: 1 Gegevens, 2 Adviseur, 3 Taal, 4 Uitnodigen. Onderaan staat Bewaren en uitnodigen, dus aan het eind krijgt de partner meteen zijn welkomstmail. Per partner kies je de taal waarin Passion Partners opent; wat Logic4 als taal en vertegenwoordiger heeft, staat erbij. In de lijst staat de kolom Taal in plaats van Afspraken, en het menu achter de drie puntjes staat in dezelfde volgorde."
+    },
+    {
       datum: "2026-10-16", bestand: "orderpicken.html", soort: "nieuw",
       titel: "Order picken (proef)",
       wat:   "De picklijsten uit het Rittenoverzicht van Logic4 op de telefoon. Druk op Ophalen uit Logic4, begin een lijst en scan de labels met de camera of een handscanner. Werkt ook zonder bereik in het magazijn; alles gaat naar het Dashboard zodra er weer verbinding is."

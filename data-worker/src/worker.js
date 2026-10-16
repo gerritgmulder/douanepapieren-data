@@ -5059,6 +5059,9 @@ async function handleDealerRoutes(request, env, url) {
         beheer: !sess.medewerker && dpIsBeheerSessie(sess),
         // Fonteynbot betaalt met de fictieve cent (7 okt 2026).
         fictief: !!sess.fictief,
+        /* De taal die in Beheer voor deze relatie is gekozen. Het portaal opent
+           daarin, tenzij de partner rechtsboven zelf een andere koos. */
+        taal: (dealer && dealer.taal) || null,
         region: (dealer && dealer.region) || "EU" });
     }
     if (p === "/dealers/api/setpassword" && request.method === "POST") return dpHandleSetPassword(request, env, sess);
@@ -18283,6 +18286,25 @@ const FP_WORKER = {
       if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const b = await request.json().catch(() => ({}));
       return reply(200, await relZoek(env, b.q).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    /* Wat Logic4 van een klant weet over taal en vertegenwoordiger. Alleen
+       lezen. Het partnervenster in Beheer zet het erbij als voorstel (Gerrit,
+       16 okt 2026: taal per partner kiezen; adviseur zoals in Logic4). */
+    if (url.pathname === "/dealers/admin/relatie/logic4" && request.method === "POST") {
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
+      const b = await request.json().catch(() => ({}));
+      const id = Number(b.debiteur) || 0;
+      if (!id) return reply(400, { ok: false, error: "debiteur ontbreekt" });
+      try {
+        const r = await relL4(env, "/v3.1/Relations/GetCustomers", { Id: id, TakeRecords: 1 });
+        const c = Array.isArray(r) ? r[0] : null;
+        if (!c) return reply(200, { ok: false, error: "klant staat nog open in Logic4" });
+        // GlobalisationId volgens /v3/Types/GetGlobalizationTypes (gemeten 16 okt 2026).
+        const TAAL = { 1: ["nl", "Nederlands"], 2: ["en", "Engels"], 3: ["de", "Duits"], 4: ["fr", "Frans"], 5: ["es", "Spaans"], 6: ["it", "Italiaans"] };
+        const t = TAAL[Number(c.GlobalisationId)] || null;
+        return reply(200, { ok: true, debiteur: id, taal: t && t[0] !== "es" ? t[0] : null, taalNaam: t ? t[1] : null,
+          vertegenwoordiger: (c.Representative && c.Representative.Name) || null });
+      } catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
     }
     if (url.pathname === "/dealers/admin/relatie/aanmaken" && request.method === "POST") {
       if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });

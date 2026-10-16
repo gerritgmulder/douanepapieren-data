@@ -132,6 +132,11 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   .relbody{padding:18px 22px;max-height:calc(100vh - 210px);overflow:auto}
   .relvoet{display:flex;gap:10px;justify-content:flex-end;align-items:center;padding:14px 22px;border-top:1px solid var(--border);flex-wrap:wrap}
   .blok{border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  /* De vier stappen in het partnervenster: 1 Gegevens, 2 Adviseur, 3 Taal, 4 Uitnodigen. */
+  .stapkop{display:flex;align-items:center;gap:10px;margin:18px 0 10px;font-weight:700;font-size:14.5px;color:var(--ink,#1f2937)}
+  .stapkop:first-child{margin-top:0}
+  .stapkop span{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;
+    background:#c8102e;color:#fff;font-size:13px;flex:0 0 auto}
   .blok > h4{margin:0 0 3px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--fonteyn-green)}
   .blok > .uit{margin:0 0 11px;font-size:12px;color:var(--muted);line-height:1.5}
   .velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 12px}
@@ -347,7 +352,7 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
     <input id="partnerZoek" type="search" placeholder="zoek op naam, e-mail, debiteurnummer of land…" style="width:100%;max-width:420px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">
     <table class="grid partners">
       <colgroup><col style="width:23%"><col style="width:17%"><col style="width:12%"><col style="width:10%"><col style="width:12%"><col style="width:9%"><col style="width:8%"><col style="width:150px"></colgroup>
-      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Taal</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
@@ -549,6 +554,12 @@ const tl = (nl, en) => ENG() ? en : nl;
    hem". De adviseur staat op het account (wie het aanmaakte, of wie op de
    relatiekaart is gekozen). Iemand logt in als "arno@fonteyn.nl" of als
    "fonteyn.arno"; toegang.js weet dat dat dezelfde Arno is. */
+/* De talen van het portaal (portaal-talen/<code>.json). Gerrit (16 okt 2026):
+   "Maak het ook mogelijk om alvast de taal voor de partners te kiezen
+   (Ondrej wil EN standaard ingesteld hebben)." Logic4 kent de taal van de
+   klant ook (GlobalisationId); die staat in het venster als voorstel. */
+const PP_TALEN = [["en","English"],["nl","Nederlands"],["de","Deutsch"],["fr","Français"],["it","Italiano"]];
+const ppTaalNaam = (c) => ((PP_TALEN.find(t => t[0] === c) || [])[1]) || "";
 const SPA_ADVISEURS = ["ahmed", "arno", "bert", "chantal", "dali", "edwin", "luis", "patrick", "yves"];
 function adviseurId(login){
   const l = String(login || "").toLowerCase().trim(); if (!l) return "";
@@ -1207,12 +1218,20 @@ function relatieKaart(index){
     + '<div class="relvoet">'
     +   '<span id="rkMelding" style="flex:1;font-size:12.5px;color:var(--muted)"></span>'
     +   '<button class="btn" id="rkAnnuleer" type="button">Annuleren</button>'
-    +   '<button class="btn solid" id="rkBewaar" type="button">Bewaren</button>'
+    +   '<button class="btn" id="rkBewaar" type="button">Alleen bewaren</button>'
+    +   '<button class="btn solid" id="rkUitnodigen" type="button">Bewaren en uitnodigen</button>'
     + '</div></div>';
   document.body.appendChild(laag);
   const $$ = (id) => laag.querySelector("#" + id);
   // Waar we mee begonnen, om te kunnen zien of er iets is ingevuld.
   const beginStand = JSON.parse(JSON.stringify(d));
+  /* Wat Logic4 van deze klant weet: de taal en de vertegenwoordiger. Komt op
+     de achtergrond binnen; daarna wordt het venster opnieuw getekend, met wat
+     er al was ingevuld. */
+  let l4info = null;
+  if ((d.debtorIds || []).length) fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/relatie/logic4", {
+      method: "POST", headers: { "Content-Type": "application/json", ...beheerKoppen() }, body: JSON.stringify({ debiteur: d.debtorIds[0] }) })
+    .then(r => r.json()).then(j => { if (j && j.ok && document.body.contains(laag)) { lees(); l4info = j; teken(); } }).catch(() => {});
   const zeg = (t, fout) => { const m=$$("rkMelding"); m.textContent=t||""; m.style.color = fout ? "var(--bad)" : "var(--muted)"; };
 
   function teken(){
@@ -1222,8 +1241,10 @@ function relatieKaart(index){
       ? "Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten met alle prijsniveaus naast elkaar."
       : "Kies eerst partner of dealer. Dat bepaalt welke prijzen en welke documenten deze relatie te zien krijgt.";
 
+    const stapKop = (n, t) => '<div class="stapkop"><span>' + n + '</span>' + esc(t) + '</div>';
     $$("rkBody").innerHTML =
-      '<div class="blok"><h4>Wat voor relatie is dit</h4>'
+      stapKop(1, "Gegevens")
+      + '<div class="blok"><h4>Wat voor relatie is dit</h4>'
       + '<p class="uit">' + esc(soortUit) + '</p>'
       + '<div class="soortkies">'
       +   '<button type="button" data-soort="partner" class="' + (d.soort==="partner"?"aan":"") + '">'
@@ -1234,15 +1255,6 @@ function relatieKaart(index){
       + '<div class="velden" style="margin-top:12px">'
       +   veld("region","Regio en valuta", d.region, {keuze:["EU","US"],
             label:["EU - het portaal opent in euro's","US - het portaal opent in dollars"]})
-      +   (() => {
-            /* De adviseur van deze relatie: krijgt elke mail aan hem in cc en
-               ziet zijn leads in Beheer. Bij de bestaande relaties (import
-               2 okt 2026) stond nog niemand. */
-            const huidig = adviseurId(d.adviseur || "");
-            const opties = SPA_ADVISEURS.includes(huidig) || !huidig ? SPA_ADVISEURS : SPA_ADVISEURS.concat([huidig]);
-            return veld("adviseur", "Adviseur", huidig ? adviseurMail(huidig) : "", { keuze: [""].concat(opties.map(adviseurMail)),
-              label: ["- kies de adviseur -"].concat(opties.map(n => n.charAt(0).toUpperCase() + n.slice(1))) });
-          })()
       + '</div></div>'
 
       + '<div class="blok"><h4>Wie is het</h4>'
@@ -1257,18 +1269,6 @@ function relatieKaart(index){
       +   veld("contact.mobiel","Mobiel", d.contact.mobiel)
       +   veld("contact.website","Website", d.contact.website, {plh:"https://"})
       +   veld("bronKlant","Bron klant", d.bronKlant, {verplicht:true, keuze:[""].concat(BRONNEN)})
-      + '</div></div>'
-
-      + '<div class="blok"><h4>' + (d.soort==="dealer"?"Dealerafspraken":"Inkoopafspraken") + '</h4>'
-      + '<p class="uit">' + (d.soort==="dealer"
-          ? "Wat is er met deze dealer afgesproken? Bijvoorbeeld tien procent korting op een spa. Wat je hier invult is wat geldt; het portaal legt het vast zodat iedereen hetzelfde weet, en het rekenwerk doe je in Logic4."
-          : "Afwijkende afspraken met deze partner, als die er zijn. Blijft dit leeg, dan gelden de gewone partnerprijzen.")
-          + " Bij Bewaren komen deze afspraken in Logic4 bij de klant, in Vrij veld 1. Het portaal rekent er niet mee." + '</p>'
-      + '<div class="velden">'
-      +   veld("afspraken.kortingPct","Korting in procenten", d.afspraken.kortingPct, {type:"number", plh:"bv. 10"})
-      +   veld("afspraken.kortingTekst","Waarop geldt die korting", d.afspraken.kortingTekst, {plh:"bv. alleen op spa's"})
-      +   veld("afspraken.betaaltermijn","Betaaltermijn", d.afspraken.betaaltermijn, {plh:"bv. 30 dagen, of 30% vooruit"})
-      +   veld("afspraken.notitie","Overige afspraken", d.afspraken.notitie, {breed:true, regels:2, plh:"vrije aantekening"})
       + '</div></div>'
 
       + '<div class="blok"><h4>Facturatie</h4>'
@@ -1321,7 +1321,43 @@ function relatieKaart(index){
       + '</div>'
       + '<div class="l4uit hidden" id="rkTreffers"></div>'
       + '<div id="rkL4melding"></div>'
-      + '</div>';
+      + '</div>'
+
+      /* Stap 2: de adviseur. Krijgt elke mail aan deze relatie in cc en ziet
+         zijn leads in Beheer. Bij de bestaande relaties (import 2 okt 2026)
+         stond nog niemand. Wat Logic4 als vertegenwoordiger heeft, staat
+         erbij als geheugensteun. */
+      + stapKop(2, "Adviseur")
+      + '<div class="blok"><p class="uit">De adviseur krijgt elke mail aan deze relatie in cc en ziet de leads van deze relatie in Beheer.'
+      +   (l4info && l4info.vertegenwoordiger ? ' In Logic4 staat <b>' + esc(l4info.vertegenwoordiger) + '</b> als vertegenwoordiger.' : '') + '</p>'
+      + '<div class="velden">' + (() => {
+            const huidig = adviseurId(d.adviseur || "");
+            const opties = SPA_ADVISEURS.includes(huidig) || !huidig ? SPA_ADVISEURS : SPA_ADVISEURS.concat([huidig]);
+            return veld("adviseur", "Adviseur", huidig ? adviseurMail(huidig) : "", { keuze: [""].concat(opties.map(adviseurMail)),
+              label: ["- kies de adviseur -"].concat(opties.map(n => n.charAt(0).toUpperCase() + n.slice(1))) });
+          })() + '</div></div>'
+
+      /* Stap 3: de taal waarin het portaal voor deze relatie opent. De
+         partner kan rechtsboven altijd zelf een andere kiezen. */
+      + stapKop(3, "Taal")
+      + '<div class="blok"><p class="uit">In deze taal opent Passion Partners voor deze relatie. Rechtsboven kan de relatie zelf altijd een andere taal kiezen.'
+      +   (l4info && l4info.taal ? ' In Logic4 staat <b>' + esc(l4info.taalNaam || ppTaalNaam(l4info.taal) || l4info.taal) + '</b>.' : '') + '</p>'
+      + '<div class="velden">' + veld("taal", "Taal van het portaal", d.taal || (l4info && l4info.taal) || "en",
+            { keuze: PP_TALEN.map(t => t[0]), label: PP_TALEN.map(t => t[1]) }) + '</div></div>'
+
+      /* Stap 4: uitnodigen. De knop rechtsonder bewaart alles en stuurt de
+         welkomstmail. */
+      + stapKop(4, "Uitnodigen")
+      + '<div class="blok"><p class="uit">' + (d.pw
+          ? 'Deze relatie heeft al een wachtwoord en kan inloggen. Met <b>Bewaren</b> komen je wijzigingen erin; opnieuw uitnodigen kan met de knop ernaast.'
+          : 'Met <b>Bewaren en uitnodigen</b> rechtsonder komt alles erin en krijgt de relatie de welkomstmail. Daarmee kiest de relatie zelf een wachtwoord en is meteen binnen. De link is zeven dagen geldig.'
+            + ' Blijft de mail uit, dan maak je in de lijst via <b>&#8943;</b> een inloglink.') + '</p></div>';
+    // De knoppen onderaan passen bij de stand van de relatie.
+    const kb = $$("rkBewaar"), ku = $$("rkUitnodigen");
+    if (kb && ku) {
+      if (d.pw) { kb.textContent = "Bewaren"; kb.className = "btn solid"; ku.textContent = "Opnieuw uitnodigen"; ku.className = "btn"; }
+      else { kb.textContent = "Alleen bewaren"; kb.className = "btn"; ku.textContent = "Bewaren en uitnodigen"; ku.className = "btn solid"; }
+    }
 
     laag.querySelectorAll("[data-soort]").forEach(b => b.addEventListener("click", () => {
       d.soort = b.dataset.soort; lees(); teken();
@@ -1677,7 +1713,9 @@ function relatieKaart(index){
   $$("rkSluit").addEventListener("click", sluiten);
   $$("rkAnnuleer").addEventListener("click", sluiten);
   laag.addEventListener("click", e => { if (e.target === laag && startNaast) sluiten(); });
-  $$("rkBewaar").addEventListener("click", async () => {
+  $$("rkBewaar").addEventListener("click", () => bewaar(false));
+  $$("rkUitnodigen").addEventListener("click", () => bewaar(true));
+  async function bewaar(uitnodigen) {
     lees();
     /* Verplicht is verplicht, ook bij Bewaren. Gerrit (14 sep 2026): "Ik kan
        nu van alles wat verplicht lijkt niet invullen en dan kan ik gewoon
@@ -1707,13 +1745,10 @@ function relatieKaart(index){
     try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
     await save("dealer-accounts", accounts);
     laag.remove(); renderPartners();
-    /* De afspraken ook in Logic4, bij de klant in Vrij veld 1 (Gerrit, 2 okt
-       2026: "notitie is prima, maar zorg dan wel dat die notitie ook in
-       Logic4 komt"). Op de achtergrond: het bewaren hierboven is al klaar. */
-    if ((d.debtorIds || []).length) fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/afspraken-logic4", {
-      method: "POST", headers: { "Content-Type": "application/json", ...beheerKoppen() }, body: JSON.stringify({ email: d.email }) })
-      .then(r => r.json()).then(j => { if (j && j.ok && (j.gedaan || []).length && !nieuw) setStatus("ok", "Bewaard. De afspraken staan in Logic4 bij debiteur " + j.gedaan.map(x => x.debiteur).join(", ") + " (Vrij veld 1)."); })
-      .catch(() => {});
+    /* De afspraken gingen hier naar Logic4, Vrij veld 1. Gerrit (16 okt 2026):
+       "we vullen geen afspraken in bij partners/dealers". Het veld is uit het
+       venster, en dus gaat er ook niets meer naar Logic4: anders zou een lege
+       tekst bestaande aantekeningen in Vrij veld 1 overschrijven. */
     /* Nieuwe relatie? Dan gaat de welkomstmail METEEN de deur uit, zonder er
        eerst iets over te vragen. Hier stond een venster van de browser met
        "meteen de welkomstmail sturen?" - klikte je dat weg, dan gebeurde er
@@ -1721,7 +1756,10 @@ function relatieKaart(index){
        overkwam Arno: hij stond als partner in de lijst, wachtte op een mail,
        en die was nooit verstuurd (Gerrit, 3 sep 2026: "ik wil er geen actie
        vanuit mij tussen hebben"). */
-    if (nieuw) {
+    /* Uitnodigen doe je met de knop Bewaren en uitnodigen, aan het eind van
+       het venster (Gerrit, 16 okt 2026: "1 venster waar je die volgorde
+       stappen uitvoert en aan het eind de partner uitnodigt"). */
+    if (uitnodigen) {
       try {
         const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/uitnodigen", {
           method:"POST", headers:{ "Content-Type":"application/json", ...beheerKoppen() },
@@ -1763,7 +1801,7 @@ function relatieKaart(index){
           bevestig: tl("Begrepen", "Got it"), geenAnnuleren: true });
       }
     }
-  });
+  }
 
   teken();
 }
@@ -1790,20 +1828,18 @@ function renderPartners(){
         <option value="partner"${d.soort==="partner"?" selected":""}>Partner</option>
         <option value="dealer"${d.soort==="dealer"?" selected":""}>Dealer</option>
       </select></td>
-      <td data-l="Afspraken" style="font-size:12px;color:var(--muted)">${(()=>{
-        const a=d.afspraken||{};
-        const s=[];
-        if(a.kortingPct) s.push("<b style='color:var(--ink)'>"+esc(a.kortingPct)+"%</b>"+(a.kortingTekst?" "+esc(a.kortingTekst):""));
-        if(a.betaaltermijn) s.push(esc(a.betaaltermijn));
-        return s.join(" &middot; ") || "-";
-      })()}</td>
+      <td data-l="Taal"><select class="taalIn" data-i="${i}" style="font-size:12px;padding:4px">
+        <option value=""${!d.taal?" selected":""}>-</option>
+        ${PP_TALEN.map(t => `<option value="${t[0]}"${d.taal===t[0]?" selected":""}>${t[0].toUpperCase()}</option>`).join("")}
+      </select></td>
       <td data-l="Status"><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"geblokkeerd"}</span></td>
       <td data-l="Acties" class="acties"><button class="rmv kaartD" data-i="${i}" title="Alle gegevens van deze relatie: afspraken, facturatie, verzending en het debiteurnummer" style="font-weight:700">Bewerken</button><button class="rmv meerD" data-i="${i}" type="button" aria-haspopup="menu" title="Uitnodiging, inloglink, wachtwoord, blokkeren of verwijderen">&#8943;</button>
         <template class="meerInhoud">
-          <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." >Uitnodiging sturen</button>
+          <button class="rmv kaartD" data-i="${i}">1. Bewerken</button>
+          <button class="rmv advD" data-i="${i}">2. Adviseur kiezen${d.adviseur ? " (" + esc(adviseurNaam(d.adviseur)) + ")" : ""}</button>
+          <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." >3. Uitnodiging sturen</button>
+          <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Meestal kiest de relatie er zelf een via de uitnodiging.">4. Wachtwoord zetten</button>
           <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of zodra de mail uitblijft. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">Inloglink maken</button>
-          <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Meestal kiest de relatie er zelf een via de uitnodiging.">Wachtwoord zetten</button>
-          <button class="rmv advD" data-i="${i}">Adviseur kiezen${d.adviseur ? " (" + esc(adviseurNaam(d.adviseur)) + ")" : ""}</button>
           <button class="rmv togAct" data-i="${i}">${d.active!==false?"Blokkeren":"Weer toelaten"}</button>
           <hr>
           <button class="rmv weg delD" data-i="${i}">${WEG_ICOON}Verwijderen</button>
@@ -1834,6 +1870,7 @@ function renderPartners(){
 document.addEventListener("click", (e) => { const m = document.querySelector(".actiemenu"); if (m && !m.contains(e.target)) m.remove(); });
 addEventListener("scroll", () => { const m = document.querySelector(".actiemenu"); if (m) m.remove(); }, true);
 function koppelRijActies(waar){
+  waar.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   /* De adviseur los kiezen, zonder de hele relatiekaart. Bij de bestaande
      relaties (import 2 okt 2026) ontbreken vaak velden die de kaart bij
      Bewaren verplicht stelt; hier gaat alleen de adviseur mee. */
@@ -1934,6 +1971,12 @@ function koppelRijVelden(){
   document.querySelectorAll(".debIn").forEach(inp=>inp.addEventListener("change", async ()=>{
     const d = accounts.dealers[Number(inp.dataset.i)];
     d.debtorIds = inp.value.split(",").map(s=>s.trim()).filter(Boolean);
+    await save("dealer-accounts", accounts);
+  }));
+  // De taal waarin het portaal voor deze relatie opent.
+  document.querySelectorAll(".taalIn").forEach(sel=>sel.addEventListener("change", async ()=>{
+    const d = accounts.dealers[Number(sel.dataset.i)];
+    d.taal = sel.value || null;
     await save("dealer-accounts", accounts);
   }));
   document.querySelectorAll(".regIn").forEach(sel=>sel.addEventListener("change", async ()=>{
