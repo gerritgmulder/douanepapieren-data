@@ -76,6 +76,10 @@
       uit:"Labels maken uit een inkooporder",                      mobiel:"krap", tile:"tileLabels" },
     /* Bakwagenroute: de eigen ritten per chauffeur, met handtekening van de
        klant en een opmerking (Gerrit, 16 okt 2026). Vooral op de telefoon. */
+    /* Order picken: de picklijsten uit het Rittenoverzicht, scannen met de
+       telefoon, werkt ook zonder bereik (Gerrit, 16 okt 2026). */
+    { telefoon:true, bestand:"orderpicken.html",    groep:"orderpicken",      ic:"📦",  naam:"Order picken",
+      uit:"Picklijsten scannen in het magazijn, ook offline",  mobiel:"goed", tile:"tileOrderpicken" },
     { telefoon:true, bestand:"bakwagen.html",       groep:"bakwagen",         ic:"🚛",  naam:"Bakwagenroute",
       uit:"Ritten klaarzetten en afmelden met handtekening", mobiel:"goed", tile:"tileBakwagen" },
     { bestand:"transport.html",      groep:"logistiek",        ic:"🚚",  naam:"Transport laden",

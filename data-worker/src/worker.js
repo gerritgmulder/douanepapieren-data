@@ -16119,7 +16119,8 @@ function bwOrderKort(o, klant) {
   const a = o.DeliveryAddress || {}, f = o.InvoiceAddress || {}, b = o.AccountAddress || {};
   const telefoon = bwTel(a.TelephoneNumber) || bwTel(f.TelephoneNumber) || bwTel(b.TelephoneNumber) || bwTel(klant && klant.MobileNumber) || bwTel(klant && klant.TelephoneNumber);
   const artikelen = (o.OrderRows || []).filter(r => !/^(korting|compensatie|verzendkosten|bezorgkosten|kosten )/i.test(String(r.Description || "").trim()) && !(Number(r.NettPrice) < 0))
-    .map(r => ({ aantal: Number(r.Qty) || 1, naam: String(r.Description || "").replace(/\s+/g, " ").trim().slice(0, 140), code: String(r.ProductCode || "").trim(), deel: !!r.IsAssemblyChild }))
+    .map(r => ({ aantal: Number(r.Qty) || 1, naam: String(r.Description || "").replace(/\s+/g, " ").trim().slice(0, 140), code: String(r.ProductCode || "").trim(),
+                 barcode: String(r.ProductBarcode1 || "").trim(), deel: !!r.IsAssemblyChild }))
     .filter(r => r.naam).slice(0, 30);
   return { order: String(o.Id), debiteur: o.DebtorId || null,
     // Logic4 zet "None" neer als er geen voornaam is ingevuld ("None Nusmeijer").
@@ -16278,6 +16279,76 @@ async function bakwagenHandtekening(env, wie, planner, rit, order) {
   if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
   const x = await db.prepare("SELECT hand FROM bakwagen_af WHERE rit = ?1 AND orderid = ?2").bind(rit, order).first();
   return { ok: true, hand: x ? x.hand : "" };
+}
+
+/* ═══ ORDER PICKEN ════════════════════════════════════════════════════════
+   Gerrit (16 okt 2026): een scansysteem voor de orderpickers. De picklijsten
+   zijn de ritten uit het Rittenoverzicht in Logic4 (Round), dus alle ritten:
+   eigen routes, DHL, VDH enzovoort. De regel: wie aan een picklijst begint,
+   maakt hem af. De tegel werkt ook zonder bereik; hij haalt alles op zolang
+   er verbinding is en stuurt de stand door zodra die er weer is.
+
+   - pickLijsten: de ritten van gisteren tot over twee weken, met wie er mee
+     bezig is of wie hem af heeft (D1 pick_status).
+   - pickLijst: één rit met de orders en hun artikelen (bwStops, dezelfde
+     orderopslag als Bakwagenroute; hooguit 30 nieuwe orders per keer, de
+     tegel vraagt door tot alles er is).
+   - pickStand: beginnen (wie het eerst begint, heeft hem), tussenstand en
+     afronden. De scans zelf staan in de stand: per regel hoeveel er gepakt is,
+     en op welke locatie. Er gaat nog niets terug naar Logic4. */
+let _pickTabel = false;
+async function pickDb(env) {
+  const db = await bwDb(env);
+  if (!_pickTabel) {
+    await db.prepare("CREATE TABLE IF NOT EXISTS pick_status (rit TEXT PRIMARY KEY, door TEXT, begonnen INTEGER, klaar INTEGER, stand TEXT, ts INTEGER)").run();
+    _pickTabel = true;
+  }
+  return db;
+}
+async function pickLijsten(env) {
+  const db = await pickDb(env), l4 = await bwLogic4(env), vandaag = pcVandaag();
+  const rondes = (await l4("/v3/Round/GetRounds", { DateTimeCreatedFrom: pcPlusDagen(vandaag, -21), TakeRecords: 500 }))
+    .filter(r => !r.HideInSystem && (r.OrderIds || []).length && String(r.DateTimePlanned || "").slice(0, 10) >= pcPlusDagen(vandaag, -1)
+              && String(r.DateTimePlanned || "").slice(0, 10) <= pcPlusDagen(vandaag, 14));
+  if (rondes.length) await db.batch(rondes.map(r => db.prepare("INSERT OR REPLACE INTO bakwagen_rit (id, naam, datum, soort, memo, aantal, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+    .bind(String(r.Id), String(r.Description || "").trim(), String(r.DateTimePlanned).slice(0, 10), Number(r.TypeId) === 2 ? "retour" : "levering", String(r.Memo || "").trim(), (r.OrderIds || []).length, Date.now())));
+  const st = {};
+  const ids = rondes.map(r => String(r.Id));
+  for (let i = 0; i < ids.length; i += 90) {
+    const stuk = ids.slice(i, i + 90);
+    const rs = await db.prepare("SELECT rit, door, begonnen, klaar FROM pick_status WHERE rit IN (" + stuk.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...stuk).all();
+    for (const x of rs.results || []) st[x.rit] = { door: x.door, begonnen: x.begonnen, klaar: x.klaar };
+  }
+  return { ok: true, vandaag, lijsten: rondes.map(r => ({ id: String(r.Id), naam: String(r.Description || "").trim(), datum: String(r.DateTimePlanned).slice(0, 10),
+    soort: Number(r.TypeId) === 2 ? "retour" : "levering", memo: String(r.Memo || "").trim(), aantal: (r.OrderIds || []).length, status: st[String(r.Id)] || null }))
+    .sort((a, b) => a.datum.localeCompare(b.datum) || a.naam.localeCompare(b.naam)) };
+}
+async function pickLijst(env, id) {
+  id = String(id || "").replace(/\D/g, "");
+  const db = await pickDb(env);
+  const r = await db.prepare("SELECT id, naam, datum, soort, memo FROM bakwagen_rit WHERE id = ?1").bind(id).first();
+  if (!r) return { ok: false, error: "Druk eerst op Ophalen uit Logic4." };
+  const rit = { id: r.id, naam: r.naam, datum: r.datum, soort: r.soort, memo: r.memo };
+  const bezig = await bwStops(env, db, await bwLogic4(env), [rit]);
+  const st = await db.prepare("SELECT door, begonnen, klaar, stand FROM pick_status WHERE rit = ?1").bind(id).first();
+  return { ok: true, bezig, lijst: { id: rit.id, naam: rit.naam, datum: rit.datum, soort: rit.soort, memo: rit.memo,
+    orders: rit.stops.map(s => ({ order: s.order, klant: s.klant || "", plaats: s.plaats || "", gefactureerd: !!s.gefactureerd, laden: !!s.laden, artikelen: s.artikelen || [] })),
+    status: st ? { door: st.door, begonnen: st.begonnen, klaar: st.klaar, stand: st.stand ? JSON.parse(st.stand) : null } : null } };
+}
+async function pickStand(env, wie, b) {
+  const id = String(b.rit || "").replace(/\D/g, "");
+  if (!id) return { ok: false, error: "rit ontbreekt" };
+  const db = await pickDb(env);
+  const nu = await db.prepare("SELECT door, begonnen, klaar FROM pick_status WHERE rit = ?1").bind(id).first();
+  // Wie het eerst begint, heeft de lijst; een ander krijgt te horen wie ermee bezig is.
+  if (nu && nu.door && nu.door !== wie && !nu.klaar) return { ok: false, bezet: true, door: nu.door, begonnen: nu.begonnen };
+  if (nu && nu.klaar && b.actie !== "klaar") return { ok: false, klaar: true, door: nu.door, ts: nu.klaar };
+  const stand = JSON.stringify(b.stand || {}).slice(0, 200000);
+  const begonnen = (nu && nu.begonnen) || Number(b.begonnen) || Date.now();
+  const klaar = b.actie === "klaar" ? (Number(b.klaarTs) || Date.now()) : null;
+  await db.prepare("INSERT OR REPLACE INTO pick_status (rit, door, begonnen, klaar, stand, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+    .bind(id, wie, begonnen, klaar, stand, Date.now()).run();
+  return { ok: true, door: wie, begonnen, klaar };
 }
 
 /* Postvak in, of een andere vaste map. Alleen de mappen die Exchange bij
@@ -18912,6 +18983,20 @@ const FP_WORKER = {
           return reply(200, await bakwagenAfmelden(env, wie, planner, await request.json().catch(() => ({}))));
         if (url.pathname === "/bakwagen/handtekening" && request.method === "GET")
           return reply(200, await bakwagenHandtekening(env, wie, planner, url.searchParams.get("rit"), url.searchParams.get("order")));
+      } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
+      return reply(404, { ok: false });
+    }
+    /* Order picken (Gerrit, 16 okt 2026; nog alleen voor Gerrit): de ritten uit
+       het Rittenoverzicht als picklijsten, scannen op de telefoon, ook zonder
+       bereik in het magazijn. */
+    if (url.pathname.startsWith("/pick/")) {
+      if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);
+      if (!(await toegangMag(env, "orderpicken", wie))) return reply(403, { ok: false, error: "Order picken is nog niet voor jou opengezet." });
+      try {
+        if (url.pathname === "/pick/lijsten" && request.method === "GET") return reply(200, await pickLijsten(env));
+        if (url.pathname === "/pick/lijst" && request.method === "GET") return reply(200, await pickLijst(env, url.searchParams.get("id")));
+        if (url.pathname === "/pick/stand" && request.method === "POST") return reply(200, await pickStand(env, wie, await request.json().catch(() => ({}))));
       } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
       return reply(404, { ok: false });
     }

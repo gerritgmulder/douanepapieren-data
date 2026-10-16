@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("orderpicken", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">De tegel Order picken is voor de orderpickers van de logistiek.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#144734">
+<title>Order picken - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ═════════════════════════════════════════════════════════════════
+     ORDER PICKEN - scannen in het magazijn, ook zonder bereik
+
+     Gerrit (16 okt 2026): "een scan systeem voor de orderpickers ... als
+     orderpicker door het magazijn kunnen lopen waar weinig tot geen bereik
+     is. Het moet dus een offline orderpicker scanner zijn die bij verbinding
+     met een netwerk de gegevens inlaadt in het Dashboard."
+
+     - De picklijsten zijn de ritten uit het Rittenoverzicht van Logic4. Met
+       Ophalen uit Logic4 komen ze binnen, met de orders en artikelen erbij,
+       en dan staan ze ook zonder verbinding op de telefoon.
+     - De regel: wie aan een picklijst begint, maakt hem af. Zolang een lijst
+       bezig is, kun je geen andere beginnen; een collega ziet wie ermee bezig
+       is.
+     - Scannen: de barcode op het label (CODE128 met de Fonteyn-artikelcode,
+       zoals Manon en Nomi ze printen bij Inkomende goederen). Met de camera
+       van de telefoon, met een handscanner (die typt de code en drukt op
+       Enter) of door de code in te typen.
+     - Locaties: Manon zet een barcode op elke locatie (Hal J, vak 9B...). Een
+       code die met LOC begint is een locatie; die geldt voor alles wat je
+       daarna scant, tot je de volgende locatie scant.
+     - Alles wat je doet, staat meteen op de telefoon en gaat naar het
+       Dashboard zodra er verbinding is (de wachtrij). Naar Logic4 gaat nog
+       niets.
+
+     De offline-helper (orderpicken-sw.js) bewaart deze pagina op de telefoon.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --goed:#16a34a; --rood:#b91c1c; --passion:#c8102e; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{margin:12px auto;padding:0 12px 90px}
+.verbinding{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;margin-bottom:10px}
+.lampje{display:inline-flex;align-items:center;gap:6px;font-weight:700;padding:4px 10px;border-radius:999px;background:#dcfce7;color:#15803d}
+.lampje.uit{background:#fee2e2;color:var(--rood)}
+.lampje i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.wacht{font-weight:600;color:#92400e}
+.grootknop{display:block;width:100%;background:var(--groen);color:#fff;border:0;border-radius:12px;padding:14px;font:inherit;font-size:16px;font-weight:700;cursor:pointer;margin:6px 0 12px}
+.grootknop:disabled{opacity:.6}
+.grootknop.passion{background:var(--passion)}
+.grootknop.wit{background:#fff;color:var(--groen);border:2px solid var(--groen)}
+.dagtitel{font-size:16px;font-weight:700;color:var(--groen);margin:14px 2px 8px}
+.lijst{background:#fff;border:1px solid var(--rand);border-left:6px solid var(--lime);border-radius:12px;padding:11px 13px;margin-bottom:8px;display:flex;gap:10px;align-items:center;cursor:pointer}
+.lijst.klaar{border-left-color:var(--goed);opacity:.75}
+.lijst.bezet{border-left-color:#f59e0b}
+.lijst.dicht{opacity:.5;cursor:default}
+.lijst .w{flex:1;min-width:0}
+.lijst b{display:block;font-size:15.5px;overflow-wrap:break-word}
+.lijst small{color:var(--grijs);font-size:12.5px}
+.pil{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:#eef2e6;color:var(--groen)}
+.pil.goed{background:#dcfce7;color:#15803d}.pil.oranje{background:#fff7ed;color:#c2410c}.pil.blauw{background:#dbeafe;color:#1d4ed8}
+.melding{padding:10px 12px;border-radius:10px;margin-bottom:10px;font-size:14px;font-weight:600}
+.melding.goed{background:#dcfce7;color:#15803d}.melding.slecht{background:#fee2e2;color:var(--rood)}.melding.info{background:#eff6ff;color:#1d4ed8}
+.leeg{color:var(--grijs);padding:16px 4px}
+/* Het pickscherm */
+.pickkop{position:sticky;top:0;z-index:20;background:var(--groen);color:#fff;margin:0 -12px 10px;padding:10px 14px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.pickkop b{font-size:15.5px;display:block;overflow-wrap:break-word}
+.pickkop .rij{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;margin-top:4px}
+.balk{height:8px;background:rgba(255,255,255,.25);border-radius:99px;overflow:hidden;margin-top:6px}
+.balk span{display:block;height:100%;background:var(--lime);transition:width .2s}
+.plek{display:inline-flex;gap:5px;align-items:center;background:rgba(255,255,255,.16);border-radius:8px;padding:3px 8px;font-weight:600}
+.scanvak{background:#fff;border:2px solid var(--groen);border-radius:12px;padding:10px;margin-bottom:10px}
+.scanvak .r{display:flex;gap:8px}
+.scanvak input{flex:1;min-width:0;border:1px solid #cbd5e1;border-radius:10px;padding:12px;font:inherit;font-size:16px}
+.scanvak button.cam{background:var(--groen);color:#fff;border:0;border-radius:10px;padding:0 16px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap}
+.camera{position:relative;margin-top:10px;border-radius:10px;overflow:hidden;background:#000;display:none}
+.camera.aan{display:block}
+.camera video{display:block;width:100%;max-height:260px;object-fit:cover}
+.camera .richt{position:absolute;left:8%;right:8%;top:42%;height:16%;border:3px solid rgba(139,197,63,.9);border-radius:8px;pointer-events:none}
+.laatst{margin-top:10px;padding:10px 12px;border-radius:10px;font-weight:700;font-size:15px}
+.laatst.goed{background:#dcfce7;color:#15803d}.laatst.slecht{background:#fee2e2;color:var(--rood)}.laatst.info{background:#eff6ff;color:#1d4ed8}
+.order{background:#fff;border:1px solid var(--rand);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.order .ok{padding:9px 12px;background:#f8faf5;border-bottom:1px solid var(--rand);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.order .ok b{font-size:14.5px}
+.order .ok small{color:var(--grijs)}
+.order.af .ok{background:#dcfce7}
+.regel{display:flex;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid #f0f0ea}
+.regel:first-of-type{border-top:0}
+.regel .n{flex:1;min-width:0}
+.regel .n b{display:block;font-size:14.5px;font-weight:600;overflow-wrap:break-word}
+.regel .n small{color:var(--grijs);font-size:12.5px}
+.regel .tel{flex:0 0 auto;text-align:center;min-width:64px;font-size:18px;font-weight:700}
+.regel .tel small{display:block;font-size:11px;color:var(--grijs);font-weight:600}
+.regel .pm{display:flex;flex-direction:column;gap:4px}
+.regel .pm button{width:38px;height:32px;padding:0;border-radius:8px;border:1px solid var(--rand);background:#fff;font-size:18px;font-weight:700;color:var(--groen);cursor:pointer}
+.regel.af{background:#f0fdf4}
+.regel.af .tel{color:var(--goed)}
+.regel.kop{background:#fafaf7;padding:7px 12px}
+.regel.kop .n b{font-size:13px;color:var(--grijs);text-transform:uppercase;letter-spacing:.03em}
+.regel.flits{animation:flits .8s}
+@keyframes flits{0%{background:#bbf7d0}100%{background:inherit}}
+@media (max-width:600px){ main{padding:0 8px 90px} .pickkop{margin:0 -8px 10px} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>📦 Order picken</h1>
+</header>
+<main id="app"><p class="leeg">Even opstarten…</p></main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+async function vraag(pad, opties){
+  var o = Object.assign({ headers: { "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type": "application/json" } }, opties||{});
+  var r = await fetch(W+pad, o);
+  var j = await r.json().catch(function(){ return null; });
+  if (!r.ok && !(j && (j.error || j.bezet))) throw new Error("HTTP "+r.status);
+  return j || {};
+}
+function isoVan(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function plusDagen(iso, n){ var d = new Date(iso+"T12:00:00"); d.setDate(d.getDate()+n); return isoVan(d); }
+function dagTekst(iso){ var d = new Date(iso+"T12:00:00"); return ["Zondag","Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"][d.getDay()]+" "+d.getDate()+" "+["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"][d.getMonth()]; }
+function tijd(ts){ var d = new Date(ts); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function naamVan(mail){ var m = String(mail||"").split("@")[0].replace(/^fonteyn\./,""); return m ? m.charAt(0).toUpperCase()+m.slice(1) : ""; }
+
+/* ═══ Opslag op de telefoon ═══════════════════════════════════════════════
+   fp.pick.data      de picklijsten zoals ze uit Logic4 kwamen
+   fp.pick.werk      wat er per lijst gepakt is, en welke lijst bezig is
+   fp.pick.wachtrij  wat nog naar het Dashboard moet zodra er verbinding is */
+function leesJ(k, w){ try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : w; } catch(e){ return w; } }
+function zetJ(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e){ return false; } }
+var data = leesJ("fp.pick.data", { lijsten: [], details: {}, opgehaald: 0 });
+var werk = leesJ("fp.pick.werk", { actief: null, per: {} });
+var wachtrij = leesJ("fp.pick.wachtrij", []);
+function bewaarAlles(){ zetJ("fp.pick.data", data); zetJ("fp.pick.werk", werk); zetJ("fp.pick.wachtrij", wachtrij); }
+
+var vandaag = isoVan(new Date());
+var scherm = "lijsten", melding = null, laatst = null, plek = "";
+
+/* ═══ Picklijst: welke regels gepakt moeten worden ═══════════════════════
+   Een set staat in Logic4 als kopregel met de onderdelen eronder (met * of
+   als samengesteld onderdeel): het label zit op de doos van het onderdeel,
+   dus de kopregel hoeft niet gescand. Een regel met een min-aantal is een
+   retour en hoort niet op de picklijst. */
+function regelsVan(lijst){
+  var uit = [];
+  (lijst.orders || []).forEach(function(o){
+    var a = (o.artikelen || []).filter(function(x){ return x.aantal > 0; });
+    a.forEach(function(x, i){
+      var deel = x.deel || /^\*\s*/.test(x.naam), volgende = a[i+1];
+      var kop = !deel && volgende && (volgende.deel || /^\*\s*/.test(volgende.naam));
+      uit.push({ sleutel: o.order+"|"+i, order: o.order, naam: x.naam.replace(/^\*\s*/, ""), code: String(x.code||"").trim(), barcode: String(x.barcode||"").trim(), aantal: x.aantal, deel: deel, kop: kop });
+    });
+  });
+  return uit;
+}
+function voortgang(id){
+  var l = data.details[id]; if (!l) return { gepakt: 0, totaal: 0 };
+  var w = werk.per[id] || { gepakt: {} }, g = 0, t = 0;
+  regelsVan(l).forEach(function(r){ if (r.kop) return; t += r.aantal; g += Math.min(r.aantal, w.gepakt[r.sleutel] || 0); });
+  return { gepakt: g, totaal: t };
+}
+
+/* ═══ Verbinding en wachtrij ═════════════════════════════════════════════ */
+var online = navigator.onLine;
+function zetOnline(v){ if (online !== v) { online = v; teken(); if (v) verstuur(); } }
+window.addEventListener("online", function(){ zetOnline(true); });
+window.addEventListener("offline", function(){ zetOnline(false); });
+var versturen = false;
+async function verstuur(){
+  if (versturen || !wachtrij.length) return;
+  versturen = true;
+  try {
+    while (wachtrij.length) {
+      var x = wachtrij[0];
+      var j = await vraag("/pick/stand", { method: "POST", body: JSON.stringify(x) });
+      if (j.bezet) {
+        // Een collega was eerder begonnen: deze lijst is van hem.
+        wachtrij = wachtrij.filter(function(y){ return y.rit !== x.rit; });
+        if (werk.actief === x.rit) werk.actief = null;
+        melding = { soort: "slecht", tekst: naamVan(j.door)+" is al met deze picklijst bezig. Kies een andere lijst." };
+        var l = data.lijsten.find(function(y){ return y.id === x.rit; }); if (l) l.status = { door: j.door, begonnen: j.begonnen };
+        scherm = "lijsten";
+      } else {
+        wachtrij.shift();
+        var l2 = data.lijsten.find(function(y){ return y.id === x.rit; }); if (l2 && j.ok) l2.status = { door: j.door, begonnen: j.begonnen, klaar: j.klaar };
+      }
+      bewaarAlles();
+    }
+    online = true;
+  } catch(e) { online = false; }
+  versturen = false;
+  teken();
+}
+function zetInWachtrij(rit, actie){
+  var w = werk.per[rit] || {};
+  // Eén tussenstand per lijst is genoeg: de nieuwste vervangt de vorige.
+  wachtrij = wachtrij.filter(function(y){ return !(y.rit === rit && y.actie === "stand" && actie !== "begin"); });
+  wachtrij.push({ rit: rit, actie: actie, begonnen: w.begonnen, klaarTs: w.klaar || null, stand: { gepakt: w.gepakt, plek: w.plek, scans: (w.scans||[]).slice(-400), tekort: w.tekort || null } });
+  bewaarAlles();
+  verstuur();
+}
+setInterval(function(){ if (wachtrij.length) verstuur(); }, 20000);
+
+/* ═══ Ophalen uit Logic4 ═════════════════════════════════════════════════ */
+var ophalen = null;   // { klaar, totaal } tijdens het ophalen
+async function haalOp(){
+  if (ophalen) return;
+  ophalen = { klaar: 0, totaal: 0 }; melding = null; teken();
+  try {
+    var j = await vraag("/pick/lijsten");
+    if (!j.ok) throw new Error(j.error || "onbekend");
+    data.lijsten = j.lijsten; data.opgehaald = Date.now(); online = true;
+    /* De lijsten van gisteren, vandaag en morgen meteen helemaal, zodat je ze
+       in het magazijn zonder bereik kunt picken; de rest als je ze opent. */
+    var nu = j.lijsten.filter(function(l){ return l.datum <= plusDagen(vandaag, 1) && !(l.status && l.status.klaar); });
+    ophalen.totaal = nu.length; teken();
+    for (var i = 0; i < nu.length; i++) { await haalLijst(nu[i].id); ophalen.klaar = i + 1; teken(); }
+    bewaarAlles();
+    melding = { soort: "goed", tekst: j.lijsten.length + " picklijsten opgehaald; " + nu.length + " staan helemaal op de telefoon." };
+  } catch(e) {
+    online = false;
+    melding = { soort: "slecht", tekst: "Ophalen lukt nu niet (" + e.message + "). Wat al op de telefoon stond, blijft gewoon werken." };
+  }
+  ophalen = null; teken();
+}
+async function haalLijst(id){
+  for (var poging = 0; poging < 8; poging++) {
+    var j = await vraag("/pick/lijst?id=" + encodeURIComponent(id));
+    if (!j.ok) throw new Error(j.error || "onbekend");
+    data.details[id] = j.lijst;
+    if (!j.bezig) break;
+    await new Promise(function(r){ setTimeout(r, 1500); });
+  }
+  bewaarAlles();
+}
+
+/* ═══ Schermen ═══════════════════════════════════════════════════════════ */
+function teken(){
+  if (scherm === "pick" && werk.actief && data.details[werk.actief]) return tekenPick();
+  scherm = "lijsten";
+  var h = '<div class="verbinding"><span class="lampje'+(online?'':' uit')+'"><i></i>'+(online?'Verbinding':'Zonder verbinding')+'</span>' +
+    (wachtrij.length ? '<span class="wacht">'+wachtrij.length+' wijziging'+(wachtrij.length===1?'':'en')+' wacht'+(wachtrij.length===1?'':'en')+' op verbinding</span>' : '') +
+    (data.opgehaald ? '<span style="color:var(--grijs)">Opgehaald om '+tijd(data.opgehaald)+(isoVan(new Date(data.opgehaald)) !== vandaag ? ' ('+isoVan(new Date(data.opgehaald)).split("-").reverse().join("-")+')' : '')+'</span>' : '') + '</div>';
+  if (melding) h += '<div class="melding '+melding.soort+'">'+esc(melding.tekst)+'</div>';
+  var actief = werk.actief && data.lijsten.find(function(l){ return l.id === werk.actief; });
+  if (actief) h += '<button type="button" class="grootknop passion" id="verder">Verder met '+esc(actief.naam)+'</button>';
+  h += '<button type="button" class="grootknop'+(actief?' wit':'')+'" id="ophalen"'+(ophalen?' disabled':'')+'>'+(ophalen ? (ophalen.totaal ? 'Ophalen… '+ophalen.klaar+' van '+ophalen.totaal : 'Ophalen…') : 'Ophalen uit Logic4')+'</button>';
+  if (!data.lijsten.length) h += '<p class="leeg">Druk op Ophalen uit Logic4: dan komen de picklijsten uit het Rittenoverzicht binnen en staan ze op deze telefoon, ook als je straks in het magazijn geen bereik hebt.</p>';
+  var dag = "";
+  data.lijsten.forEach(function(l){
+    if (l.datum !== dag) { dag = l.datum; h += '<div class="dagtitel">'+esc(dagTekst(dag))+(dag===vandaag?' (vandaag)':dag===plusDagen(vandaag,1)?' (morgen)':'')+'</div>'; }
+    var mijn = werk.per[l.id] || null, st = l.status || {};
+    var klaar = (mijn && mijn.klaar) || st.klaar, bezetDoorAnder = st.door && st.door !== ik && !st.klaar;
+    var dicht = !!werk.actief && werk.actief !== l.id && !klaar;
+    var v = voortgang(l.id), pil;
+    if (klaar) pil = '<span class="pil goed">✓ Klaar'+(st.door && st.door !== ik ? ' · '+esc(naamVan(st.door)) : '')+'</span>';
+    else if (werk.actief === l.id) pil = '<span class="pil oranje">Bezig · '+v.gepakt+'/'+v.totaal+'</span>';
+    else if (bezetDoorAnder) pil = '<span class="pil oranje">'+esc(naamVan(st.door))+' is bezig</span>';
+    else pil = data.details[l.id] ? '<span class="pil">Op de telefoon</span>' : '<span class="pil blauw">Ophalen bij openen</span>';
+    h += '<div class="lijst'+(klaar?' klaar':'')+(bezetDoorAnder?' bezet':'')+(dicht?' dicht':'')+'" data-lijst="'+esc(l.id)+'"><div class="w"><b>'+esc(l.naam)+'</b><small>'+l.aantal+' order'+(l.aantal===1?'':'s')+(l.soort==='retour'?' · retour':'')+(dicht?' · maak eerst je lijst af':'')+'</small></div>'+pil+'</div>';
+  });
+  $("app").innerHTML = h;
+  $("ophalen").addEventListener("click", haalOp);
+  if ($("verder")) $("verder").addEventListener("click", function(){ scherm = "pick"; teken(); });
+  $("app").querySelectorAll("[data-lijst]").forEach(function(el){ el.addEventListener("click", function(){ openLijst(el.dataset.lijst); }); });
+}
+async function openLijst(id){
+  var l = data.lijsten.find(function(x){ return x.id === id; }); if (!l) return;
+  var st = l.status || {}, mijn = werk.per[id];
+  if (werk.actief && werk.actief !== id) { melding = { soort: "info", tekst: "Maak eerst "+(data.lijsten.find(function(x){ return x.id === werk.actief; })||{naam:"je lijst"}).naam+" af. Wie aan een picklijst begint, maakt hem af." }; return teken(); }
+  if (werk.actief === id) { scherm = "pick"; return teken(); }
+  if ((mijn && mijn.klaar) || st.klaar) { melding = { soort: "goed", tekst: l.naam+" is al klaar." }; return teken(); }
+  if (st.door && st.door !== ik) { melding = { soort: "info", tekst: naamVan(st.door)+" is al met "+l.naam+" bezig." }; return teken(); }
+  if (!data.details[id]) {
+    melding = { soort: "info", tekst: "Even "+l.naam+" ophalen…" }; teken();
+    try { await haalLijst(id); melding = null; } catch(e) { melding = { soort: "slecht", tekst: "Deze lijst staat nog niet op de telefoon en ophalen lukt nu niet. Probeer het waar je bereik hebt." }; return teken(); }
+  }
+  var regels = regelsVan(data.details[id]).filter(function(r){ return !r.kop; });
+  if (!(await fpBevestig("Beginnen met "+l.naam+"?\n\n"+regels.length+" regels uit "+(data.details[id].orders||[]).length+" orders.\nWie aan een picklijst begint, maakt hem af.", { knop: "Beginnen" }))) return;
+  werk.actief = id;
+  werk.per[id] = { begonnen: Date.now(), gepakt: {}, plek: {}, scans: [] };
+  plek = ""; laatst = null; melding = null;
+  zetInWachtrij(id, "begin");
+  scherm = "pick"; teken();
+}
+
+/* ═══ Het pickscherm ═════════════════════════════════════════════════════ */
+function tekenPick(){
+  var id = werk.actief, l = data.details[id], w = werk.per[id];
+  var v = voortgang(id), pct = v.totaal ? Math.round(v.gepakt / v.totaal * 100) : 0;
+  var h = '<div class="pickkop"><b>'+esc(l.naam)+'</b><div class="balk"><span style="width:'+pct+'%"></span></div>' +
+    '<div class="rij"><span>'+v.gepakt+' van '+v.totaal+' gepakt</span>'+(plek ? '<span class="plek">📍 '+esc(plek)+'</span>' : '<span class="plek">📍 scan een locatie</span>')+
+    '<span style="margin-left:auto">'+(online ? '● verbinding' : '○ zonder verbinding')+(wachtrij.length ? ' · '+wachtrij.length+' wacht' : '')+'</span></div></div>';
+  h += '<div class="scanvak"><div class="r"><input id="scanIn" inputmode="text" autocomplete="off" autocapitalize="off" placeholder="Scan of typ een barcode"><button type="button" class="cam" id="cam">📷 Camera</button></div>' +
+    '<div id="camPlek"></div>' +
+    (laatst ? '<div class="laatst '+laatst.soort+'">'+esc(laatst.tekst)+'</div>' : '') + '</div>';
+  var regels = regelsVan(l), perOrder = {};
+  regels.forEach(function(r){ (perOrder[r.order] = perOrder[r.order] || []).push(r); });
+  (l.orders || []).forEach(function(o){
+    var rr = perOrder[o.order] || [];
+    var open = rr.filter(function(r){ return !r.kop && (w.gepakt[r.sleutel]||0) < r.aantal; }).length;
+    h += '<div class="order'+(rr.length && !open ? ' af' : '')+'"><div class="ok"><b>'+esc(o.order)+'</b><small>'+esc([o.klant, o.plaats].filter(Boolean).join(" · "))+'</small>'+(rr.length && !open ? '<span class="pil goed" style="margin-left:auto">✓ compleet</span>' : '')+'</div>';
+    if (o.gefactureerd) h += '<div class="regel"><div class="n"><small>Deze order is al gefactureerd; er hoeft niets meer gepakt.</small></div></div>';
+    else if (o.laden) h += '<div class="regel"><div class="n"><small>De artikelen van deze order komen bij de volgende keer ophalen.</small></div></div>';
+    else if (!rr.length) h += '<div class="regel"><div class="n"><small>Er staat bij deze order niets om te pakken.</small></div></div>';
+    rr.forEach(function(r){
+      if (r.kop) { h += '<div class="regel kop"><div class="n"><b>'+esc(r.naam)+'</b></div></div>'; return; }
+      var g = w.gepakt[r.sleutel] || 0, af = g >= r.aantal;
+      h += '<div class="regel'+(af?' af':'')+(flits===r.sleutel?' flits':'')+'" data-regel="'+esc(r.sleutel)+'"><div class="n"><b>'+esc(r.naam)+'</b><small>'+esc(r.code || r.barcode || "zonder code")+(w.plek && w.plek[r.sleutel] ? ' · 📍 '+esc(w.plek[r.sleutel]) : '')+'</small></div>' +
+        '<div class="tel">'+g+' / '+r.aantal+'<small>'+(af?'✓ gepakt':'te pakken')+'</small></div>' +
+        '<div class="pm"><button type="button" data-plus="'+esc(r.sleutel)+'" title="met de hand erbij">+</button><button type="button" data-min="'+esc(r.sleutel)+'" title="er één af">−</button></div></div>';
+    });
+    h += '</div>';
+  });
+  h += '<button type="button" class="grootknop" id="afronden">Picklijst afronden</button>' +
+       '<button type="button" class="grootknop wit" id="naarLijsten">Terug naar de lijsten (deze blijft bezig)</button>';
+  $("app").innerHTML = h;
+  /* De camera blijft hetzelfde element: anders gaat het beeld bij elke scan
+     even op zwart. */
+  $("camPlek").appendChild(camVak); camVak.classList.toggle("aan", camAan);
+  flits = null;
+  var inp = $("scanIn");
+  inp.addEventListener("keydown", function(e){ if (e.key === "Enter") { e.preventDefault(); var c = inp.value; inp.value = ""; verwerkScan(c); } });
+  if (!camAan) setTimeout(function(){ try { inp.focus({ preventScroll: true }); } catch(e){} }, 0);
+  $("cam").addEventListener("click", function(){ camAan ? stopCamera() : startCamera(); });
+  if (camAan) koppelVideo();
+  $("app").querySelectorAll("[data-plus]").forEach(function(b){ b.addEventListener("click", function(){ telBij(b.dataset.plus, 1, "hand"); }); });
+  $("app").querySelectorAll("[data-min]").forEach(function(b){ b.addEventListener("click", function(){ telBij(b.dataset.min, -1, "hand"); }); });
+  $("afronden").addEventListener("click", afronden);
+  $("naarLijsten").addEventListener("click", function(){ stopCamera(); scherm = "lijsten"; teken(); });
+}
+var flits = null;
+function telBij(sleutel, d, hoe){
+  var id = werk.actief, w = werk.per[id]; if (!w) return;
+  var r = regelsVan(data.details[id]).find(function(x){ return x.sleutel === sleutel; }); if (!r) return;
+  var g = Math.max(0, (w.gepakt[sleutel] || 0) + d);
+  w.gepakt[sleutel] = g;
+  if (d > 0 && plek) { w.plek = w.plek || {}; w.plek[sleutel] = plek; }
+  w.scans = w.scans || []; w.scans.push({ t: Date.now(), regel: sleutel, d: d, hoe: hoe, plek: plek || null });
+  flits = d > 0 ? sleutel : null;
+  zetInWachtrij(id, "stand");
+  tekenPick();
+}
+/* Een scan: eerst kijken of het een locatie is, dan of hij op de lijst
+   staat. Staat dezelfde code bij meer orders, dan gaat hij naar de eerste
+   regel die nog niet compleet is. */
+var vorigeScan = { code: "", t: 0 };
+function verwerkScan(ruw){
+  var code = String(ruw || "").trim(); if (!code) return;
+  var id = werk.actief, l = data.details[id], w = werk.per[id]; if (!l || !w) return;
+  if (/^LOC[-:_ ]?/i.test(code)) {
+    plek = code.replace(/^LOC[-:_ ]?/i, "").replace(/[-_]+/g, " ").trim() || code;
+    laatst = { soort: "info", tekst: "📍 Locatie: " + plek }; signaal("info"); return tekenPick();
+  }
+  var c = code.toLowerCase();
+  var kandidaten = regelsVan(l).filter(function(r){ return !r.kop && (r.code.toLowerCase() === c || (r.barcode && r.barcode.toLowerCase() === c)); });
+  if (!kandidaten.length) { laatst = { soort: "slecht", tekst: "Code " + code + " staat niet op deze picklijst." }; signaal("fout"); return tekenPick(); }
+  var r = kandidaten.find(function(x){ return (w.gepakt[x.sleutel] || 0) < x.aantal; });
+  if (!r) { laatst = { soort: "slecht", tekst: kandidaten[0].naam + ": daar heb je er al genoeg van (" + kandidaten.reduce(function(n, x){ return n + x.aantal; }, 0) + ")." }; signaal("fout"); return tekenPick(); }
+  laatst = { soort: "goed", tekst: "✓ " + r.naam + " · order " + r.order + " (" + ((w.gepakt[r.sleutel] || 0) + 1) + " / " + r.aantal + ")" };
+  signaal("goed");
+  telBij(r.sleutel, 1, "scan");
+  setTimeout(function(){ var el = document.querySelector('[data-regel="'+r.sleutel+'"]'); if (el && !camAan) el.scrollIntoView({ block: "center", behavior: "smooth" }); }, 50);
+}
+/* Geluid en trillen: een korte hoge piep bij goed, een lage bij fout. */
+var geluid = null;
+function signaal(soort){
+  try { if (navigator.vibrate) navigator.vibrate(soort === "fout" ? [180, 80, 180] : 60); } catch(e){}
+  try {
+    geluid = geluid || new (window.AudioContext || window.webkitAudioContext)();
+    var o = geluid.createOscillator(), g = geluid.createGain();
+    o.frequency.value = soort === "fout" ? 220 : soort === "info" ? 660 : 1320; g.gain.value = 0.08;
+    o.connect(g); g.connect(geluid.destination); o.start(); o.stop(geluid.currentTime + (soort === "fout" ? 0.35 : 0.09));
+  } catch(e){}
+}
+async function afronden(){
+  var id = werk.actief, l = data.details[id], w = werk.per[id];
+  var open = regelsVan(l).filter(function(r){ return !r.kop && (w.gepakt[r.sleutel] || 0) < r.aantal; });
+  if (open.length) {
+    var lijstje = open.slice(0, 8).map(function(r){ return "• " + r.naam + " (" + (w.gepakt[r.sleutel] || 0) + " van " + r.aantal + ", order " + r.order + ")"; }).join("\n") + (open.length > 8 ? "\n… en nog " + (open.length - 8) : "");
+    if (!(await fpBevestig("Er staan nog " + open.length + " regels open:\n\n" + lijstje + "\n\nToch afronden? Dan staat dit als tekort bij de lijst.", { knop: "Afronden met tekort", annuleer: "Verder picken" }))) return;
+    w.tekort = open.map(function(r){ return { order: r.order, code: r.code, naam: r.naam, gepakt: w.gepakt[r.sleutel] || 0, nodig: r.aantal }; });
+  }
+  w.klaar = Date.now();
+  werk.actief = null; stopCamera();
+  zetInWachtrij(id, "klaar");
+  var lijst = data.lijsten.find(function(x){ return x.id === id; }); if (lijst) lijst.status = { door: ik, begonnen: w.begonnen, klaar: w.klaar };
+  melding = { soort: "goed", tekst: l.naam + " is afgerond" + (w.tekort ? " (met " + w.tekort.length + " regel" + (w.tekort.length === 1 ? "" : "s") + " tekort)" : "") + (online ? "." : "; het gaat naar het Dashboard zodra er verbinding is.") };
+  scherm = "lijsten"; bewaarAlles(); teken();
+}
+
+/* ═══ Camera ═════════════════════════════════════════════════════════════
+   Op Android (Chrome) leest de telefoon zelf barcodes (BarcodeDetector). Elders
+   (iPhone) laden we ZXing; dat bewaart de offline-helper na de eerste keer. */
+var camAan = false, stroom = null, lezer = null, zxing = null, lusTimer = null;
+var camVak = document.createElement("div"); camVak.className = "camera";
+camVak.innerHTML = '<video id="camVideo" playsinline muted></video><div class="richt"></div>';
+async function startCamera(){
+  camAan = true; tekenPick();
+  try {
+    if ("BarcodeDetector" in window) {
+      var kan = await window.BarcodeDetector.getSupportedFormats().catch(function(){ return []; });
+      if (kan.indexOf("code_128") >= 0) lezer = new window.BarcodeDetector({ formats: ["code_128", "ean_13", "ean_8", "code_39", "qr_code"].filter(function(f){ return kan.indexOf(f) >= 0; }) });
+    }
+    stroom = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    koppelVideo();
+    if (!lezer && !zxing) {
+      await new Promise(function(ok, nee){ var s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"; s.onload = ok; s.onerror = nee; document.head.appendChild(s); });
+      zxing = new window.ZXing.BrowserMultiFormatReader();
+    }
+    lees();
+  } catch(e) {
+    camAan = false; stopCamera();
+    laatst = { soort: "slecht", tekst: "De camera start niet (" + (e.message || e) + "). Geef de tegel toestemming voor de camera, of gebruik een handscanner." };
+    tekenPick();
+  }
+}
+function koppelVideo(){ var v = camVak.querySelector("video"); if (v && stroom) { if (v.srcObject !== stroom) v.srcObject = stroom; if (v.paused) v.play().catch(function(){}); } }
+function lees(){
+  clearTimeout(lusTimer);
+  if (!camAan) return;
+  var v = camVak.querySelector("video");
+  var klaar = function(code){
+    var nu = Date.now();
+    // Dezelfde code twee keer binnen 2 seconden is één scan (de camera ziet hem een paar keer).
+    if (code && !(code === vorigeScan.code && nu - vorigeScan.t < 2000)) { vorigeScan = { code: code, t: nu }; verwerkScan(code); }
+    lusTimer = setTimeout(lees, 220);
+  };
+  if (!v || v.readyState < 2) { lusTimer = setTimeout(lees, 250); return; }
+  if (lezer) lezer.detect(v).then(function(r){ klaar(r && r[0] && r[0].rawValue); }).catch(function(){ klaar(null); });
+  else if (zxing) {
+    try {
+      var c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0);
+      zxing.decodeFromImageUrl(c.toDataURL("image/jpeg", 0.8)).then(function(r){ klaar(r && r.getText()); }).catch(function(){ klaar(null); });
+    } catch(e) { klaar(null); }
+  } else lusTimer = setTimeout(lees, 300);
+}
+function stopCamera(){
+  camAan = false; clearTimeout(lusTimer);
+  if (stroom) { stroom.getTracks().forEach(function(t){ t.stop(); }); stroom = null; }
+  camVak.classList.remove("aan");
+}
+
+/* ═══ Starten ════════════════════════════════════════════════════════════ */
+(async function(){
+  // De offline-helper: alleen voor deze tegel (scope ./orderpicken).
+  try { if ("serviceWorker" in navigator && /^https:|^http:\/\/(127\.0\.0\.1|localhost)/.test(location.href)) navigator.serviceWorker.register("orderpicken-sw.js", { scope: "./orderpicken" }).catch(function(){}); } catch(e){}
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 300); });
+  if (werk.actief && data.details[werk.actief]) scherm = "pick";
+  teken();
+  verstuur();
+  // Bij openen met verbinding meteen de stand van de lijsten bijwerken (wie is waarmee bezig).
+  if (online && !werk.actief) vraag("/pick/lijsten").then(function(j){ if (j.ok) { var bekend = {}; data.lijsten.forEach(function(l){ bekend[l.id] = l; }); data.lijsten = j.lijsten; data.opgehaald = data.opgehaald || Date.now(); bewaarAlles(); if (scherm === "lijsten") teken(); } }).catch(function(){ online = false; teken(); });
+})();
+document.addEventListener("visibilitychange", function(){ if (document.hidden) stopCamera(); else if (wachtrij.length) verstuur(); });
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"orderpicken",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  if (navigator.onLine) window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

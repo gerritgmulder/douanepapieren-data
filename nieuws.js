@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-16", bestand: "orderpicken.html", soort: "nieuw",
+      titel: "Order picken (proef)",
+      wat:   "De picklijsten uit het Rittenoverzicht van Logic4 op de telefoon. Druk op Ophalen uit Logic4, begin een lijst en scan de labels met de camera of een handscanner. Werkt ook zonder bereik in het magazijn; alles gaat naar het Dashboard zodra er weer verbinding is."
+    },
+    {
       datum: "2026-10-16", bestand: "voorraad.html", soort: "beter",
       titel: "Zoeken op kleur, kleurgroepen en Reserveringen op het hele scherm",
       wat:   "De zoekbalk bovenin zoekt nu op losse woorden: 'Renew Sterling' vindt de Renew in Sterling White en Sterling Silver, en laat uitgelicht zien op welk schip hij zit. Bij de kleurkeuze kies je bovenaan een hele kleurgroep, zoals Alle Mystic Mountain. In Reserveringen scrolt de lijst over het hele scherm en blijft de rode kopregel bovenaan staan."

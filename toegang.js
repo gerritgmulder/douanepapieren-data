@@ -219,6 +219,11 @@
     ],
     /* Ritten ophalen, controleren en akkoord geven voor een chauffeur: Manon
        en Nomi (Gerrit, 16 okt 2026). */
+    /* Order picken: scannen in het magazijn, ook zonder bereik. Nog alleen
+       voor Gerrit (16 okt 2026). */
+    "orderpicken": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
     "bakwagen-planning": [
       "dolf", "fonteynbot", "gerrit", "manon", "nomi",
     ],
