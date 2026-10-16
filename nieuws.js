@@ -53,7 +53,7 @@
     {
       datum: "2026-10-16", iedereen: true, soort: "beter",
       titel: "Alle tegels over de hele breedte",
-      wat:   "Elke tegel gebruikt nu de hele breedte van je scherm. Tabellen en lijsten hebben meer ruimte, zodat je meer tegelijk kunt lezen."
+      wat:   "Elke tegel en het startscherm gebruiken nu de hele breedte van je scherm. Tabellen en lijsten hebben meer ruimte, zodat je meer tegelijk kunt lezen."
     },
     {
       datum: "2026-10-16", bestand: "werkplaats.html", soort: "hersteld",

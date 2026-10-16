@@ -69,7 +69,9 @@
      die breedte is prima", maar wel minder scrollen tussen de afdelingen.
      Vier tegels van deze maat vragen 1260 breed; daarboven blijft het bij
      vier en groeien de tegels een beetje mee. */
-  main { max-width: 1260px; margin: 28px auto 80px; padding: 0 24px; }
+  /* Gerrit (16 okt 2026): "Maak het startscherm ook over de hele breedte",
+     net als alle tegels. Nog steeds vier naast elkaar; de tegels worden breder. */
+  main { max-width: none; margin: 28px auto 80px; padding: 0 24px; }
 
   /* ─── Login view ──────────────────────────────────────── */
   .login-wrap {
