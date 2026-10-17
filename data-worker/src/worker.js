@@ -16222,6 +16222,8 @@ async function bwDb(env) {
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_akkoord (rit TEXT PRIMARY KEY, chauffeur TEXT, datum TEXT, naam TEXT, soort TEXT, memo TEXT, door TEXT, ts INTEGER)"),
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_foto (id TEXT PRIMARY KEY, rit TEXT, orderid TEXT, door TEXT, chauffeur TEXT, ts INTEGER, grootte INTEGER)"),
     ]);
+    /* Wie er op de flexwagen reed (Gerrit, 17 okt 2026); kolom erbij in een bestaande tabel. */
+    try { await db.prepare("ALTER TABLE bakwagen_akkoord ADD COLUMN bestuurder TEXT").run(); } catch (e) { /* bestaat al */ }
     _bwTabellen = true;
   }
   return db;
@@ -16327,8 +16329,8 @@ async function bakwagenOverzicht(env) {
   if (rondes.length) await db.batch(rondes.map(r => db.prepare("INSERT OR REPLACE INTO bakwagen_rit (id, naam, datum, soort, memo, aantal, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
     .bind(String(r.Id), String(r.Description || "").trim(), String(r.DateTimePlanned).slice(0, 10), Number(r.TypeId) === 2 ? "retour" : "levering", String(r.Memo || "").trim(), (r.OrderIds || []).length, Date.now())));
   const ak = {};
-  const rs = await db.prepare("SELECT rit, chauffeur, door, ts FROM bakwagen_akkoord WHERE datum >= ?1").bind(vandaag).all();
-  for (const x of rs.results || []) ak[x.rit] = { chauffeur: x.chauffeur, door: x.door, ts: x.ts };
+  const rs = await db.prepare("SELECT rit, chauffeur, bestuurder, door, ts FROM bakwagen_akkoord WHERE datum >= ?1").bind(vandaag).all();
+  for (const x of rs.results || []) ak[x.rit] = { chauffeur: x.chauffeur, bestuurder: x.bestuurder || "", door: x.door, ts: x.ts };
   const ritten = rondes.map(r => ({ id: String(r.Id), naam: String(r.Description || "").trim(), datum: String(r.DateTimePlanned).slice(0, 10),
     soort: Number(r.TypeId) === 2 ? "retour" : "levering", chauffeur: (ak[String(r.Id)] || {}).chauffeur || bwChauffeur(r.Description),
     aantal: (r.OrderIds || []).length, akkoord: ak[String(r.Id)] || null }))
@@ -16341,7 +16343,7 @@ async function bakwagenRit(env, id) {
   const db = await bwDb(env), l4 = await bwLogic4(env);
   const r = await db.prepare("SELECT id, naam, datum, soort, memo FROM bakwagen_rit WHERE id = ?1").bind(id).first();
   if (!r) return { ok: false, error: "Druk eerst op Ritten ophalen." };
-  const ak = await db.prepare("SELECT chauffeur, door, ts FROM bakwagen_akkoord WHERE rit = ?1").bind(id).first();
+  const ak = await db.prepare("SELECT chauffeur, bestuurder, door, ts FROM bakwagen_akkoord WHERE rit = ?1").bind(id).first();
   const rit = { id: r.id, naam: r.naam, datum: r.datum, soort: r.soort, memo: r.memo, chauffeur: (ak && ak.chauffeur) || bwChauffeur(r.naam), akkoord: ak || null };
   const bezig = await bwStops(env, db, l4, [rit]);
   return { ok: true, bezig, rit, chauffeurs: BW_CHAUFFEURS.map(c => c.naam) };
@@ -16355,9 +16357,10 @@ async function bakwagenAkkoord(env, wie, b) {
   if (!chauffeur) return { ok: false, error: "Kies eerst de chauffeur." };
   const r = await db.prepare("SELECT naam, datum, soort, memo FROM bakwagen_rit WHERE id = ?1").bind(id).first();
   if (!r) return { ok: false, error: "Druk eerst op Ritten ophalen." };
-  await db.prepare("INSERT OR REPLACE INTO bakwagen_akkoord (rit, chauffeur, datum, naam, soort, memo, door, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
-    .bind(id, chauffeur, r.datum, r.naam, r.soort, r.memo || "", wie, Date.now()).run();
-  return { ok: true, akkoord: { chauffeur, door: wie, ts: Date.now() } };
+  const bestuurder = chauffeur === "Flex" ? String(b.bestuurder || "").trim().slice(0, 60) : "";
+  await db.prepare("INSERT OR REPLACE INTO bakwagen_akkoord (rit, chauffeur, datum, naam, soort, memo, door, ts, bestuurder) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
+    .bind(id, chauffeur, r.datum, r.naam, r.soort, r.memo || "", wie, Date.now(), bestuurder).run();
+  return { ok: true, akkoord: { chauffeur, bestuurder, door: wie, ts: Date.now() } };
 }
 /* 3. De chauffeur: zijn goedgekeurde ritten van vandaag (de planning kan
    ook "Alle" of een andere dag bekijken). */
@@ -16365,12 +16368,28 @@ async function bakwagenMijn(env, chauffeur, datum) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) datum = pcVandaag();
   const db = await bwDb(env);
   const rs = chauffeur === "Alle"
-    ? await db.prepare("SELECT rit, chauffeur, naam, soort, memo FROM bakwagen_akkoord WHERE datum = ?1").bind(datum).all()
-    : await db.prepare("SELECT rit, chauffeur, naam, soort, memo FROM bakwagen_akkoord WHERE datum = ?1 AND chauffeur = ?2").bind(datum, chauffeur).all();
-  const ritten = (rs.results || []).map(x => ({ id: x.rit, naam: x.naam, chauffeur: x.chauffeur, soort: x.soort, memo: x.memo })).slice(0, 6);
+    ? await db.prepare("SELECT rit, chauffeur, bestuurder, naam, soort, memo FROM bakwagen_akkoord WHERE datum = ?1").bind(datum).all()
+    : await db.prepare("SELECT rit, chauffeur, bestuurder, naam, soort, memo FROM bakwagen_akkoord WHERE datum = ?1 AND chauffeur = ?2").bind(datum, chauffeur).all();
+  const ritten = (rs.results || []).map(x => ({ id: x.rit, naam: x.naam, chauffeur: x.chauffeur, bestuurder: x.bestuurder || "", soort: x.soort, memo: x.memo })).slice(0, 6);
   let bezig = false;
   if (ritten.length) bezig = await bwStops(env, db, await bwLogic4(env), ritten);
   return { ok: true, datum, chauffeur, bezig, ritten };
+}
+/* Wie er reed: voor de flexwagen "Flexwagen · <naam>", zodat Manon en Nomi
+   altijd terugzien wie die rit reed. */
+async function bwWieReed(db, wie, rit, opgegeven) {
+  const c = bwChauffeurVanInlog(wie) || String(opgegeven || "").slice(0, 40);
+  if (c !== "Flex") return c;
+  const x = await db.prepare("SELECT bestuurder FROM bakwagen_akkoord WHERE rit = ?1").bind(rit).first();
+  return x && x.bestuurder ? "Flexwagen · " + x.bestuurder : "Flexwagen";
+}
+async function bakwagenBestuurder(env, wie, planner, b) {
+  const rit = String(b.rit || "").replace(/\D/g, ""), naam = String(b.naam || "").trim().slice(0, 60);
+  if (!rit || !naam) return { ok: false, error: "Vul de naam in." };
+  const db = await bwDb(env);
+  if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
+  await db.prepare("UPDATE bakwagen_akkoord SET bestuurder = ?1 WHERE rit = ?2 AND chauffeur = 'Flex'").bind(naam, rit).run();
+  return { ok: true, bestuurder: naam };
 }
 async function bwMagBijRit(env, db, wie, planner, rit) {
   if (planner) return true;
@@ -16388,7 +16407,7 @@ async function bakwagenAfmelden(env, wie, planner, b) {
   const hand = String(b.hand || "");
   if (hand && (!hand.startsWith("data:image/png;base64,") || hand.length > 400000)) return { ok: false, error: "handtekening te groot" };
   const naam = String(b.naam || "").slice(0, 120), opmerking = String(b.opmerking || "").slice(0, 2000);
-  const chauffeur = bwChauffeurVanInlog(wie) || String(b.chauffeur || "").slice(0, 40), ts = Date.now();
+  const chauffeur = await bwWieReed(db, wie, rit, b.chauffeur), ts = Date.now();
   await db.prepare("INSERT OR REPLACE INTO bakwagen_af (rit, orderid, soort, naam, opmerking, chauffeur, door, ts, hand) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
     .bind(rit, order, soort, naam, opmerking, chauffeur, wie, ts, hand).run();
   if (opmerking.trim()) {
@@ -16418,7 +16437,7 @@ async function bakwagenFotoZet(env, wie, planner, b) {
   const bytes = Uint8Array.from(atob(m[1]), c => c.charCodeAt(0));
   const id = Date.now().toString(36) + crypto.randomUUID().replace(/-/g, "").slice(0, 10);
   await bestandZet(env, "bakwagen/foto/" + id, bytes.buffer);
-  const chauffeur = bwChauffeurVanInlog(wie) || String(b.chauffeur || "").slice(0, 40);
+  const chauffeur = await bwWieReed(db, wie, rit, b.chauffeur);
   await db.prepare("INSERT INTO bakwagen_foto (id, rit, orderid, door, chauffeur, ts, grootte) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
     .bind(id, rit, order, wie, chauffeur, Date.now(), bytes.length).run();
   return { ok: true, id, ts: Date.now() };
@@ -17660,7 +17679,7 @@ const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                              inlog zonder Logic4) melden hun eigen stops af en zetten er foto's bij. De worker laat dat alleen
                              toe voor een rit die voor die chauffeur klaarstaat (bwMagBijRit), en er
                              schrijft niets terug wat gefilterd is: het is een eigen nieuwe regel. */
-                          "/bakwagen/afmelden", "/bakwagen/foto"];
+                          "/bakwagen/afmelden", "/bakwagen/foto", "/bakwagen/bestuurder"];
 const EXTERN_EXACT = ["/internal/teamkey"];
 const EXTERN_VAKKEN = [
   "takenlijst", "taken", "taken-ritme", "dashboard-gezien", "dashboard-indeling", "voorraad-indeling",
@@ -19213,6 +19232,8 @@ const FP_WORKER = {
         }
         if (url.pathname === "/bakwagen/afmelden" && request.method === "POST")
           return reply(200, await bakwagenAfmelden(env, wie, planner, await request.json().catch(() => ({}))));
+        if (url.pathname === "/bakwagen/bestuurder" && request.method === "POST")
+          return reply(200, await bakwagenBestuurder(env, wie, planner, await request.json().catch(() => ({}))));
         if (url.pathname === "/bakwagen/foto" && request.method === "POST")
           return reply(200, await bakwagenFotoZet(env, wie, planner, await request.json().catch(() => ({}))));
         if (url.pathname === "/bakwagen/foto" && request.method === "GET") return bakwagenFotoLees(env, wie, planner, url.searchParams.get("id"));

@@ -257,7 +257,7 @@ function tekenPlanning(){
   var d = $("detail"); if (d) { koppelDetail(d); laadFotos(d); }
 }
 function ritRij(r, wagen){
-  var pil = r.akkoord ? '<span class="pil goed">✓ Klaar voor '+esc(chauffeurNaam(r.akkoord.chauffeur))+'</span>' : '<span class="pil wacht">Te controleren</span>';
+  var pil = r.akkoord ? '<span class="pil goed">✓ Klaar voor '+esc(chauffeurNaam(r.akkoord.chauffeur))+(r.akkoord.bestuurder ? ' · '+esc(r.akkoord.bestuurder) : '')+'</span>' : '<span class="pil wacht">Te controleren</span>';
   return '<div class="ritrij'+(openRit===r.id?' open':'')+'"><div class="r1" data-rit="'+esc(r.id)+'"><b>'+esc(wagen)+'</b><small>'+esc(r.naam)+' · '+(r.soort==="retour"?"retour ophalen":"levering")+' · '+r.aantal+' order'+(r.aantal===1?'':'s')+'</small>'+pil+'</div>' +
     (openRit === r.id ? '<div class="ritdetail" id="detail">'+detailHtml(r)+'</div>' : '') + '</div>';
 }
@@ -284,6 +284,8 @@ function detailHtml(r){
   var keuze = (r.akkoord && r.akkoord.chauffeur) || r.chauffeur || "";
   h += '<div class="akkoordbalk"><span style="font-weight:700;color:var(--groen)">Chauffeur</span><select id="akChauffeur"><option value="">kies…</option>' +
     CHAUFFEURS.map(function(n){ return '<option value="'+n+'"'+(n===keuze?' selected':'')+'>'+esc(chauffeurNaam(n))+'</option>'; }).join("") + '</select>' +
+    /* Bij de flexwagen: wie er rijdt, zodat je altijd terugziet wie die rit reed (Gerrit, 17 okt 2026). */
+    '<input type="text" id="akBestuurder" placeholder="Naam chauffeur flexwagen" value="'+esc((r.akkoord && r.akkoord.bestuurder) || "")+'" style="flex:1 1 220px;min-width:0;font:inherit;font-size:15px;padding:9px 11px;border:1px solid #cbd5e1;border-radius:10px'+(keuze === "Flex" ? '' : ';display:none')+'">' +
     '<button type="button" class="groen" id="akJa">'+(r.akkoord ? "Akkoord bijwerken" : "Akkoord, zet klaar voor de chauffeur")+'</button>' +
     (r.akkoord ? '<button type="button" class="wit" id="akNee">Akkoord intrekken</button><span style="font-size:13px;color:var(--grijs)">Akkoord van '+esc(naamVan(r.akkoord.door))+' om '+tijd(r.akkoord.ts)+'</span>' : '') +
     '<span class="melding" id="akMelding"></span></div>';
@@ -292,10 +294,13 @@ function detailHtml(r){
 function koppelDetail(d){
   var r = overzicht.ritten.find(function(x){ return x.id === openRit; }); if (!r) return;
   var ja = $("akJa"), nee = $("akNee"), m = $("akMelding");
+  var keus = $("akChauffeur"), naamVeld = $("akBestuurder");
+  if (keus && naamVeld) keus.addEventListener("change", function(){ naamVeld.style.display = keus.value === "Flex" ? "" : "none"; if (keus.value === "Flex") naamVeld.focus(); });
   if (ja) ja.addEventListener("click", async function(){
     var ch = $("akChauffeur").value; if (!ch) { m.className = "melding slecht"; m.textContent = "Kies eerst de chauffeur."; return; }
+    var bestuurder = ch === "Flex" && naamVeld ? naamVeld.value.trim() : "";
     ja.disabled = true;
-    try { var j = await lees("/bakwagen/akkoord", { method:"POST", body: JSON.stringify({ rit: r.id, chauffeur: ch, akkoord: true }) }); if (!j.ok) throw new Error(j.error);
+    try { var j = await lees("/bakwagen/akkoord", { method:"POST", body: JSON.stringify({ rit: r.id, chauffeur: ch, bestuurder: bestuurder, akkoord: true }) }); if (!j.ok) throw new Error(j.error);
       r.akkoord = j.akkoord; r.chauffeur = ch; dagData = null;
       try{ if (window.fpLog) window.fpLog("bakwagen-akkoord", r.naam + " → " + ch); }catch(e){}
       tekenPlanning(); }
@@ -347,8 +352,12 @@ function tekenDag(){
   if (!dagData.ritten.length) h += '<p class="leeg">'+(planner ? 'Op deze dag staat er voor '+(kies==="Alle"?"de chauffeurs":esc(kies))+' nog geen goedgekeurde rit klaar. Geef bij Ritten klaarzetten akkoord, dan staat hij hier.' : 'Vandaag staat er voor jou nog geen rit klaar. Zodra Manon of Nomi je rit klaarzet, staat hij hier.')+'</p>';
   dagData.ritten.forEach(function(r){
     var klaar = r.stops.filter(function(s){ return s.af; }).length;
-    h += '<section class="rit"><div class="ritkop"><b>'+esc(r.naam)+(planner && kies==="Alle" ? ' · '+esc(chauffeurNaam(r.chauffeur)) : '')+'</b><span>'+(r.soort === "retour" ? "Retour ophalen" : "Levering")+' · '+klaar+' van '+r.stops.length+' afgemeld</span></div>' +
-      (r.memo ? '<div class="ritmemo">'+esc(r.memo)+'</div>' : '') + '<div class="stops">' + r.stops.map(function(s, i){ return stopHtml(r, s, i, {}); }).join("") + '</div></section>';
+    h += '<section class="rit"><div class="ritkop"><b>'+esc(r.naam)+(planner && kies==="Alle" ? ' · '+esc(chauffeurNaam(r.chauffeur)) : '')+(r.bestuurder ? ' · '+esc(r.bestuurder) : '')+'</b><span>'+(r.soort === "retour" ? "Retour ophalen" : "Levering")+' · '+klaar+' van '+r.stops.length+' afgemeld</span></div>' +
+      (r.memo ? '<div class="ritmemo">'+esc(r.memo)+'</div>' : '') +
+      (r.chauffeur === "Flex" ? '<div class="ritmemo" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fff"><b>Chauffeur flexwagen:</b>' +
+        '<input type="text" data-bestuurder="'+esc(r.id)+'" value="'+esc(r.bestuurder || "")+'" placeholder="Wie rijdt er vandaag?" style="flex:1 1 180px;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:9px">' +
+        '<button type="button" class="klein" style="margin:0" data-bestuurderbewaar="'+esc(r.id)+'">Bewaren</button></div>' : '') +
+      '<div class="stops">' + r.stops.map(function(s, i){ return stopHtml(r, s, i, {}); }).join("") + '</div></section>';
   });
   $("lijst").innerHTML = h;
   koppelDag();
@@ -522,6 +531,13 @@ function koppelDag(){
     var nu = open[k] !== undefined ? open[k] : (eerste === x.s); open[k] = !nu; tekenDag();
   }); });
   koppelFotoKnoppen($("lijst"), tekenDag);
+  $("lijst").querySelectorAll("[data-bestuurderbewaar]").forEach(function(b){ b.addEventListener("click", async function(){
+    var id = b.dataset.bestuurderbewaar, veldje = document.querySelector('[data-bestuurder="'+id+'"]'), naam = (veldje.value || "").trim();
+    var r = dagData.ritten.find(function(x){ return x.id === id; }); if (!r || !naam) return;
+    b.disabled = true; b.textContent = "Bezig…";
+    try { var j = await lees("/bakwagen/bestuurder", { method: "POST", body: JSON.stringify({ rit: id, naam: naam }) }); if (!j.ok) throw new Error(j.error); r.bestuurder = j.bestuurder; tekenDag(); }
+    catch(e){ b.disabled = false; b.textContent = "Bewaren"; }
+  }); });
   $("lijst").querySelectorAll("[data-pak]").forEach(function(v){ v.addEventListener("change", function(){ bewaarLokaal(v.dataset.pak, v.checked ? "1" : ""); v.closest("li").classList.toggle("gepakt", v.checked); }); });
   $("lijst").querySelectorAll(".stop").forEach(function(vak){
     var k = vak.dataset.stop, x = zoekStop(k); if (!x) return;
@@ -559,6 +575,7 @@ async function afmelden(k, knop){
   var x = zoekStop(k); if (!x) return;
   var c = concept[k] || {}, m = document.querySelector('[data-melding="'+k+'"]');
   if (!c.hand) { if (m) { m.className = "melding slecht"; m.textContent = "Laat de klant eerst tekenen in het vak hierboven."; } return; }
+  if (x.r.chauffeur === "Flex" && !x.r.bestuurder) { if (m) { m.className = "melding slecht"; m.textContent = "Vul eerst bovenaan bij de rit in wie er op de flexwagen rijdt."; } return; }
   knop.disabled = true; knop.textContent = "Bezig met afmelden…";
   var soort = c.soort || x.r.soort;
   try {

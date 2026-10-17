@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-17", groep: "bakwagen-planning", soort: "beter",
+      titel: "Naam bij de flexwagen",
+      wat:   "Kies je bij het akkoord de Flexwagen, dan vul je ernaast in wie er rijdt. Staat er nog geen naam, dan vult de chauffeur die zelf in voordat hij afmeldt. Bij Zoeken en Onderweg zie je daarna altijd wie die rit reed."
+    },
+    {
       datum: "2026-10-17", bestand: "bakwagen.html", soort: "beter",
       titel: "Bakwagenroute: Dani, Jordy en de flexwagen",
       wat:   "Per dag staan de bakwagen van Dani en die van Jordy er altijd, ook als de rit nog gemaakt moet worden. De derde wagen is de flexwagen: zet flex in de naam van de rit in Logic4, dan staat hij erbij. Wie op de flexwagen rijdt, logt in met flex."
