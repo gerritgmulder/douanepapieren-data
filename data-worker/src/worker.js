@@ -13545,11 +13545,22 @@ async function autoOrder(env, token, orderId, budget) {
   if (!(o && Number(o.Id) === Number(orderId) && o.Totals)) return null;
   const tot = Math.round((Number(o.Totals.AmountIncl) || 0) * 100) / 100;
   const betaald = Math.round((Number(o.Totals.Calc_TotalPayed) || 0) * 100) / 100;
-  return { totaal: tot, betaald, open: Math.round((tot - betaald) * 100) / 100, status: Number(o.OrderStatus && o.OrderStatus.Id) || null };
+  return { totaal: tot, betaald, open: Math.round((tot - betaald) * 100) / 100, status: Number(o.OrderStatus && o.OrderStatus.Id) || null,
+    debiteur: Number(o.DebtorId) || null, referentie: String(o.Reference || ""), omschrijving: String(o.Description || "") };
 }
 
 /* Uitleveren en factureren. Geeft { ok, stap, uitleg }. */
-async function autoFactureer(env, token, orderId, budget, proef, nr) {
+/* Osman (16 okt 2026, mail "USA orders afboeken in logic"): een volledig
+   betaalde Amerika-order afboeken zoals hij het met de hand doet: uitlevering
+   aanmaken en verwerken, en de status op 'te factureren'. De factuur maakt hij
+   zelf. Dat is zonderFactuur. Containerorders boekt Osman zelf af; die slaan
+   we over (referentie of omschrijving met "container", of een andere
+   debiteur dan Passion Spa South). */
+function autoIsContainer(o) {
+  return /container/i.test((o.referentie || "") + " " + (o.omschrijving || "")) || (o.debiteur && o.debiteur !== AMERIKA_DEBTOR);
+}
+async function autoFactureer(env, token, orderId, budget, proef, nr, opties) {
+  const zonderFactuur = !!(opties && opties.zonderFactuur);
   const post = async (pad, body) => {
     budget.n++;
     const r = await fetch("https://api.logic4server.nl" + pad, {
@@ -13562,7 +13573,13 @@ async function autoFactureer(env, token, orderId, budget, proef, nr) {
   };
   const o = await autoOrder(env, token, orderId, budget);
   if (!o) return { ok: false, stap: "order", uitleg: "order " + orderId + " vraagt Logic4 nog een keer" };
-  if (o.open > 0.10) return { ok: false, stap: "betaald", uitleg: "er staat nog " + o.open.toFixed(2) + " euro open" };
+  if (o.open > 0.10) return { ok: false, stap: "betaald", open: o.open, uitleg: "er staat nog " + o.open.toFixed(2) + " euro open" };
+  /* Logic4 levert alleen uit als de order tot op de cent betaald is ("Onvoldoende
+     betaling voor uitlevering" bij 4 cent open, 17 okt 2026). Een verschil, ook
+     te veel betaald, kijkt Osman zelf na. */
+  if (zonderFactuur && Math.abs(o.open) >= 0.005) return { ok: false, stap: "verschil", open: o.open, totaal: o.totaal, betaald: o.betaald, uitleg: (o.open > 0 ? "nog " + o.open.toFixed(2) + " euro open" : (-o.open).toFixed(2) + " euro te veel betaald") };
+  if (zonderFactuur && autoIsContainer(o)) return { ok: false, stap: "container", uitleg: "containerorder; die boekt Osman zelf af" };
+  if (zonderFactuur && o.status === 17) return { ok: true, stap: "al-te-factureren" };
   // Al gefactureerd? Dan is er niets meer te doen.
   /* Al gefactureerd? Een factuur draagt de referentie van de order mee
      ("QuickBooks <nr>") en het ordernummer in InvoiceBelongsToOrderNumber. */
@@ -13579,6 +13596,7 @@ async function autoFactureer(env, token, orderId, budget, proef, nr) {
     .filter(r => r.AmountToDeliver > 0);
   // Alles al uitgeleverd en niets meer te factureren: dan is hij al klaar.
   if (!uit.length && !lijst.some(r => Number(r.QtyDeliverd_NotInvoiced) > 0)) return { ok: true, stap: "al-gefactureerd" };
+  if (zonderFactuur && proef) return { ok: true, stap: "proef", uitleveren: uit.length, status: o.status, totaal: o.totaal, betaald: o.betaald, open: o.open };
   if (proef) return { ok: true, stap: "proef", uitleveren: uit.length, status: o.status };
   if (uit.length) {
     const lev = await post("/v3/Delivery/CreateDeliveryForOrderRows", { DeliveryRows: uit });
@@ -13586,6 +13604,7 @@ async function autoFactureer(env, token, orderId, budget, proef, nr) {
   }
   const st = await post("/v3/Orders/UpdateOrderStatus", { OrderId: Number(orderId), StatusId: 17 });
   if (!st.ok) return { ok: false, stap: "status", uitleg: "HTTP " + st.status + " " + st.tekst };
+  if (zonderFactuur) return { ok: true, stap: "te-factureren", uitgeleverd: uit.length };
   const fa = await post("/v3/Orders/CreateAndProcessInvoiceForOrder", Number(orderId));
   if (!fa.ok) return { ok: false, stap: "factuur", uitleg: "HTTP " + fa.status + " " + fa.tekst };
   return { ok: true, stap: "gefactureerd", factuur: fa.j };
@@ -13755,11 +13774,13 @@ async function autoRonde(env, opties) {
   }
 
   // 4. Factureren - alleen als het aanstaat.
+  /* Afboeken (Osman, 16 okt 2026): staat factureren uit maar afboeken aan, dan
+     uitleveren en 'te factureren' zonder factuur; de factuur maakt Osman. */
   for (const [orderId, f] of Object.entries(st.factuurRij || {})) {
-    if (!st.factureren && !proef) break;
+    if (!st.factureren && !st.afboeken && !proef) break;
     if (budget.n > AUTO_BUDGET - 6) break;
     if (f.klaar || (f.pogingen || 0) >= 3) continue;
-    const r = await autoFactureer(env, token, orderId, budget, proef, f.factuur);
+    const r = await autoFactureer(env, token, orderId, budget, proef, f.factuur, { zonderFactuur: !st.factureren });
     if (proef) { log({ soort: "factureren", orderId, factuur: f.factuur, ...r }); continue; }
     f.pogingen = (f.pogingen || 0) + 1; f.laatste = nu.toISOString();
     if (r.ok) { f.klaar = nu.toISOString(); f.stap = r.stap; log({ soort: "gefactureerd", orderId, factuur: f.factuur, stap: r.stap }); }
@@ -19558,9 +19579,31 @@ const FP_WORKER = {
         if (!st) return reply(409, { ok: false, error: "de automaat is nog niet gestart; dat gebeurt bij de eerste ronde" });
         if (typeof b.aan === "boolean") st.aan = b.aan;
         if (typeof b.factureren === "boolean") st.factureren = b.factureren;
-        st.ingesteld = { ts: new Date().toISOString(), door: wie, aan: st.aan, factureren: st.factureren };
+        if (typeof b.afboeken === "boolean") st.afboeken = b.afboeken;
+        st.ingesteld = { ts: new Date().toISOString(), door: wie, aan: st.aan, factureren: st.factureren, afboeken: !!st.afboeken };
         await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
-        return reply(200, { ok: true, aan: st.aan, factureren: st.factureren });
+        return reply(200, { ok: true, aan: st.aan, factureren: st.factureren, afboeken: !!st.afboeken });
+      }
+      /* Een lijst volledig betaalde orders afboeken (uitleveren + te factureren),
+         zonder factuur. Hooguit 10 per keer: een order kost 4 vragen aan Logic4. */
+      if (url.pathname === "/amerika/automaat/afboeken" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const orders = (Array.isArray(b.orders) ? b.orders : []).map(Number).filter(Boolean).slice(0, 10);
+        const token = await l4Token(env), budget = { n: 0 }, uit = [];
+        // Inzien: de order en zijn regels zoals Logic4 ze geeft, om een weigering te begrijpen.
+        if (b.inzien === true && orders[0]) {
+          const p = async (pad, body) => { const r = await fetch("https://api.logic4server.nl" + pad, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body) }); return r.json().catch(() => null); };
+          const o = await p("/v3/Orders/GetOrders", { Id: orders[0], TakeRecords: 1 });
+          const rij = await p("/v3/Orders/GetOrderRows", { OrderId: orders[0], TakeRecords: 500 });
+          return reply(200, { order: o, regels: rij });
+        }
+        for (const id of orders) {
+          if (budget.n > 44) { uit.push({ orderId: id, ok: false, stap: "later", uitleg: "volgende keer" }); continue; }
+          const r = await autoFactureer(env, token, id, budget, b.proef === true, null, { zonderFactuur: true }).catch(e => ({ ok: false, stap: "fout", uitleg: String(e.message || e) }));
+          uit.push({ orderId: id, ...r });
+        }
+        try { if (b.proef !== true) for (const r of uit) if (r.ok && r.stap === "te-factureren") await actSchrijf(env, "dashboard", new Date().toISOString().slice(0, 7), { ts: new Date().toISOString(), user: wie, tile: "amerika", action: "order-afgeboekt", detail: "order " + r.orderId + " uitgeleverd, status te factureren", wijziging: true }); } catch (e) {}
+        return reply(200, { ok: true, proef: b.proef === true, resultaten: uit, vragen: budget.n });
       }
       if (url.pathname === "/amerika/automaat/factureer" && request.method === "POST") {
         const b = await request.json().catch(() => ({}));
