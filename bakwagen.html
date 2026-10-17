@@ -36,7 +36,8 @@
      - Manon en Nomi (groep bakwagen-planning) drukken op Ritten ophalen,
        zien alle eigen ritten vanaf vandaag, klikken er een aan, controleren
        hem en geven akkoord voor een chauffeur.
-     - De chauffeur (Dani, Jordy, Johny; eigen inlog zonder Logic4) ziet
+     - De chauffeur (Dani of Jordy met hun vaste bakwagen, of wie op de
+       flexwagen rijdt met de inlog flex; eigen inlog zonder Logic4) ziet
        alleen zijn eigen goedgekeurde rit van vandaag, met per order de
        paklijst om af te vinken.
 
@@ -191,12 +192,16 @@ function bewaarLokaal(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
 function leesLokaal(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 function naamVan(mail){ var m = String(mail||"").split("@")[0].replace(/^fonteyn\./,""); return m ? m.charAt(0).toUpperCase()+m.slice(1) : ""; }
 
-/* Wie is er: de planning (Manon, Nomi) of een chauffeur (Dani, Jordy, Johny,
+/* Wie is er: de planning (Manon, Nomi) of een chauffeur (Dani, Jordy, flex,
    eigen inlog zonder Logic4). De worker controleert hetzelfde nog eens. */
 var planner = !!(window.fpToegang && fpToegang.mag("bakwagen-planning", ik));
-function chauffeurVanInlog(w){ w = String(w||"").toLowerCase(); if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Dani"; if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy"; if (/^joh?n+[iy]([.@_ -]|$)|^john([.@_ -]|$)/.test(w)) return "Johny"; return ""; }
+function chauffeurVanInlog(w){ w = String(w||"").toLowerCase(); if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Dani"; if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy"; if (/^flex([.@_ -]|$)/.test(w)) return "Flex"; return ""; }
 var ikChauffeur = chauffeurVanInlog(ik);
-var CHAUFFEURS = ["Dani","Jordy","Johny"];
+/* Gerrit (17 okt 2026): Dani en Jordy rijden elk een vaste bakwagen; de
+   derde wagen is de flexwagen, die Manon inzet waar nodig. */
+var CHAUFFEURS = ["Dani","Jordy","Flex"];
+function wagenNaam(n){ return n === "Flex" ? "Flexwagen" : n ? "Bakwagen " + n : ""; }
+function chauffeurNaam(n){ return n === "Flex" ? "Flexwagen" : n; }
 
 var vandaag = isoVan(new Date());
 var tab = planner ? (leesLokaal("fp.bw.tab") || "planning") : "onderweg";
@@ -226,18 +231,35 @@ function tekenPlanning(){
   if (!overzicht) { h += '<p class="leeg">Druk op Ritten ophalen: dan staan hier alle eigen ritten uit het Rittenoverzicht van Logic4, vanaf vandaag. Klik een rit aan, controleer hem en geef akkoord; dan ziet de chauffeur hem op die dag in zijn tegel.</p>'; }
   else if (!overzicht.ritten.length) h += '<p class="leeg">In Logic4 staan er vanaf vandaag nog geen eigen ritten. Een rit hoort erbij als "Eigenroute" of "Eigen route" in de naam staat.</p>';
   else {
-    var dag = "";
-    overzicht.ritten.forEach(function(r){
-      if (r.datum !== dag) { dag = r.datum; h += '<div class="dagtitel">'+esc(dagTekst(dag))+(dag === vandaag ? " (vandaag)" : dag === plusDagen(vandaag,1) ? " (morgen)" : "")+'</div>'; }
-      var pil = r.akkoord ? '<span class="pil goed">✓ Klaar voor '+esc(r.akkoord.chauffeur)+'</span>' : '<span class="pil wacht">Te controleren</span>';
-      h += '<div class="ritrij'+(openRit===r.id?' open':'')+'"><div class="r1" data-rit="'+esc(r.id)+'"><b>'+esc(r.naam)+'</b><small>'+(r.soort==="retour"?"Retour ophalen":"Levering")+' · '+r.aantal+' order'+(r.aantal===1?'':'s')+(r.chauffeur && !r.akkoord ? ' · '+esc(r.chauffeur) : '')+'</small>'+pil+'</div>' +
-        (openRit === r.id ? '<div class="ritdetail" id="detail">'+detailHtml(r)+'</div>' : '') + '</div>';
+    /* Per dag: altijd de bakwagen van Dani en van Jordy, ook als Manon er nog
+       geen rit voor maakte; de flexwagen alleen als er een flexrit is. Ritten
+       zonder naam staan eronder om te koppelen. Altijd vandaag en de
+       eerstvolgende werkdag, en verder elke dag met een rit. */
+    var dagen = {};
+    dagen[vandaag] = true;
+    var volgende = plusDagen(vandaag, 1); if (new Date(volgende+"T12:00:00").getDay() === 0) volgende = plusDagen(volgende, 1);
+    dagen[volgende] = true;
+    overzicht.ritten.forEach(function(r){ dagen[r.datum] = true; });
+    Object.keys(dagen).sort().forEach(function(dag){
+      var opDag = overzicht.ritten.filter(function(r){ return r.datum === dag; });
+      h += '<div class="dagtitel">'+esc(dagTekst(dag))+(dag === vandaag ? " (vandaag)" : dag === plusDagen(vandaag,1) ? " (morgen)" : "")+'</div>';
+      ["Dani","Jordy","Flex"].forEach(function(w){
+        var van = opDag.filter(function(r){ return r.chauffeur === w; });
+        if (!van.length && w !== "Flex") h += '<div class="ritrij" style="opacity:.75"><div class="r1"><b>'+esc(wagenNaam(w))+'</b><small>nog geen rit in Logic4</small><span class="pil">Nog te maken</span></div></div>';
+        van.forEach(function(r){ h += ritRij(r, wagenNaam(w)); });
+      });
+      opDag.filter(function(r){ return CHAUFFEURS.indexOf(r.chauffeur) < 0; }).forEach(function(r){ h += ritRij(r, "Nog aan een wagen te koppelen"); });
     });
   }
   $("planning").innerHTML = h;
   $("ophaal").addEventListener("click", ophalen);
   $("planning").querySelectorAll("[data-rit]").forEach(function(el){ el.addEventListener("click", function(){ openRit = openRit === el.dataset.rit ? null : el.dataset.rit; tekenPlanning(); if (openRit && !ritDetail[openRit]) laadRit(openRit, 0); }); });
   var d = $("detail"); if (d) { koppelDetail(d); laadFotos(d); }
+}
+function ritRij(r, wagen){
+  var pil = r.akkoord ? '<span class="pil goed">✓ Klaar voor '+esc(chauffeurNaam(r.akkoord.chauffeur))+'</span>' : '<span class="pil wacht">Te controleren</span>';
+  return '<div class="ritrij'+(openRit===r.id?' open':'')+'"><div class="r1" data-rit="'+esc(r.id)+'"><b>'+esc(wagen)+'</b><small>'+esc(r.naam)+' · '+(r.soort==="retour"?"retour ophalen":"levering")+' · '+r.aantal+' order'+(r.aantal===1?'':'s')+'</small>'+pil+'</div>' +
+    (openRit === r.id ? '<div class="ritdetail" id="detail">'+detailHtml(r)+'</div>' : '') + '</div>';
 }
 async function ophalen(){
   var b = $("ophaal"); b.disabled = true; b.textContent = "Ritten worden opgehaald…";
@@ -261,7 +283,7 @@ function detailHtml(r){
     '<div class="stops" style="padding-top:0">' + d.stops.map(function(s, i){ return stopHtml(d, s, i, { alleenKijken: true, altijdOpen: true }); }).join("") + '</div>';
   var keuze = (r.akkoord && r.akkoord.chauffeur) || r.chauffeur || "";
   h += '<div class="akkoordbalk"><span style="font-weight:700;color:var(--groen)">Chauffeur</span><select id="akChauffeur"><option value="">kies…</option>' +
-    CHAUFFEURS.map(function(n){ return '<option'+(n===keuze?' selected':'')+'>'+n+'</option>'; }).join("") + '</select>' +
+    CHAUFFEURS.map(function(n){ return '<option value="'+n+'"'+(n===keuze?' selected':'')+'>'+esc(chauffeurNaam(n))+'</option>'; }).join("") + '</select>' +
     '<button type="button" class="groen" id="akJa">'+(r.akkoord ? "Akkoord bijwerken" : "Akkoord, zet klaar voor de chauffeur")+'</button>' +
     (r.akkoord ? '<button type="button" class="wit" id="akNee">Akkoord intrekken</button><span style="font-size:13px;color:var(--grijs)">Akkoord van '+esc(naamVan(r.akkoord.door))+' om '+tijd(r.akkoord.ts)+'</span>' : '') +
     '<span class="melding" id="akMelding"></span></div>';
@@ -280,7 +302,7 @@ function koppelDetail(d){
     catch(e){ ja.disabled = false; m.className = "melding slecht"; m.textContent = "Akkoord geven vraagt nog een poging: " + e.message; }
   });
   if (nee) nee.addEventListener("click", async function(){
-    if (!(await fpBevestig("Akkoord intrekken? Dan ziet "+(r.akkoord.chauffeur||"de chauffeur")+" deze rit niet meer.", { knop: "Intrekken" }))) return;
+    if (!(await fpBevestig("Akkoord intrekken? Dan ziet "+(chauffeurNaam(r.akkoord.chauffeur)||"de chauffeur")+" deze rit niet meer.", { knop: "Intrekken" }))) return;
     try { await lees("/bakwagen/akkoord", { method:"POST", body: JSON.stringify({ rit: r.id, akkoord: false }) }); r.akkoord = null; dagData = null; tekenPlanning(); }
     catch(e){ m.className = "melding slecht"; m.textContent = "Intrekken vraagt nog een poging."; }
   });
@@ -298,7 +320,7 @@ function tekenDagKeus(){
   $("dagen").innerHTML = '<span class="label">Dag</span>' + knoppen.map(function(k){ return '<button type="button" data-dag="'+k[0]+'"'+(k[0]===datum?' class="aan"':'')+'>'+k[1]+'</button>'; }).join("") + '<input type="date" id="dagKeus" value="'+datum+'">';
   $("dagen").querySelectorAll("[data-dag]").forEach(function(b){ b.addEventListener("click", function(){ kiesDag(b.dataset.dag); }); });
   $("dagKeus").addEventListener("change", function(){ if (this.value) kiesDag(this.value); });
-  $("chauffeurs").innerHTML = '<span class="label">Chauffeur</span>' + ["Alle"].concat(CHAUFFEURS).map(function(n){ return '<button type="button" data-ch="'+n+'"'+(n===kies?' class="aan"':'')+'>'+n+'</button>'; }).join("");
+  $("chauffeurs").innerHTML = '<span class="label">Wagen</span>' + ["Alle"].concat(CHAUFFEURS).map(function(n){ return '<button type="button" data-ch="'+n+'"'+(n===kies?' class="aan"':'')+'>'+esc(n === "Alle" ? "Alle" : chauffeurNaam(n))+'</button>'; }).join("");
   $("chauffeurs").querySelectorAll("[data-ch]").forEach(function(b){ b.addEventListener("click", function(){ kies = b.dataset.ch; bewaarLokaal("fp.bw.chauffeur", kies); dagData = null; concept = {}; laadDag(0); }); });
 }
 function kiesDag(d){ datum = d; dagData = null; concept = {}; laadDag(0); }
@@ -321,11 +343,11 @@ async function laadDag(poging){
 }
 function tekenDag(){
   if (!dagData) return;
-  var h = planner ? '<div class="dagtitel">'+esc(dagTekst(datum))+'</div>' : '<div class="groet">Hoi '+esc(ikChauffeur)+'</div><div class="dagtitel" style="margin-top:2px">'+esc(dagTekst(datum))+'</div>';
+  var h = planner ? '<div class="dagtitel">'+esc(dagTekst(datum))+'</div>' : '<div class="groet">'+(ikChauffeur === "Flex" ? 'Flexwagen' : 'Hoi '+esc(ikChauffeur))+'</div><div class="dagtitel" style="margin-top:2px">'+esc(dagTekst(datum))+'</div>';
   if (!dagData.ritten.length) h += '<p class="leeg">'+(planner ? 'Op deze dag staat er voor '+(kies==="Alle"?"de chauffeurs":esc(kies))+' nog geen goedgekeurde rit klaar. Geef bij Ritten klaarzetten akkoord, dan staat hij hier.' : 'Vandaag staat er voor jou nog geen rit klaar. Zodra Manon of Nomi je rit klaarzet, staat hij hier.')+'</p>';
   dagData.ritten.forEach(function(r){
     var klaar = r.stops.filter(function(s){ return s.af; }).length;
-    h += '<section class="rit"><div class="ritkop"><b>'+esc(r.naam)+(planner && kies==="Alle" ? ' · '+esc(r.chauffeur) : '')+'</b><span>'+(r.soort === "retour" ? "Retour ophalen" : "Levering")+' · '+klaar+' van '+r.stops.length+' afgemeld</span></div>' +
+    h += '<section class="rit"><div class="ritkop"><b>'+esc(r.naam)+(planner && kies==="Alle" ? ' · '+esc(chauffeurNaam(r.chauffeur)) : '')+'</b><span>'+(r.soort === "retour" ? "Retour ophalen" : "Levering")+' · '+klaar+' van '+r.stops.length+' afgemeld</span></div>' +
       (r.memo ? '<div class="ritmemo">'+esc(r.memo)+'</div>' : '') + '<div class="stops">' + r.stops.map(function(s, i){ return stopHtml(r, s, i, {}); }).join("") + '</div></section>';
   });
   $("lijst").innerHTML = h;
@@ -370,7 +392,7 @@ function stopHtml(r, s, i, opt){
       fotosHtml(r, s, !opt.alleenKijken);
   }
   if (!opt.alleenKijken) h += afmeldHtml(r, s, k);
-  else if (s.af) h += '<div class="afmeld"><div class="klaar"><b>✓ '+(s.af.soort === "retour" ? "Retour opgehaald" : "Geleverd")+'</b> om '+tijd(s.af.ts)+(s.af.chauffeur ? ' door '+esc(s.af.chauffeur) : '')+(s.af.opmerking ? '<br><b style="color:#92400e">Opmerking:</b> '+esc(s.af.opmerking) : '')+'</div></div>';
+  else if (s.af) h += '<div class="afmeld"><div class="klaar"><b>✓ '+(s.af.soort === "retour" ? "Retour opgehaald" : "Geleverd")+'</b> om '+tijd(s.af.ts)+(s.af.chauffeur ? ' door '+esc(chauffeurNaam(s.af.chauffeur)) : '')+(s.af.opmerking ? '<br><b style="color:#92400e">Opmerking:</b> '+esc(s.af.opmerking) : '')+'</div></div>';
   return h + '</div></div>';
 }
 function veld(k, w){ return '<div class="veld"><div class="k">'+k+'</div><div class="w">'+w+'</div></div>'; }
@@ -455,7 +477,7 @@ function tekenTreffers(){
     var k = sleutel(x.rit, x.order), a = x.af;
     return '<div class="treffer"><div class="t1"><b>'+esc(x.klant || ("Order "+x.order))+'</b><small>order '+esc(x.order)+(x.plaats?' · '+esc(x.plaats):'')+'</small>' +
       (a ? '<span class="pil goed">✓ '+(a.soort==="retour"?"Retour opgehaald":"Geleverd")+'</span>' : '<span class="pil">foto\'s</span>') + '</div>' +
-      '<small>'+esc([x.datum ? dagTekst(x.datum) : "", x.ritnaam, a ? tijd(a.ts)+(a.chauffeur?" door "+a.chauffeur:"") : ""].filter(Boolean).join(" · "))+'</small>' +
+      '<small>'+esc([x.datum ? dagTekst(x.datum) : "", x.ritnaam, a ? tijd(a.ts)+(a.chauffeur?" door "+chauffeurNaam(a.chauffeur):"") : ""].filter(Boolean).join(" · "))+'</small>' +
       (a && a.naam ? '<div style="margin-top:4px;font-size:14px">Getekend door: '+esc(a.naam)+'</div>' : '') +
       (a && a.opmerking ? '<div class="opm"><b>Opmerking:</b> '+esc(a.opmerking)+'</div>' : '') +
       (a && a.getekend ? (handCache[k] ? '<img class="handimg" alt="Handtekening" src="'+handCache[k]+'">' : '<button type="button" class="klein" data-zoekhand="'+esc(k)+'">Handtekening bekijken</button>') : '') +
@@ -471,7 +493,7 @@ function tekenTreffers(){
 function afmeldHtml(r, s, k){
   if (s.af && !(concept[k] && concept[k].opnieuw)) {
     var a = s.af;
-    return '<div class="afmeld"><div class="klaar"><b>✓ '+(a.soort === "retour" ? "Retour opgehaald" : "Geleverd")+'</b> om '+tijd(a.ts)+(a.chauffeur ? ' door '+esc(a.chauffeur) : '')+
+    return '<div class="afmeld"><div class="klaar"><b>✓ '+(a.soort === "retour" ? "Retour opgehaald" : "Geleverd")+'</b> om '+tijd(a.ts)+(a.chauffeur ? ' door '+esc(chauffeurNaam(a.chauffeur)) : '')+
       (a.naam ? '<br>Getekend door: '+esc(a.naam) : '')+
       (a.opmerking ? '<br><br><b style="color:#92400e">Opmerking:</b> '+esc(a.opmerking) : '')+
       (a.getekend ? (handCache[k] ? '<img alt="Handtekening" src="'+handCache[k]+'">' : '<br><button type="button" class="klein" data-toonhand="'+esc(k)+'">Handtekening bekijken</button>') : '')+

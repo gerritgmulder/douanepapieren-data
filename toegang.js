@@ -91,7 +91,8 @@
     "extern": [
       "christiaan",
       // De bakwagenchauffeurs: eigen inlog zonder Logic4, alleen Bakwagenroute (16 okt 2026).
-      "dani", "johny", "jordy",
+      // Johny is heftruckchauffeur, geen bakwagenchauffeur; flex is de inlog voor wie op de flexwagen rijdt (17 okt 2026).
+      "dani", "flex", "jordy",
     ],
     /* Maandcontrole los van de rest van Administratie (proef), zodat de
        accountant alleen deze tegel uit die groep krijgt (Frank Hop,
@@ -210,12 +211,13 @@
     ],
     // Transport laden en Prijslijst maken
     /* Bakwagenroute: de eigen ritten per chauffeur (Gerrit, 16 okt 2026).
-       De chauffeurs Dani, Jordy en Johny hebben geen Logic4-account; ze
+       De chauffeurs Dani en Jordy (elk een vaste bakwagen) en wie er op de
+       flexwagen rijdt (inlog flex) hebben geen Logic4-account; ze
        loggen in met een eigen Dashboard-account (zie de groep extern) onder
        precies deze gebruikersnamen. JordyS in Logic4 is iemand anders, die is
        uit dienst. */
     "bakwagen": [
-      "dani", "dolf", "fonteynbot", "gerrit", "johny", "jordy", "manon", "nomi",
+      "dani", "dolf", "flex", "fonteynbot", "gerrit", "jordy", "manon", "nomi",
     ],
     /* Ritten ophalen, controleren en akkoord geven voor een chauffeur: Manon
        en Nomi (Gerrit, 16 okt 2026). */

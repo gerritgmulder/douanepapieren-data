@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-17", bestand: "bakwagen.html", soort: "beter",
+      titel: "Bakwagenroute: Dani, Jordy en de flexwagen",
+      wat:   "Per dag staan de bakwagen van Dani en die van Jordy er altijd, ook als de rit nog gemaakt moet worden. De derde wagen is de flexwagen: zet flex in de naam van de rit in Logic4, dan staat hij erbij. Wie op de flexwagen rijdt, logt in met flex."
+    },
+    {
       datum: "2026-10-16", bestand: "bakwagen.html", soort: "beter",
       titel: "Bakwagenroute: foto's, zoeken en meteen een melding",
       wat:   "De chauffeur zet bij een stop foto's als bewijs, bijvoorbeeld als er een kussen mist. Met het nieuwe tabblad Zoeken vind je elke afgemelde stop terug op order, klant, plaats, chauffeur of datum, met de handtekening en de foto's. Zet een chauffeur een opmerking bij een stop, dan krijgen Manon en Nomi meteen een melding, in elke tegel."

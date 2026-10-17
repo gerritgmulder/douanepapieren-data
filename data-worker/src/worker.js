@@ -16186,7 +16186,11 @@ async function logic4Lees(env, request, body) {
    3. De chauffeur ziet op de dag zelf alleen zijn eigen goedgekeurde ritten
       (bakwagenMijn) en meldt per stop af (bakwagenAfmelden).
 
-   Jordy, Dani en Johny hebben geen Logic4-account; ze loggen in met een
+   Gerrit (17 okt 2026): Dani en Jordy rijden elk een vaste bakwagen; de derde
+   wagen is de flexwagen, die Manon inzet waar nodig. Johny is heftruck-
+   chauffeur en hoort hier niet bij. Een rit met "flex" in de naam hoort bij
+   de flexwagen. Dani, Jordy en wie op de flexwagen rijdt (inlog flex) hebben
+   geen Logic4-account; ze loggen in met een
    eigen Dashboard-account (groep extern) en komen hier via externPoort,
    met hun gebruikersnaam in X-Fonteyn-User. JordyS in Logic4 is iemand
    anders (uit dienst).
@@ -16203,7 +16207,7 @@ async function logic4Lees(env, request, body) {
    bakwagen_akkoord (welke rit klaarstaat voor wie), bakwagen_af (afmelden met
    handtekening, naam en opmerking). Een opmerking van de chauffeur ("er mist
    een kussen") komt als bericht bij Manon. Er gaat niets terug naar Logic4. */
-const BW_CHAUFFEURS = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Johny", rx: /\bjoh?n+[iy]\b|\bjohn\b/i }];
+const BW_CHAUFFEURS = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex/i }];
 const BW_RIT = /eigen ?r?oute|bakwagen/i;
 // Een opmerking van een chauffeur gaat naar Manon én Nomi (Gerrit, 16 okt 2026).
 const BW_MANON = ["manon@fonteyn.nl", "fonteyn.manon", "manon", "nomi@fonteyn.nl", "fonteyn.nomi", "nomi"];
@@ -16223,13 +16227,13 @@ async function bwDb(env) {
   return db;
 }
 function bwChauffeur(tekst) { const c = BW_CHAUFFEURS.find(c => c.rx.test(String(tekst || ""))); return c ? c.naam : ""; }
-/* De inlog van een chauffeur: gebruikersnaam dani, jordy of johny (ook met een
+/* De inlog van een chauffeur: gebruikersnaam dani, jordy of flex (ook met een
    achternaam of mailadres erachter). */
 function bwChauffeurVanInlog(wie) {
   const w = String(wie || "").toLowerCase();
   if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Dani";
   if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy";
-  if (/^joh?n+[iy]([.@_ -]|$)|^john([.@_ -]|$)/.test(w)) return "Johny";
+  if (/^flex([.@_ -]|$)/.test(w)) return "Flex";
   return "";
 }
 function bwTel(t) { t = String(t || "").trim(); return (t.replace(/\D/g, "").length >= 6) ? t : ""; }
@@ -17652,7 +17656,7 @@ const EXTERN_LEES_GET = ["/planning/", "/herinneringen/open", "/herinneringen/lo
                          "/bakwagen/mijn", "/bakwagen/handtekening", "/bakwagen/foto"];
 const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                           "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo", "/extern/logic4",
-                          /* De enige schrijfroutes: de bakwagenchauffeurs (Jordy, Dani, Johny; eigen
+                          /* De enige schrijfroutes: de bakwagenchauffeurs (Dani, Jordy, flex; eigen
                              inlog zonder Logic4) melden hun eigen stops af en zetten er foto's bij. De worker laat dat alleen
                              toe voor een rit die voor die chauffeur klaarstaat (bwMagBijRit), en er
                              schrijft niets terug wat gefilterd is: het is een eigen nieuwe regel. */
