@@ -1356,7 +1356,7 @@ async function lookupFonteynCodes() {
         producten_gescand: j.productsScanned,
         paginas_opgehaald: j.pagesFetched,
         diagnostics: j.diagnostics,
-        toelichting: "Claude kijkt naar 'sampleProductFieldNames' om de juiste veldnaam te vinden waarin Fonteyns leveranciers-code staat."
+        toelichting: "Met 'sampleProductFieldNames' vinden we de juiste veldnaam waarin Fonteyns leveranciers-code staat."
       });
     } else {
       setStatus(`✓ ${foundCount} van ${state.rows.length} Fonteyn-codes gevonden — vul de ontbrekende handmatig in.`, "ok");
@@ -1384,7 +1384,7 @@ function showDebugPanel(info) {
   }
   const text = JSON.stringify(info, null, 2);
   panel.innerHTML = `
-    <h3>Details voor Gerrit (stuur deze aan Claude):</h3>
+    <h3>Details voor Gerrit:</h3>
     <pre id="debugContent"></pre>
     <button type="button" id="copyDebugBtn">📋 Kopieer naar klembord</button>
     <span id="copyDebugHint" style="margin-left:10px; font-size:12px;"></span>

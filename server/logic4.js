@@ -273,7 +273,7 @@ export async function getProductsBySupplierCode(supplierCodes, authCtx) {
 
 /**
  * Diagnostisch: haal een kleine sample producten op zonder filter, zodat
- * Claude de veldnamen en response-structuur kan inspecteren.
+ * de veldnamen en response-structuur te inspecteren zijn.
  */
 export async function getProductsSample(authCtx, count = 3) {
   return fetchProductsPage({ TakeRecords: count }, authCtx);

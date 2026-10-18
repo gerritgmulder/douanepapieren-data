@@ -1647,7 +1647,7 @@ document.getElementById("diagPayBtn").addEventListener("click", async () => {
     }
     if (bolHits.length) blocks.unshift("<b style='color:var(--ok)'>🔎 Mogelijk Bol-dagboek/betaalmethode gevonden:</b><br>" + bolHits.join("<br>") + "<br><span style='color:var(--muted)'>→ Vul het dagboek-ID (BookingId) hierboven in.</span>");
     out.className = "status-msg";
-    out.innerHTML = "<b>🔧 Betaling-diagnose</b> — plak dit terug naar Claude:<div style='margin-top:8px;padding:11px 13px;background:#fffdf6;border:1px solid #fde68a;border-radius:8px;font-size:12px;line-height:1.6;max-height:440px;overflow:auto'>" + blocks.join("<br><br>") + "</div>";
+    out.innerHTML = "<b>🔧 Betaling-diagnose</b> — stuur dit naar Gerrit:<div style='margin-top:8px;padding:11px 13px;background:#fffdf6;border:1px solid #fde68a;border-radius:8px;font-size:12px;line-height:1.6;max-height:440px;overflow:auto'>" + blocks.join("<br><br>") + "</div>";
   } catch (e) {
     out.className = "status-msg bad";
     out.textContent = "Diagnose-fout: " + e.message;
@@ -1768,7 +1768,7 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
 
     let verdict;
     if (moved) verdict = `<span class="match-pill ok">✓ Openstaand daalde met ${drop != null ? fmtEur(drop) : fmtEur(expected)}${fullyPaid ? " — factuur volledig betaald!" : ""} — het werkt!</span>`;
-    else if (!apiErr && drop === 0) verdict = `<span class="match-pill fail">⚠ Logic4 gaf OK; het openstaande bedrag staat nog gelijk. Deel dit met Claude (mogelijk BookingId/dagboek).</span>`;
+    else if (!apiErr && drop === 0) verdict = `<span class="match-pill fail">⚠ Logic4 gaf OK; het openstaande bedrag staat nog gelijk. Stuur dit naar Gerrit (mogelijk BookingId/dagboek).</span>`;
     else if (apiErr) verdict = `<span class="match-pill fail">✗ Logic4 vraagt nog een poging: ${escapeHtml(apiErr)}</span>`;
     else verdict = `<span class="match-pill fail">⚠ Openstaand −${drop != null ? fmtEur(drop) : "?"}, verwacht −${fmtEur(expected)}</span>`;
 
@@ -1941,7 +1941,7 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     } else if (apiOk && delta === 0) {
       failCount++;
       statusHtml = `<span class="match-pill fail">⚠ API OK maar stand ongewijzigd</span>`;
-      detailExtra = "Logic4 nam de boeking aan; het saldo staat nog gelijk - deel dit met Claude (mogelijk BookingId/dagboek).";
+      detailExtra = "Logic4 nam de boeking aan; het saldo staat nog gelijk - stuur dit naar Gerrit (mogelijk BookingId/dagboek).";
     } else if (apiOk) {
       failCount++;
       statusHtml = `<span class="match-pill fail">⚠ verschil: verwacht ${fmtEur(expected)}, gemeten ${delta != null ? fmtEur(delta) : "?"}</span>`;
@@ -2014,7 +2014,7 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     statusEl.innerHTML = `<b>✗ Geen enkele betaling werd verifieerbaar gekoppeld.</b><br>
       Logic4 accepteerde de API-calls (status OK) maar het openstaande factuurbedrag daalde niet.
       Vermoedelijke oorzaak: het BookingId/dagboek voor Bol klopt niet.
-      <b>STOP met doorvoeren</b> en deel deze info met Claude voor verdere diagnose.`;
+      <b>STOP met doorvoeren</b> en stuur deze info naar Gerrit.`;
   }
 
   // ─── Uitleg-popup ───
@@ -2101,7 +2101,7 @@ function showAfterApplyExplanation(results, verifiedCount, totalCount, data) {
           <span style="color:#6b5e1f;">
             Voor ${totalCount - verifiedCount} regel(s) bleef het Betaald-veld op €0,00 staan na de API-call.
             Mogelijke oorzaken: PaymentMethodId is verkeerd voor Bol-betalingen, of er ontbreekt een verplicht veld.
-            Voer die regels handmatig in via Logic4 of laat Claude de PaymentMethodId verifiëren.
+            Voer die regels handmatig in via Logic4 of laat Gerrit de PaymentMethodId nakijken.
           </span>
         </div>
       ` : ""}

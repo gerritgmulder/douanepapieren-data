@@ -1851,7 +1851,7 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     } else {
       debtorDump = dumpFields(debtor, "Debtor-velden (klant)");
     }
-    diag.steps.push(`<b>Geel = mogelijk de adviseur</b>. Kopieer terug naar Claude met welk veld de juiste is:${orderDump}${debtorDump}`);
+    diag.steps.push(`<b>Geel = mogelijk de adviseur</b>. Stuur naar Gerrit welk veld de juiste is:${orderDump}${debtorDump}`);
     diag.steps.push(`<b>Vul anders handmatig in</b> in de velden Advisor + Advisor email hieronder.`);
   }
   console.log(`[adviseur] resolved → naam="${advisor}", email="${advisorEmail}"`);
