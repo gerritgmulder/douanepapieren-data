@@ -2529,8 +2529,16 @@ function renderReserveringen(){
     const m=row.dataset.m; resvOpen[m]=!resvOpen[m]; renderReserveringen();
   }));
 }
-function verwachtLabel(v){
+/* Een datum die voorbij is zegt niets meer (Chantal, video 17 okt 2026:
+   "allemaal ETA's in het verleden, waar haalt hij dat vandaan?"). Bij een
+   schip betekent het dat het schip binnen is; bij de fabriek dat de leverdatum
+   in Logic4 verlopen is en er een nieuwe komt. */
+function verlopen(v){ return /^\d{4}-\d\d-\d\d/.test(String(v||"")) && String(v).slice(0,10) < new Date().toISOString().slice(0,10); }
+function verwachtLabel(v,bron){
   if(!v) return "<span style='color:var(--muted)'>-</span>";
+  if(verlopen(v)) return bron==="productie"
+    ? "<span style='color:#92400e'>volgende productie (datum volgt)</span>"
+    : "<span style='color:#15803d;font-weight:600'>schip is binnen</span>";
   if(v==="voorraad") return "<span style='color:#15803d;font-weight:600'>op voorraad</span>";
   if(v==="op-schip") return "<span style='color:#2563eb'>op schip (datum volgt)</span>";
   if(v==="productie") return "<span style='color:#92400e'>volgende productie</span>";
@@ -2557,7 +2565,7 @@ function verwachtVanRegel(r){
 }
 function verwachtCel(r){
   const w=verwachtVanRegel(r);
-  return verwachtLabel(w.v)+(w.schip?" <span style='color:var(--muted);font-size:11px'>("+esc(w.schip)+(w.hand?", handmatig":"")+")</span>":"");
+  return verwachtLabel(w.v, w.hand ? (w.schip ? "schip" : null) : r.verwachtBron)+(w.schip?" <span style='color:var(--muted);font-size:11px'>("+esc(w.schip)+(w.hand?", handmatig":"")+")</span>":"");
 }
 function betaalBadge(r){
   if(r.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d'>betaald "+(r.betaaldPct!=null?r.betaaldPct+"%":"")+"</span>";
@@ -3266,7 +3274,7 @@ function fabrieksRegel(r){
   var stukken = [];
   if(r.verwachtIko) stukken.push("<b>"+esc(fabriekKort(r.verwachtFabriek)||"inkooporder")+" "+esc(r.verwachtIko)+"</b>");
   // De ETA alleen apart tonen als hij niet al als datum boven staat.
-  if(r.verwachtEta && r.verwacht!==r.verwachtEta) stukken.push("ETA "+esc(datumNL(r.verwachtEta)));
+  if(r.verwachtEta && r.verwacht!==r.verwachtEta && !verlopen(r.verwachtEta)) stukken.push("ETA "+esc(datumNL(r.verwachtEta)));
   if(!stukken.length) return "";
   return " <span style='font-size:11px;color:#92400e;white-space:nowrap'>"+stukken.join(" · ")+"</span>";
 }
@@ -3297,14 +3305,15 @@ function leveringCel(r,n,id,uit){
      aangevinkt. Wie de zending alsnog wil aanwijzen kiest hem hieronder. */
   var binnenGevinkt = !gekozen && !!(n.inplannen || n.gepland);
   var kop = gekozen
-    ? "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>"+
+    ? (zendingBinnen(gekozen) ? "<span style='color:#15803d;font-weight:600'>schip is binnen</span>"
+       : "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>")+
       " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig"+
       (zendingBinnen(gekozen)?", binnen":"")+")</span>"
     : binnenGevinkt
     ? "<span style='color:#15803d;font-weight:600'>binnen in Uddel</span>"+
       " <span style='color:var(--muted);font-size:11px'>("+(n.gepland?"gepland":"inplannen")+
       (n.ts?" "+esc(datumNL(String(n.ts).slice(0,10))):"")+(n.door?", "+esc(String(n.door).split("@")[0]):"")+")</span>"
-    : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")
+    : verwachtLabel(r.verwacht, r.verwachtBron)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")
       +fabrieksRegel(r);
   // Een keuze die nergens meer op slaat mag niet stilzwijgend verdwijnen.
   if(n.schip && !gekozen)
@@ -4304,7 +4313,7 @@ async function pcMailOpstellen(k,soort,taal){
 }
 async function pcStuur(k,test){
   const m=pcMail[k]; if(!m) return;
-  if(!test&&!confirm((PC_SOORT_NAAM[m.soort]||"Mail")+" versturen aan "+m.naar+(m.bijlage?" met bijlage "+m.bijlage.naam:" zonder bijlage")+"?")) return;
+  if(!test&&!(await fpBevestig((PC_SOORT_NAAM[m.soort]||"Mail")+" versturen aan "+m.naar+(m.bijlage?" met bijlage "+m.bijlage.naam:", zonder bijlage")+"?",{knop:"Versturen"}))) return;
   m.melding="Versturen…"; m.fout=false; renderPartnerContainers();
   try{
     const r=await fetch(PC_URL+"/mail",{method:"POST",headers:pcKop(true),body:JSON.stringify({ordernr:Number(k),soort:m.soort,naar:m.naar,taal:m.taal,onderwerp:m.onderwerp,tekst:m.tekst,test:!!test,bijlage:m.bijlage||null})});

@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-18", bestand: "voorraad.html", soort: "beter",
+      titel: "Verwachte levering: geen oude datums meer",
+      wat:   "Bij Reserveringen staat geen datum meer die al voorbij is. Is het schip aangekomen, dan staat er schip is binnen. Is de leverdatum van de fabriek verlopen, dan staat er volgende productie (datum volgt). Partners en adviseurs zien hetzelfde in Passion Partners."
+    },
+    {
+      datum: "2026-10-18", bestand: "voorraad.html", soort: "beter",
+      titel: "Mail bij Partner containers netjes onder elkaar",
+      wat:   "De mail aan een partner komt nu binnen zoals je hem in je scherm ziet: met witregels en de bankgegevens onder elkaar."
+    },
+    {
       datum: "2026-10-17", groep: "bakwagen-planning", soort: "beter",
       titel: "Naam bij de flexwagen",
       wat:   "Kies je bij het akkoord de Flexwagen, dan vul je ernaast in wie er rijdt. Staat er nog geen naam, dan vult de chauffeur die zelf in voordat hij afmeldt. Bij Zoeken en Onderweg zie je daarna altijd wie die rit reed."

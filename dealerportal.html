@@ -2016,8 +2016,11 @@ async function loadMySpas(){
 //   voorraad → aangekomen (klaar voor levering) · station 4 is de bestemming.
 // Een afgeleverde order verdwijnt uit de lijst, dus bij "Your warehouse"
 // blijft het leeg - de vrachtwagen rijdt er symbolisch heen.
+// Een datum die voorbij is: het schip is binnen, of de fabriek geeft een nieuwe datum.
+function etaVoorbij(v){ return /^\d{4}-\d\d-\d\d/.test(String(v||"")) && String(v).slice(0,10) < new Date().toISOString().slice(0,10); }
 function reisEtappe(s){
   const v = s.verwacht;
+  if (etaVoorbij(v)) return s.verwachtBron === "productie" ? 0 : 2;
   if (s.vervallen || !v || v === "vervallen") return -1;
   if (v === "productie") return 0;
   if (v === "op-schip" || v === "dealer-direct") return 1;
@@ -2029,6 +2032,7 @@ function reisEtaTekst(s){
   const v = s.verwacht;
   if (v === "dealer-direct") return "own container";
   if (v === "op-schip") return "date to follow";
+  if (etaVoorbij(v)) return s.verwachtBron === "productie" ? "date to follow" : "arrived";
   const d = new Date(v);
   return isNaN(d.getTime()) ? "" : "~ " + d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
@@ -2137,6 +2141,9 @@ function mySpaEta(s){
   if (v==="voorraad") return '<span style="color:#15803d;font-weight:600">available now</span>';
   if (v==="op-schip") return '<span style="color:#2563eb">on the water (date to follow)</span>';
   if (v==="productie") return '<span style="color:#92400e">next production batch</span>';
+  if (etaVoorbij(v)) return s.verwachtBron === "productie"
+    ? '<span style="color:#92400e">next production batch (date to follow)</span>'
+    : '<span style="color:#15803d;font-weight:600">arrived at our warehouse</span>';
   const d = new Date(v);
   return '<span style="color:#2563eb">'+(isNaN(d)?esc(v):('~ '+d.toLocaleDateString("en-GB",{month:"short",year:"numeric"})))+'</span>';
 }

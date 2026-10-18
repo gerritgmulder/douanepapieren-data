@@ -8991,9 +8991,11 @@ async function pcOrderLive(env, nr) {
 function pcVul(s, w) { return String(s || "").replace(/\{(\w+)\}/g, (m, k) => (w[k] != null ? String(w[k]) : m)); }
 function pcMailHtml(tekst, groet) {
   const e = (x) => String(x == null ? "" : x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:680px'>" +
-    "<p style='font-size:14px;white-space:pre-line;line-height:1.5'>" + e(tekst) + "</p>" +
-    "<p style='font-size:14px;white-space:pre-line;line-height:1.5'>" + e(groet) + "</p></div>";
+  /* Witregel = nieuwe alinea, enter = <br>. Outlook negeert white-space:pre-line
+     en zette alles achter elkaar (Chantal, video 17 okt 2026). */
+  const alineas = (t) => String(t == null ? "" : t).replace(/\r/g, "").split(/\n\s*\n/).filter(a => a.trim())
+    .map(a => "<p style='font-size:14px;line-height:1.5;margin:0 0 12px'>" + e(a.replace(/^\n+|\n+$/g, "")).replace(/\n/g, "<br>") + "</p>").join("");
+  return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:680px'>" + alineas(tekst) + alineas(groet) + "</div>";
 }
 /* Aan wie: het mailadres van het dealeraccount in Passion Partners als die
    deze debiteur heeft, anders het herinnerings-, factuur- of gewone adres uit
