@@ -9725,6 +9725,36 @@ async function voorraadbepalingHandle(request, env, url) {
   /* Per kleur voor de tegel (Gerrit, 19 okt 2026: "zo'n mooi tabelletje zie ik
      niet als ik op Refresh druk"). Alleen D1: gefactureerd per artikel, met de
      partnercontainers apart. Zelfde periode als de tegel (vanaf = jjjj-mm). */
+  /* Orders van één artikel per status, op orderdatum: om naast Chantals
+     Rapportage Wizard te leggen (statussen 30% aanbetaald, afgehandeld,
+     volledig betaald, te factureren, gepland). */
+  if (url.searchParams.get("statustel")) {
+    const code = String(url.searchParams.get("statustel"));
+    const vanaf = (url.searchParams.get("vanaf") || "2025-11") + "-01T00:00:00";
+    const tot = url.searchParams.get("tot") ? url.searchParams.get("tot") + "T23:59:59" : null;
+    const token = await l4Token(env);
+    const uit = {};
+    const ids = (url.searchParams.get("ids") || "").split(",").map(Number).filter(Boolean);
+    for (const id of (ids.length ? ids : Array.from({ length: 40 }, (_, i) => i + 1))) {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ StatusId: id, ProductCode: code, CreationDateFrom: vanaf, ...(tot ? { CreationDateTo: tot } : {}), TakeRecords: 500 }) });
+      const j = await r.json().catch(() => null);
+      const lijst = Array.isArray(j) ? j : ((j && j.Records) || []);
+      if (!lijst.length) continue;
+      const s = { naam: DP_STATUS_NAMEN[id] || null, orders: lijst.length, uddel: 0, container: 0, amerika: 0 };
+      for (const o of lijst) {
+        if (!s.naam && o.OrderStatus) s.naam = o.OrderStatus.Value || o.OrderStatus.Name || null;
+        for (const rw of (o.OrderRows || [])) {
+          if (String(rw.ProductCode) !== code) continue;
+          const q = Number(rw.Qty) || 0;
+          if (Number(o.DebtorId) === AMERIKA_DEBTOR || Number(rw.WarehouseId) === WH_TEXAS) s.amerika += q;
+          else if (Number(rw.WarehouseId) === WH_DEALER) s.container += q; else s.uddel += q;
+        }
+      }
+      uit[id] = s;
+    }
+    return reply(200, { ok: true, code, vanaf, tot, perStatus: uit });
+  }
   if (url.searchParams.get("kleuren")) {
     const model = url.searchParams.get("kleuren");
     const vanaf = /^\d{4}-\d\d$/.test(url.searchParams.get("vanaf") || "") ? url.searchParams.get("vanaf") + "-01" : new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 7) + "-01";
