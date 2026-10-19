@@ -9598,6 +9598,29 @@ async function berichtenRonde(env) {
 async function voorraadbepalingHandle(request, env, url) {
   const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
   if (!(await toegangMag(env, "voorraadbepaling", wie))) return reply(403, { ok: false, error: "geen toegang" });
+  /* Uitsplitsing van één model per artikel (Chantal, 19 okt 2026: "Refresh 196
+     verkocht, maar in Logic4 staan 44 Refresh Sterling White"). Per artikelcode
+     de kleur, de stuks zonder Amerika (wat de tegel telt) en met Amerika. */
+  if (url.searchParams.get("model")) {
+    const model = url.searchParams.get("model");
+    const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+    const varianten = (catalog.models || {})[model] || [];
+    if (!varianten.length) return reply(404, { ok: false, error: "model onbekend in de spa-catalogus" });
+    const token = await l4Token(env);
+    const vraag = (uitAmerika) => fetch("https://api.logic4server.nl/v3/Management/GetProductCollectionSalesInformation", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ TimeFrame: 2, HistoryPoints: 12, IncludingCurrentPeriod: true, ProductCodes: varianten.map(v => String(v.code)),
+                             ...(uitAmerika ? { ExcludeDebtorIds: [AMERIKA_DEBTOR] } : {}) }),
+    }).then(r => r.json()).catch(() => []);
+    const [zonder, met] = await Promise.all([vraag(true), vraag(false)]);
+    const per = {};
+    for (const v of varianten) per[String(v.code)] = { code: String(v.code), omschrijving: v.desc || "", kleur: dpRowInfo(v.desc || "").kleur || null, zonderAmerika: 0, metAmerika: 0, perMaand: {} };
+    for (const x of (Array.isArray(zonder) ? zonder : [])) { const p = per[String(x.ProductCode)]; if (p) { p.zonderAmerika += Number(x.Value) || 0; const m = String(x.DateStart || "").slice(0, 7); if (m && x.Value) p.perMaand[m] = (p.perMaand[m] || 0) + Number(x.Value); } }
+    for (const x of (Array.isArray(met) ? met : [])) { const p = per[String(x.ProductCode)]; if (p) p.metAmerika += Number(x.Value) || 0; }
+    const regels = Object.values(per).filter(p => p.zonderAmerika || p.metAmerika).sort((a, b) => b.zonderAmerika - a.zonderAmerika);
+    return reply(200, { ok: true, model, varianten: varianten.length, regels,
+                        totaal: { zonderAmerika: regels.reduce((a, p) => a + p.zonderAmerika, 0), metAmerika: regels.reduce((a, p) => a + p.metAmerika, 0) } });
+  }
   const vers = url.searchParams.get("vers") === "1";
   const oud = await env.FONTEYN_DATA.get("voorraadbepaling", { type: "json" });
   if (!vers && oud && oud.ts && Date.now() - Date.parse(oud.ts) < 6 * 3600000) return reply(200, { ...(await vbMetOverzicht(env, oud)), uitCache: true });
