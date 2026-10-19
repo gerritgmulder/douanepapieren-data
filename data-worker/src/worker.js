@@ -8924,25 +8924,13 @@ async function voorraadbepalingBereken(env) {
     method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body),
   }).then(async r => { if (!r.ok) throw new Error(path + " HTTP " + r.status); return r.json(); });
 
-  // Verkocht per model, 12 maanden, zonder Amerika
-  const verkocht = {}, perMaand = {}; let vanaf = null, tot = null;
-  /* Porties van 1000, niet 80. Sinds de spa-catalogus op 14 okt 2026 alle
-     5.120 varianten bevat (was 888) werden dat 64 aanroepen en liep de tegel
-     vast op "Too many subrequests" (Chantal). 1000 per keer geeft dezelfde
-     uitkomst (nagerekend); alle codes in één keer geeft bij Logic4 een 500. */
-  for (let i = 0; i < codes.length; i += 1000) {
-    const l = await post("/v3/Management/GetProductCollectionSalesInformation", {
-      TimeFrame: 2, HistoryPoints: 12, IncludingCurrentPeriod: true,
-      ProductCodes: codes.slice(i, i + 1000), ExcludeDebtorIds: [AMERIKA_DEBTOR],
-    });
-    for (const x of (Array.isArray(l) ? l : [])) {
-      const m = codeToModel[String(x.ProductCode)]; if (!m) continue;
-      const n = Number(x.Value) || 0; if (!n) continue;
-      verkocht[m] = (verkocht[m] || 0) + n;
-      const mnd = String(x.DateStart || "").slice(0, 7);
-      if (mnd) { perMaand[mnd] = (perMaand[mnd] || 0) + n; if (!vanaf || mnd < vanaf) vanaf = mnd; if (!tot || mnd > tot) tot = mnd; }
-    }
-  }
+  /* Verkocht komt alleen nog uit de ingelezen orders (vbVerkochtPerCode):
+     magazijn Fonteyn, nooit Warehouse Texas of een ander magazijn (Gerrit,
+     19 okt 2026: "voor nu en altijd"). Logic4's eigen verkoopcijfers telden
+     elk magazijn mee en zijn daarom geen terugval meer. */
+  const verkocht = {}, perMaand = {};
+  const jaarTerug0 = new Date(); jaarTerug0.setUTCFullYear(jaarTerug0.getUTCFullYear() - 1);
+  let vanaf = jaarTerug0.toISOString().slice(0, 7), tot = new Date().toISOString().slice(0, 7);
   // Besteld: open inkooporders bij de spa-fabrieken, zonder Amerika
   let orders = [];
   for (let page = 0; page < 12; page++) {
@@ -8964,9 +8952,8 @@ async function voorraadbepalingBereken(env) {
     }
   }
   /* Verkocht zoals Chantal het telt (zie vbOrdersInlezen): orders op orderdatum
-     met de vijf statussen, partnercontainers apart, Amerika eruit. Dezelfde
-     bron als de tabel per kleur. Logic4's eigen telling (hierboven) is alleen
-     de terugval zolang de orders nog niet zijn ingelezen. */
+     met de vijf statussen, alleen magazijn Fonteyn, partnercontainers apart.
+     Dezelfde bron als de tabel per kleur. */
   const containers = {}, verkochtMet = { ...verkocht };
   const dealer = { open: 0, ingelezen: false, fout: null };
   try {
@@ -8990,6 +8977,7 @@ async function voorraadbepalingBereken(env) {
       for (const m of Object.keys(verkocht)) if (verkocht[m] < 0) verkocht[m] = 0;
     }
   } catch (e) { dealer.fout = String(e.message || e); }
+  if (!dealer.ingelezen) return { ok: false, error: dealer.fout ? "orders lezen: " + dealer.fout : "De orders worden ingelezen; binnen het uur staat alles klaar." };
   const totaalVerkocht = Object.values(verkocht).reduce((a, b) => a + b, 0);
   const totaalBesteld = Object.values(besteld).reduce((a, b) => a + b, 0);
   const modellen = [...new Set([...Object.keys(verkocht), ...Object.keys(besteld)])].map(m => {
