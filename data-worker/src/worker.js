@@ -746,7 +746,9 @@ async function dpHandleAuth(request, env, url) {
    elkaar gaan lopen en dan zegt de forecast iets anders dan het portaal. */
 const DP_SCHAALKLEUREN = ["sterling white", "mystic mountain", "desert horizon", "pearl shadow",
                           "solid white", "pure white", "espresso", "white", "black"];
-const DP_SCHAAL_ANDERS = { "sterling silver": "sterling white" };
+/* Namen van de fabriek voor dezelfde schaal. Romex schrijft "sliver white" (Believe,
+   Wonder, Hope, Praise; Chantal 19 okt 2026: de Believe-container van 11 nov telde niet mee). */
+const DP_SCHAAL_ANDERS = { "sterling silver": "sterling white", "sliver white": "sterling white", "silver white": "sterling white", "sliver black": "black" };
 function dpSchaalKleur(tekst) {
   let t = String(tekst || "").toLowerCase()
     .replace(/^customized\s*-\s*/, "")          // "CUSTOMIZED - Sterling White with …"
@@ -10454,14 +10456,16 @@ async function dpRefreshReservations(env) {
         const n = Number(aantal) || 0;
         if (n <= 0) continue;
         geteld += n;
-        bakken.push({ eta: s.eta || null, qty: n, vessel: s.vessel || "", kleur: schaalKleur(naam) });
+        bakken.push({ eta: s.eta || null, qty: n, vessel: s.vessel || "", kleur: schaalKleur(naam), binnen: !!s.binnenGemeld });
       }
       /* Klopt de kleurverdeling niet met het totaal (een oudere invoice zonder
          kleuren, of een regel die niet gelezen kon worden), dan gaat het
          verschil in een bak zonder kleur. Zo staat er nooit meer of minder op
          het schip dan er echt op ligt. */
-      if (geteld < totaal) bakken.push({ eta: s.eta || null, qty: totaal - geteld, vessel: s.vessel || "", kleur: null });
-      (shipsByModel[model] = shipsByModel[model] || []).push(...bakken);
+      if (geteld < totaal) bakken.push({ eta: s.eta || null, qty: totaal - geteld, vessel: s.vessel || "", kleur: null, binnen: !!s.binnenGemeld });
+      /* De fabriek schrijft soms "Spa Believe" waar de catalogus "Believe" zegt: op één naam. */
+      const mKey = String(model).replace(/^spa\s+/i, "").trim();
+      (shipsByModel[mKey] = shipsByModel[mKey] || []).push(...bakken);
     }
   }
   /* De hal-voorraad telt PER KLEUR, niet per model.
@@ -10564,9 +10568,14 @@ async function dpRefreshReservations(env) {
        zoals het was. */
     const hal = Number(halRec.available) || 0;
     if (!halTotaal && hal > 0) { halPerKleur[""] = hal; halTotaal = hal; }
-    (shipsByModel[model] || [])
-      .sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
-      .forEach(sh => buckets.push({ kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel, kleur: sh.kleur }));
+    /* Een schip dat binnen is gemeld, ligt in Uddel: wie daaruit pakt, staat op
+       voorraad en niet op een ETA uit het verleden (Chantal, 19 okt 2026: "Bangkok
+       Express is ook in Logic al verwerkt"). Binnen gemeld eerst, dan op ETA. */
+    (shipsByModel[String(model).replace(/^spa\s+/i, "").trim()] || [])
+      .sort((a, b) => (b.binnen ? 1 : 0) - (a.binnen ? 1 : 0) || String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
+      .forEach(sh => buckets.push(sh.binnen
+        ? { kind: "voorraad", eta: null, left: sh.qty, vessel: null, kleur: sh.kleur }
+        : { kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel, kleur: sh.kleur }));
     // Productie (open fabrieks-IKO's) ná de schepen, op ETA-volgorde
     (prodByModel[model] || [])
       .slice().sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
@@ -10608,7 +10617,10 @@ async function dpRefreshReservations(env) {
          De kleurregel: een bak zonder kleur mag door iedereen, een order
          zonder kleur mag overal uit, en verder moet de schaalkleur kloppen. */
       const mijnSchaal = schaalKleur(r.kleur);
-      const mijnExtra = extraSleutel(r.extra);
+      /* Bij Kenai en Calgary staat de modelnaam zelf als "uitvoering" op de regel;
+         dat is geen uitvoering (warmtepomp e.d.) en mag een schip niet uitsluiten. */
+      const mijnExtra0 = extraSleutel(r.extra);
+      const mijnExtra = mijnExtra0 && mijnExtra0 === extraSleutel(model) ? "" : mijnExtra0;
       /* Een spa die bij de fabriek voor déze order besteld is (proforma met
          ordernummer en klantnaam, Chantal 2 okt 2026) gaat eerst naar deze
          order, en nooit naar een andere. */
@@ -10669,13 +10681,15 @@ async function dpRefreshReservations(env) {
     for (const lijst of [byModel, byModelUSA]) for (const rows of Object.values(lijst)) for (const r of rows) {
       const n = regels[r.regelId] || regels[r.regelIdOud];
       if (!n || !n.schip) continue;
+      // Op inplannen of gepland gezet = binnen in Uddel; dat gaat vóór een eerder gekozen schip.
+      if (n.inplannen || n.gepland) continue;
       r.verwachtAuto = r.verwacht || null;
       r.verwachtHandmatig = true;
       r.verwachtBron = "handmatig";
       if (n.schip === "__voorraad__") { r.verwacht = "voorraad"; r.verwachtSchip = null; toegepast++; continue; }
       const s = perSleutel[n.schip];
       const eta = (s && s.eta) || n.schipEta || null;
-      r.verwacht = eta || "op-schip";
+      r.verwacht = (s && s.binnenGemeld) ? "voorraad" : (eta || "op-schip");
       r.verwachtSchip = (s && (s.vessel || s.ref)) || n.schipRef || n.schip;
       toegepast++;
     }

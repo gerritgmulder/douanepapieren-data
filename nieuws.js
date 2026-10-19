@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-19", bestand: "voorraad.html", soort: "beter",
+      titel: "Reserveringen en schepen kloppen weer",
+      wat:   "Een reservering op inplannen of gepland staat altijd als binnen in Uddel, ook als er eerder een schip bij gekozen was. Een schip dat binnen is gemeld telt als voorraad en staat niet meer bij Binnenkomende schepen. Kenai, Calgary en Believe pakken weer uit de containers die onderweg zijn."
+    },
+    {
       datum: "2026-10-19", bestand: "voorraadbepaling.html", soort: "nieuw",
       titel: "Voorraadbepaling: de lijst van Chantal, elke week vers",
       wat:   "De tegel maakt nu dezelfde lijst als de Rapportage Wizard in Logic4: per uitvoering wat er verkocht is, de vrije voorraad Fonteyn/onderweg, wat in productie is, de spa's te produceren (7 weken verkoop) en het advies. Met een knop voor alleen wat besteld moet worden, een download naar Excel en Vastleggen voor deze week."

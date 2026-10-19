@@ -2323,7 +2323,9 @@ function renderOvShips(){
      crisscross door elkaar heen, dat is niet echt overzichtelijk."
      Schepen zonder ETA staan onderaan: die moet ze juist nog invullen, en dan
      helpt het niet als ze tussen de rest verdwijnen. */
-  const alle=ovShipsCache.slice().sort((a,b)=>{
+  /* Alleen wat nog moet binnenkomen (Chantal, 19 okt 2026: "12 containers die
+     allang binnen zijn"). Binnen gemeld staat bij Schepen en ontvangst. */
+  const alle=ovShipsCache.filter(s=>!s.binnenGemeld&&!s.alleenDocumenten).sort((a,b)=>{
     const ea=Date.parse(a.eta||""), eb=Date.parse(b.eta||"");
     const ga=isFinite(ea), gb=isFinite(eb);
     if(ga&&gb) return ea-eb;
@@ -2556,10 +2558,11 @@ function verwachtLabel(v,bron){
 function verwachtVanRegel(r){
   const n=notitie(r);
   if(n.schip===VOORRAAD_KEUZE) return {v:"voorraad", schip:null, hand:true};
+  if(n.inplannen||n.gepland) return {v:"voorraad", schip:null, hand:true};
   if(n.schip){
     let g=schipVan(n.schip);
     if(!g && (n.schipEta||n.schipRef)) g={eta:n.schipEta||null, ref:n.schipRef||n.schip};
-    if(g) return {v:g.eta||"op-schip", schip:g.ref||null, hand:true};
+    if(g) return {v:g.binnen?"voorraad":(g.eta||"op-schip"), schip:g.ref||null, hand:true};
   }
   return {v:r.verwacht, schip:r.verwachtSchip||null, hand:false};
 }
@@ -3231,7 +3234,7 @@ function alleZendingen(){
     .map(function(s){ return { sleutel:String(s.ref||s.trackRef||s.file||s.vessel||""),
                                naam:s.vessel||"(zonder naam)",
                                ref:String(s.ref||s.trackRef||"")||(s.vessel||"(zonder referentie)"),
-                               eta:s.eta||null }; })
+                               eta:s.eta||null, binnen:!!s.binnenGemeld }; })
     .filter(function(s){ return s.sleutel; });
 }
 function schipVan(sleutel){
@@ -3303,8 +3306,12 @@ function leveringCel(r,n,id,uit){
      volgende boot te staan (Manon, 17 sep 2026: "alles staat nog op
      automatisch"), maar dat hij binnen is, en sinds wanneer dat zo is
      aangevinkt. Wie de zending alsnog wil aanwijzen kiest hem hieronder. */
-  var binnenGevinkt = !gekozen && !!(n.inplannen || n.gepland);
-  var kop = gekozen
+  /* Inplannen of gepland wint ook van een eerder gekozen schip (Chantal, 19 okt 2026). */
+  var binnenGevinkt = !!(n.inplannen || n.gepland);
+  var kop = (gekozen && !binnenGevinkt && gekozen.binnen)
+    ? "<span style='color:#15803d;font-weight:600'>binnen in Uddel</span>"+
+      " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig)</span>"
+    : (gekozen && !binnenGevinkt)
     ? (zendingBinnen(gekozen) ? "<span style='color:#15803d;font-weight:600'>schip is binnen</span>"
        : "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>")+
       " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig"+
