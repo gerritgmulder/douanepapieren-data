@@ -18357,8 +18357,8 @@ let _d1DichtTot = 0;
 function d1IsDicht(e) {
   const m = String((e && e.message) || e || "");
   if (/daily row read limit|exceeded D1|free tier daily/i.test(m)) {
-    const morgen = new Date(); morgen.setUTCHours(24, 0, 30, 0);
-    _d1DichtTot = morgen.getTime();
+    // Eén minuut overslaan en dan opnieuw proberen (na een upgrade gaat D1 meteen weer open).
+    _d1DichtTot = Date.now() + 60000;
     return true;
   }
   return false;
