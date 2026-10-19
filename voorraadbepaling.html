@@ -130,7 +130,7 @@ function teken(){
     '<div><b>'+nl(totVrij)+'</b><span>spa\'s vrij: voorraad, zee en productie min '+nl(res)+' gereserveerd</span></div>'+
     '<div><b>'+bij.length+'</b><span>modellen om bij te bestellen, samen '+nl(nodig)+' spa\'s</span></div>';
   var b=(j.overzicht||{}).bron||{};
-  $("basis").innerHTML = esc("Verkocht = orders met orderdatum van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+" en status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland: dezelfde telling als de Rapportage Wizard in Logic4. Particulier en partner samen. Partnercontainers en Amerika blijven buiten de telling, ook de "+j.ikosAmerika+" inkooporders voor Houston.")+
+  $("basis").innerHTML = esc("Verkocht = orders met orderdatum van "+(j.periode.vanafDag?datumNL(j.periode.vanafDag)+" tot en met "+datumNL(j.periode.totDag):mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot))+", magazijn Fonteyn, status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland: dezelfde selectie als de Rapportage Wizard in Logic4. Particulier en partner samen. Partnercontainers, Outlet, Showroommodel en Amerika blijven buiten de telling, ook de "+j.ikosAmerika+" inkooporders voor Houston.")+
     '<br>'+esc("Uit Overzicht (Voorraadbeheer), stand: reserveringen "+tijd(b.reserveringen)+", voorraad "+tijd(b.hallen)+", schepen "+tijd(b.schepen)+", productie "+tijd(b.productie)+". Ook hier blijven partnercontainers buiten de telling.")+
     (N?'<br><b>'+esc("Met een nieuwe bestelling van "+nl(N)+" spa's: per model staat bij Advies hoeveel daarvan het moeten zijn.")+'</b>':'');
   var lijst = $("alles").checked ? j.modellen : bij;
@@ -154,7 +154,7 @@ async function laadKleuren(model){
   if(kleuren[model]&&!kleuren[model].fout) return;
   kleuren[model]={bezig:true};
   try{
-    var r=await fetch(W+"/voorraadbepaling?kleuren="+encodeURIComponent(model)+"&vanaf="+encodeURIComponent((data&&data.periode&&data.periode.vanaf)||""), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
+    var r=await fetch(W+"/voorraadbepaling?kleuren="+encodeURIComponent(model)+"&vanaf="+encodeURIComponent((data&&data.periode&&(data.periode.vanafDag||data.periode.vanaf))||""), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
     var j=await r.json(); if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
     kleuren[model]=j;
   }catch(e){ kleuren[model]={fout:e.message}; }
@@ -168,7 +168,7 @@ function kleurTabel(model){
   if(!k.regels.length) return '<div class="kleuren"><span class="lead">In deze periode staat van dit model 0 verkocht.</span></div>';
   var t=k.totaal;
   var regels=k.regels.filter(function(x){ return x.uddel || toonCont; });
-  var kop='<b>Per kleur</b> <span class="lead">(verkocht voor Uddel vanaf '+esc(mnd(String(k.vanaf).slice(0,7)))+')</span> '+
+  var kop='<b>Per kleur</b> <span class="lead">(verkocht, magazijn Fonteyn, vanaf '+esc(datumNL(k.vanaf))+')</span> '+
     '<button type="button" class="contKnop">'+(toonCont?'Partnercontainers verbergen':'Partnercontainers tonen')+'</button>';
   return '<div class="kleuren">'+kop+
     (toonCont?'<div class="contUitleg">Partnercontainers blijven buiten de voorraadbepaling: die spa\'s gaan van de fabriek rechtstreeks naar de partner. Ze staan hier alleen ter informatie.</div>':'')+

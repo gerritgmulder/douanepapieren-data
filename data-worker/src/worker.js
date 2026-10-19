@@ -5391,7 +5391,7 @@ const DP_STATUS_NAMEN = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1:
   17: "te factureren", 8: "wordt gepickt", 29: "afhaal", 6: "bestellen",
   32: "nalevering", 31: "niet op voorraad", 26: "op afroep", 27: "wordt gemonteerd", 34: "omruiling/retour" };
 const WH_NAMES = { 19: "Geen", 20: "OUD Kelder", 21: "Fonteyn", 25: "Showroommodel", 26: "Outlet", 27: "Dealer magazijn", 49: "Derving", 50: "Warehouse Texas USA", 51: "Transporteur", 52: "Retouren" };
-const WH_TEXAS = 50, WH_DEALER = 27;
+const WH_TEXAS = 50, WH_DEALER = 27, WH_FONTEYN = 21;
 /* Kleur uit de regelomschrijving. Die is opgebouwd met streepjes:
    "Relax Spa | Sterling White with Grey". Alleen: sommige regels hebben er
    twee of drie, en dan ging het mis (Chantal, video 28 aug 2026: "ik krijg
@@ -8885,12 +8885,15 @@ async function vbVerkochtPerCode(env, vanafDatum, codes) {
   const db = await vbDb(env);
   const bij = await db.prepare("SELECT v FROM vb_scan WHERE k = 'obij'").first().catch(() => null);
   if (!(bij && bij.v)) return null;
+  /* Alleen magazijn Fonteyn telt voor Uddel, net als Chantal (19 okt 2026): Outlet,
+     Showroommodel, Texas en de rest blijven erbuiten. Magazijn 27 komt mee, apart,
+     voor de kolom partnercontainers. */
   let sql = "SELECT r.code AS code, substr(o.datum, 1, 7) AS m, (r.wh = ?) AS c, SUM(r.qty) AS q FROM vb_orderregel r JOIN vb_order o ON o.orderid = r.orderid " +
-    "WHERE o.status IN (" + VB_TELT.join(",") + ") AND o.datum >= ? AND r.wh != ? AND (o.debiteur IS NULL OR o.debiteur != ?)";
+    "WHERE o.status IN (" + VB_TELT.join(",") + ") AND o.datum >= ? AND r.wh IN (" + WH_FONTEYN + ", ?) AND (o.debiteur IS NULL OR o.debiteur != ?)";
   const uit = [];
   const run = async (deel) => {
     const q = sql + (deel ? " AND r.code IN (" + deel.map(() => "?").join(",") + ")" : "") + " GROUP BY r.code, m, c";
-    const r = await db.prepare(q).bind(WH_DEALER, vanafDatum, WH_TEXAS, AMERIKA_DEBTOR, ...(deel || [])).all();
+    const r = await db.prepare(q).bind(WH_DEALER, vanafDatum, WH_DEALER, AMERIKA_DEBTOR, ...(deel || [])).all();
     uit.push(...(r.results || []));
   };
   if (codes) for (let i = 0; i < codes.length; i += 90) await run(codes.slice(i, i + 90)); else await run(null);
@@ -8967,9 +8970,13 @@ async function voorraadbepalingBereken(env) {
   const containers = {}, verkochtMet = { ...verkocht };
   const dealer = { open: 0, ingelezen: false, fout: null };
   try {
-    const rijen = vanaf ? await vbVerkochtPerCode(env, vanaf + "-01", null) : null;
+    /* Precies twaalf maanden tot vandaag, op de dag af (Chantal: 19-10-2025 t/m 19-10-2026). */
+    const jaarTerug = new Date(); jaarTerug.setUTCFullYear(jaarTerug.getUTCFullYear() - 1);
+    const vanafDag = jaarTerug.toISOString().slice(0, 10);
+    const rijen = await vbVerkochtPerCode(env, vanafDag, null);
     dealer.ingelezen = !!rijen;
     if (rijen) {
+      dealer.vanafDag = vanafDag;
       for (const k of Object.keys(verkocht)) delete verkocht[k];
       for (const k of Object.keys(perMaand)) perMaand[k] = 0;
       for (const k of Object.keys(verkochtMet)) delete verkochtMet[k];
@@ -8992,7 +8999,7 @@ async function voorraadbepalingBereken(env) {
     return { model: m, verkocht: v, verkochtMetContainers: verkochtMet[m] || 0, containers: Math.round((containers[m] || 0) * 100) / 100,
              aandeel: Math.round(aandeel * 10000) / 100, besteld: b, hoort: Math.round(hoort * 10) / 10, verschil: Math.round(hoort - b), ikos: ikosPerModel[m] || [] };
   }).sort((a, b) => b.verschil - a.verschil || b.verkocht - a.verkocht);
-  return { ok: true, ts: new Date().toISOString(), periode: { vanaf, tot }, perMaand, totaalVerkocht, totaalBesteld,
+  return { ok: true, ts: new Date().toISOString(), periode: { vanaf, tot, vanafDag: dealer.vanafDag || null, totDag: new Date().toISOString().slice(0, 10) }, perMaand, totaalVerkocht, totaalBesteld,
            zonderContainers: { aantal: Math.round(Object.values(containers).reduce((a, b) => a + b, 0)), nogOpen: dealer.open, facturenIngelezen: dealer.ingelezen, fout: dealer.fout || null },
            ikosFabriek: fabriek.length, ikosAmerika: overgeslagen, modellen };
 }
@@ -9865,9 +9872,48 @@ async function voorraadbepalingHandle(request, env, url) {
     } catch (e) {}
     return reply(200, { ok: true, code, vanaf, tot, perStatus: uit, facturen });
   }
+  /* Per magazijn voor één model: om naast een selectie op magazijn te leggen. */
+  if (url.searchParams.get("perMagazijn")) {
+    const model = url.searchParams.get("perMagazijn");
+    const vv = url.searchParams.get("vanaf") || "2025-11";
+    const vanaf = vv.length === 7 ? vv + "-01" : vv;
+    const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+    const codes = ((catalog.models || {})[model] || []).map(v => String(v.code));
+    const db = await vbDb(env);
+    const uit = [];
+    for (let i = 0; i < codes.length; i += 90) {
+      const deel = codes.slice(i, i + 90);
+      const r = await db.prepare("SELECT r.wh AS wh, r.code AS code, o.status AS status, (o.debiteur = ?) AS usa, SUM(r.qty) AS q, GROUP_CONCAT(o.orderid || '@' || o.datum || '@' || r.qty) AS orders FROM vb_orderregel r JOIN vb_order o ON o.orderid = r.orderid WHERE o.status IN (" + VB_TELT.join(",") + ") AND o.datum >= ? AND r.code IN (" + deel.map(() => "?").join(",") + ") GROUP BY r.wh, r.code, o.status, usa")
+        .bind(AMERIKA_DEBTOR, vanaf, ...deel).all();
+      uit.push(...(r.results || []).map(x => ({ ...x, magazijn: WH_NAMES[x.wh] || String(x.wh) })));
+    }
+    // De leverancier per artikel, zoals Logic4 hem kent (de Rapportage Wizard selecteert op crediteur).
+    let leveranciers = {};
+    try {
+      const vs = ((catalog.models || {})[model] || []);
+      const ids = vs.map(v => Number(v.productId || v.id)).filter(Boolean);
+      const token = await l4Token(env);
+      const r = await fetch("https://api.logic4server.nl/v3/Products/GetSuppliersForProducts", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ProductIds: ids, TakeRecords: 500 }) });
+      const j = await r.json().catch(() => null);
+      const naarCode = {}; for (const v of vs) naarCode[Number(v.productId || v.id)] = String(v.code);
+      for (const x of (Array.isArray(j) ? j : ((j && j.Records) || []))) { const c = naarCode[Number(x.ProductId)]; if (c) (leveranciers[c] = leveranciers[c] || []).push({ naam: x.CreditorName, actief: !!x.IsActive }); }
+    } catch (e) { leveranciers = { fout: String(e.message || e) }; }
+    // De artikelgroepen (Chantal selecteert Spa's, Spa's Gebruikt, Spa's Gebruikt Garantie).
+    let groepen = {};
+    try {
+      const vs = ((catalog.models || {})[model] || []);
+      const ids = vs.map(v => Number(v.productId || v.id)).filter(Boolean);
+      const token = await l4Token(env);
+      const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ProductIds: ids, LoadProductGroups: true, TakeRecords: 500 }) });
+      const j = await r.json().catch(() => null);
+      for (const x of (Array.isArray(j) ? j : ((j && j.Records) || []))) groepen[String(x.ProductCode)] = { naam1: x.ProductName1, naam2: x.ProductName2, g1: x.ProductGroupId1, g2: x.ProductGroupId2, groepen: (x.ProductGroups || []).map(g => ({ id: g.Id || g.ProductGroupId, naam: g.Name || g.Description || g.ProductGroupName })) , status: x.StatusId };
+    } catch (e) { groepen = { fout: String(e.message || e) }; }
+    return reply(200, { ok: true, model, vanaf, regels: uit, leveranciers, groepen });
+  }
   if (url.searchParams.get("kleuren")) {
     const model = url.searchParams.get("kleuren");
-    const vanaf = /^\d{4}-\d\d$/.test(url.searchParams.get("vanaf") || "") ? url.searchParams.get("vanaf") + "-01" : new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 7) + "-01";
+    const vv = url.searchParams.get("vanaf") || "";
+    const vanaf = /^\d{4}-\d\d-\d\d$/.test(vv) ? vv : /^\d{4}-\d\d$/.test(vv) ? vv + "-01" : (() => { const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() - 1); return d.toISOString().slice(0, 10); })();
     const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
     const varianten = (catalog.models || {})[model] || [];
     if (!varianten.length) return reply(404, { ok: false, error: "model onbekend in de spa-catalogus" });

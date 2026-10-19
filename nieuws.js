@@ -53,7 +53,7 @@
     {
       datum: "2026-10-19", bestand: "voorraadbepaling.html", soort: "beter",
       titel: "Voorraadbepaling zonder partnercontainers",
-      wat:   "Verkocht telt nu precies zoals de Rapportage Wizard in Logic4: orders op orderdatum met status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland, alleen voor Uddel. Klik een model open en je ziet per kleur hoeveel er verkocht is en welk aandeel dat is. Partnercontainers kun je erbij tonen; die blijven buiten de berekening."
+      wat:   "Verkocht telt nu zoals de Rapportage Wizard in Logic4: orders van precies de laatste 12 maanden, magazijn Fonteyn, status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland. Klik een model open en je ziet per kleur hoeveel er verkocht is en welk aandeel dat is. Partnercontainers kun je erbij tonen; die blijven buiten de berekening."
     },
     {
       datum: "2026-10-18", bestand: "voorraad.html", soort: "beter",
