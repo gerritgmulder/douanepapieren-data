@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-19", bestand: "voorraadbepaling.html", soort: "beter",
+      titel: "Voorraadbepaling zonder partnercontainers",
+      wat:   "De verkoop telt nu alleen wat voor Uddel is: gefactureerde spa's, zonder partnercontainers. Klik een model open en je ziet hoeveel er voor partnercontainers af gaan."
+    },
+    {
       datum: "2026-10-18", bestand: "voorraad.html", soort: "beter",
       titel: "Verwachte levering: geen oude datums meer",
       wat:   "Bij Reserveringen staat geen datum meer die al voorbij is. Is het schip aangekomen, dan staat er schip is binnen. Is de leverdatum van de fabriek verlopen, dan staat er volgende productie (datum volgt). Partners en adviseurs zien hetzelfde in Passion Partners."

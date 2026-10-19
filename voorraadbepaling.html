@@ -115,20 +115,20 @@ function teken(){
   var bij=j.modellen.filter(function(m){ return m._advies>0; });
   var nodig=bij.reduce(function(n,m){ return n+m._advies; },0);
   var res=j.modellen.reduce(function(n,m){ return n+(m.res||0); },0);
-  $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s verkocht in de laatste 12 maanden</span></div>'+
+  $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s gefactureerd in de laatste 12 maanden, partnercontainers eraf'+(j.zonderContainers?' ('+nl(j.zonderContainers.aantal)+')':'')+'</span></div>'+
     '<div><b>'+nl(j.totaalBesteld)+'</b><span>spa\'s besteld bij de fabrieken (open inkooporders)</span></div>'+
     '<div><b>'+nl(totVrij)+'</b><span>spa\'s vrij: voorraad, zee en productie min '+nl(res)+' gereserveerd</span></div>'+
     '<div><b>'+bij.length+'</b><span>modellen om bij te bestellen, samen '+nl(nodig)+' spa\'s</span></div>';
   var b=(j.overzicht||{}).bron||{};
-  $("basis").innerHTML = esc("Verkoop van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Amerika blijft buiten deze telling: de verkoop én de "+j.ikosAmerika+" inkooporders voor Houston.")+
-    '<br>'+esc("Uit Overzicht (Voorraadbeheer), stand: reserveringen "+tijd(b.reserveringen)+", voorraad "+tijd(b.hallen)+", schepen "+tijd(b.schepen)+", productie "+tijd(b.productie)+". Partnercontainers tellen niet mee: die gaan rechtstreeks naar de dealer.")+
+  $("basis").innerHTML = esc("Verkoop = gefactureerd, van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Partnercontainers blijven buiten de telling"+(j.zonderContainers?" ("+nl(j.zonderContainers.aantal)+" spa's)":"")+": die gaan van de fabriek rechtstreeks naar de partner, buiten Uddel om. Amerika ook: de verkoop én de "+j.ikosAmerika+" inkooporders voor Houston.")+
+    '<br>'+esc("Uit Overzicht (Voorraadbeheer), stand: reserveringen "+tijd(b.reserveringen)+", voorraad "+tijd(b.hallen)+", schepen "+tijd(b.schepen)+", productie "+tijd(b.productie)+". Ook hier blijven partnercontainers buiten de telling.")+
     (N?'<br><b>'+esc("Met een nieuwe bestelling van "+nl(N)+" spa's: per model staat bij Advies hoeveel daarvan het moeten zijn.")+'</b>':'');
   var lijst = $("alles").checked ? j.modellen : bij;
   $("lijst").innerHTML = lijst.length ? lijst.map(function(m){
     var pil = m._advies>0 ? '<span class="pil bij">'+m._advies+' bijbestellen</span>' : m._teveel>0 ? '<span class="pil teveel">'+m._teveel+' meer dan de verhouding</span>' : '<span class="pil goed">klopt</span>';
     var uitleg = '<div style="line-height:1.6">'+
       '<b>Overzicht:</b> '+nl(m.res)+' gereserveerd · '+nl(m.nl)+' op voorraad NL · '+nl(m.zee)+' op zee · '+nl(m.prod)+' in productie → <b>'+nl(m.vrij)+' vrij</b><br>'+
-      '<b>Verkoop:</b> '+nl(m.verkocht)+' verkocht = '+m.aandeel.toLocaleString("nl-NL")+'% van alles · '+m.aandeel.toLocaleString("nl-NL")+'% van '+nl(basisT)+(N?' (vrij '+nl(totVrij)+' + nieuwe bestelling '+nl(N)+')':' vrij')+' = <b>hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</b><br>'+
+      '<b>Verkoop:</b> '+nl(m.verkocht)+' gefactureerd'+(m.containers?' ('+nl(m.verkochtMetContainers)+' min '+nl(m.containers)+' voor partnercontainers)':'')+' = '+m.aandeel.toLocaleString("nl-NL")+'% van alles · '+m.aandeel.toLocaleString("nl-NL")+'% van '+nl(basisT)+(N?' (vrij '+nl(totVrij)+' + nieuwe bestelling '+nl(N)+')':' vrij')+' = <b>hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</b><br>'+
       '<b>Advies:</b> hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+' - vrij '+nl(m.vrij)+(m.tekortOverzicht?' (en het tekort in Overzicht is '+m.tekortOverzicht+', dat moet er minstens bij)':'')+' → <b>'+(m._advies>0?m._advies+' bijbestellen':(m._teveel>0?m._teveel+' meer dan de verhouding':'klopt'))+'</b></div>'+
       '<div style="margin-top:6px">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Voor dit model staan nu 0 stuks besteld.')+'</div>';
     return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+(open[m.model]?'▾ ':'▸ ')+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n">'+nl(m.vrij)+'</td><td class="n verberg-mob">'+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
