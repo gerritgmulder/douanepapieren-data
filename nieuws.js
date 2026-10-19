@@ -53,7 +53,7 @@
     {
       datum: "2026-10-19", bestand: "voorraadbepaling.html", soort: "beter",
       titel: "Voorraadbepaling zonder partnercontainers",
-      wat:   "De verkoop telt nu alleen wat voor Uddel is: gefactureerde spa's, zonder partnercontainers. Klik een model open en je ziet hoeveel er voor partnercontainers af gaan."
+      wat:   "De verkoop telt nu alleen wat voor Uddel is: gefactureerde spa's, zonder partnercontainers. Klik een model open en je ziet per kleur hoeveel er voor Uddel verkocht is, welk aandeel dat is, en hoeveel er naar partnercontainers ging."
     },
     {
       datum: "2026-10-18", bestand: "voorraad.html", soort: "beter",

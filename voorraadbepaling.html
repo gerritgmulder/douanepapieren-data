@@ -57,6 +57,13 @@ tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
 .iko{font-size:12px;color:var(--grijs)}
 .hidden{display:none!important}
 @media (max-width:700px){ .verberg-mob{display:none} }
+.kleuren{margin-top:10px}
+.kleurtab{width:100%;margin-top:6px;border-collapse:collapse;font-size:12.5px;background:#fff;color:#1f2937}
+.kleurtab th{background:#f3f4f6;text-align:left;font-weight:600;padding:5px 8px;white-space:nowrap}
+.kleurtab td{padding:5px 8px;border-top:1px solid #e5e7eb;overflow-wrap:break-word}
+.kleurtab .n{text-align:right;white-space:nowrap}
+.kleurtab .code{color:#6b7280;font-size:11px}
+.kleurtab tr.som td{border-top:2px solid #d1d5db;background:#fafafa}
 </style>
 </head>
 <body>
@@ -132,9 +139,34 @@ function teken(){
       '<b>Advies:</b> hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+' - vrij '+nl(m.vrij)+(m.tekortOverzicht?' (en het tekort in Overzicht is '+m.tekortOverzicht+', dat moet er minstens bij)':'')+' → <b>'+(m._advies>0?m._advies+' bijbestellen':(m._teveel>0?m._teveel+' meer dan de verhouding':'klopt'))+'</b></div>'+
       '<div style="margin-top:6px">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Voor dit model staan nu 0 stuks besteld.')+'</div>';
     return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+(open[m.model]?'▾ ':'▸ ')+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n">'+nl(m.vrij)+'</td><td class="n verberg-mob">'+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
-      (open[m.model] ? '<tr><td colspan="7" class="iko">'+uitleg+'</td></tr>' : '');
+      (open[m.model] ? '<tr><td colspan="7" class="iko">'+uitleg+kleurTabel(m.model)+'</td></tr>' : '');
   }).join("") : '<tr><td colspan="7" class="lead">Alle modellen zitten op of boven de verhouding.</td></tr>';
-  document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; teken(); }); });
+  document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; if(open[tr.dataset.m]) laadKleuren(tr.dataset.m); teken(); }); });
+}
+/* Per kleur: wat er voor Uddel gefactureerd is en wat voor partnercontainers
+   (Gerrit, 19 okt 2026). Wordt opgehaald bij het openklikken van een model. */
+var kleuren={};
+async function laadKleuren(model){
+  if(kleuren[model]&&!kleuren[model].fout) return;
+  kleuren[model]={bezig:true};
+  try{
+    var r=await fetch(W+"/voorraadbepaling?kleuren="+encodeURIComponent(model)+"&vanaf="+encodeURIComponent((data&&data.periode&&data.periode.vanaf)||""), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
+    var j=await r.json(); if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    kleuren[model]=j;
+  }catch(e){ kleuren[model]={fout:e.message}; }
+  if(open[model]) teken();
+}
+function kleurTabel(model){
+  var k=kleuren[model];
+  if(!k||k.bezig) return '<div class="kleuren"><span class="lead">Kleuren ophalen…</span></div>';
+  if(k.fout) return '<div class="kleuren"><span style="color:#b91c1c">Kleuren ophalen vraagt een nieuwe poging: '+esc(k.fout)+'</span></div>';
+  if(!k.regels.length) return '<div class="kleuren"><span class="lead">In deze periode staat van dit model 0 gefactureerd.</span></div>';
+  var t=k.totaal;
+  return '<div class="kleuren"><b>Per kleur</b> <span class="lead">(gefactureerd vanaf '+esc(mnd(String(k.vanaf).slice(0,7)))+')</span>'+
+    '<table class="kleurtab"><thead><tr><th>Uitvoering</th><th class="n">Uddel</th><th class="n">Aandeel</th><th class="n">Partnercontainers</th></tr></thead><tbody>'+
+    k.regels.map(function(x){ return '<tr><td>'+esc(x.omschrijving)+' <span class="code">'+esc(x.code)+'</span></td><td class="n"><b>'+nl(x.uddel)+'</b></td><td class="n">'+(t.uddel?Math.round(x.uddel/t.uddel*100):0)+'%</td><td class="n">'+nl(x.containers)+'</td></tr>'; }).join('')+
+    '<tr class="som"><td>Totaal</td><td class="n"><b>'+nl(t.uddel)+'</b></td><td class="n">100%</td><td class="n">'+nl(t.containers)+'</td></tr>'+
+    '</tbody></table></div>';
 }
 function tijd(v){ if(!v) return "onbekend"; var d=new Date(v); return isNaN(d)?String(v):d.toLocaleString("nl-NL",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}); }
 $("nieuw").addEventListener("input", teken);

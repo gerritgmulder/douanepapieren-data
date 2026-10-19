@@ -8858,17 +8858,31 @@ async function voorraadbepalingBereken(env) {
       (ikosPerModel[m] = ikosPerModel[m] || []).push({ iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 90), qty: q, eta: String(r.ExpectedDeliveryDate || "").slice(0, 10) || null });
     }
   }
-  // Partnercontainers eraf (Gerrit, 19 okt 2026), per model en per maand.
-  const containers = {};
-  const dealer = await vbDealerPerCode(env, (vanaf || new Date().toISOString().slice(0, 7)) + "-01").catch(e => ({ per: {}, open: 0, ingelezen: false, fout: String(e.message || e) }));
-  for (const [sleutel, x] of Object.entries(dealer.per)) {
-    const m = sleutel.startsWith("model:") ? sleutel.slice(6) : codeToModel[sleutel];
-    if (!m) continue;
-    containers[m] = (containers[m] || 0) + x.totaal;
-    for (const [mnd, q] of Object.entries(x.perMaand)) if (perMaand[mnd] != null) perMaand[mnd] = Math.max(0, perMaand[mnd] - q);
-  }
-  const verkochtMet = { ...verkocht };
-  for (const [m, q] of Object.entries(containers)) if (verkocht[m] != null) verkocht[m] = Math.max(0, Math.round((verkocht[m] - q) * 100) / 100);
+  /* Partnercontainers eraf (Gerrit, 19 okt 2026). Zijn de facturen ingelezen,
+     dan komt de hele verkoop uit D1: gefactureerd, magazijn 27 apart. Dezelfde
+     bron als de tabel per kleur, zodat de som van de kleuren gelijk is aan het
+     model. Logic4's eigen telling (hierboven) is dan alleen de terugval. */
+  const containers = {}, verkochtMet = { ...verkocht };
+  const dealer = { open: 0, ingelezen: false, fout: null };
+  try {
+    const db = await vbDb(env);
+    const bij = await db.prepare("SELECT v FROM vb_scan WHERE k = 'bij2'").first();
+    dealer.ingelezen = !!(bij && bij.v);
+    if (dealer.ingelezen && vanaf) {
+      const r = await db.prepare("SELECT code, substr(datum, 1, 7) AS m, (wh = ?) AS c, SUM(qty) AS q FROM vb_factuurregel WHERE datum >= ? GROUP BY code, m, c").bind(WH_DEALER, vanaf + "-01").all();
+      for (const k of Object.keys(verkocht)) delete verkocht[k];
+      for (const k of Object.keys(perMaand)) perMaand[k] = 0;
+      for (const k of Object.keys(verkochtMet)) delete verkochtMet[k];
+      for (const x of (r.results || [])) {
+        const m = codeToModel[String(x.code)]; if (!m) continue;
+        const q = Number(x.q) || 0;
+        verkochtMet[m] = (verkochtMet[m] || 0) + q;
+        if (Number(x.c)) containers[m] = (containers[m] || 0) + q;
+        else { verkocht[m] = (verkocht[m] || 0) + q; if (perMaand[x.m] != null || x.m >= vanaf) perMaand[x.m] = (perMaand[x.m] || 0) + q; }
+      }
+      for (const m of Object.keys(verkocht)) if (verkocht[m] < 0) verkocht[m] = 0;
+    }
+  } catch (e) { dealer.fout = String(e.message || e); }
   const totaalVerkocht = Object.values(verkocht).reduce((a, b) => a + b, 0);
   const totaalBesteld = Object.values(besteld).reduce((a, b) => a + b, 0);
   const modellen = [...new Set([...Object.keys(verkocht), ...Object.keys(besteld)])].map(m => {
@@ -9708,6 +9722,29 @@ async function voorraadbepalingHandle(request, env, url) {
      de kleur, de stuks zonder Amerika (wat de tegel telt) en met Amerika. */
   /* Containerregels inlezen met de hand (beheer), naast de ronde op :45. */
   if (url.searchParams.get("inlezen") === "1") return reply(200, await vbDealerInlezen(env, 40));
+  /* Per kleur voor de tegel (Gerrit, 19 okt 2026: "zo'n mooi tabelletje zie ik
+     niet als ik op Refresh druk"). Alleen D1: gefactureerd per artikel, met de
+     partnercontainers apart. Zelfde periode als de tegel (vanaf = jjjj-mm). */
+  if (url.searchParams.get("kleuren")) {
+    const model = url.searchParams.get("kleuren");
+    const vanaf = /^\d{4}-\d\d$/.test(url.searchParams.get("vanaf") || "") ? url.searchParams.get("vanaf") + "-01" : new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 7) + "-01";
+    const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+    const varianten = (catalog.models || {})[model] || [];
+    if (!varianten.length) return reply(404, { ok: false, error: "model onbekend in de spa-catalogus" });
+    const db = await vbDb(env);
+    const per = {};
+    for (const v of varianten) per[String(v.code)] = { code: String(v.code), omschrijving: String(v.desc || "").replace(/^[^|]*\|\s*/, "").trim() || String(v.desc || ""), uddel: 0, containers: 0 };
+    const codes = Object.keys(per);
+    for (let i = 0; i < codes.length; i += 90) {
+      const deel = codes.slice(i, i + 90);
+      const r = await db.prepare("SELECT code, SUM(CASE WHEN wh = ? THEN qty ELSE 0 END) AS c, SUM(CASE WHEN wh != ? THEN qty ELSE 0 END) AS u FROM vb_factuurregel WHERE datum >= ? AND code IN (" + deel.map(() => "?").join(",") + ") GROUP BY code")
+        .bind(WH_DEALER, WH_DEALER, vanaf, ...deel).all();
+      for (const x of (r.results || [])) { const p = per[String(x.code)]; if (p) { p.uddel = Number(x.u) || 0; p.containers = Number(x.c) || 0; } }
+    }
+    const regels = Object.values(per).filter(p => p.uddel || p.containers).sort((a, b) => b.uddel - a.uddel || b.containers - a.containers);
+    return reply(200, { ok: true, model, vanaf, regels,
+                        totaal: { uddel: regels.reduce((a, p) => a + p.uddel, 0), containers: regels.reduce((a, p) => a + p.containers, 0) } });
+  }
   if (url.searchParams.get("model")) {
     const model = url.searchParams.get("model");
     const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
