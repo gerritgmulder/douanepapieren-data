@@ -22,51 +22,52 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Voorraadbepaling - Fonteyn Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-<!-- ══════════════════════════════════════════════════════════════════════
-     VOORRAADBEPALING - bestellen in dezelfde verhouding als er verkocht wordt
+<!-- ═════════════════════════════════════════════════════════════════
+     VOORRAADBEPALING - zoals Chantal hem maakt (Gerrit, 19 okt 2026)
 
-     Gerrit (23 sep 2026): verkopen we 10% Renew, dan hoort 10% van wat er
-     besteld staat een Renew te zijn. Staat er minder, dan meldt dit scherm
-     hoeveel er nog bij moeten. Basis: de laatste 12 maanden, per model, alle
-     open inkooporders, particulier en partner samen, Amerika los.
-     De berekening staat in de worker (voorraadbepalingBereken).
+     Chantal maakt de lijst in Logic4 met de Rapportage Wizard en rekent in
+     Excel door. Deze tegel doet hetzelfde, elke week opnieuw:
+       verkocht       orderregels met orderdatum in de laatste 12 maanden,
+                      magazijn Fonteyn, status afgehandeld / 30% aanbetaald /
+                      volledig betaald / te factureren / gepland, Jazzi,
+                      spa's en zwemspa's
+       vrij           voorraad Uddel + op zee (Vrije voorraad Fonteyn/onderweg)
+       in productie   open inkooporders bij de fabriek
+       te produceren  verkocht / 52 x 7 (tussen 0 en 1: 1; tussen 3 en 7 naar boven)
+       advies         te produceren - vrij - in productie
+     Wat er na de berekening besteld moet worden, bestelt Chantal.
+     De berekening staat in de worker (vb2Lijst).
 
      OTA: staat in manifest.json. Nooit opnieuw installeren.
-     ══════════════════════════════════════════════════════════════════════ -->
+     ═════════════════════════════════════════════════════════════════ -->
 <style>
 :root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --oranje:#c2410c; }
 *{box-sizing:border-box}
 body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
 header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 header h1{margin:0;font-size:16px;font-weight:600;flex:1}
-main{max-width:1100px;margin:16px auto;padding:0 14px 60px}
+main{margin:16px auto;padding:0 14px 60px}
 .kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
 .lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
 .kop3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:6px 0 4px}
 .kop3 div{background:#f8faf5;border:1px solid var(--rand);border-radius:10px;padding:10px 12px}
 .kop3 b{display:block;font-size:20px}
 .kop3 span{font-size:11.5px;color:var(--grijs)}
-.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.balk{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--groen);font-weight:600}
+.knop.vol{background:var(--groen);color:#fff;border-color:var(--groen)}
+.tabs{display:inline-flex;border:1px solid var(--rand);border-radius:9px;overflow:hidden}
+.tabs button{border:0;background:#fff;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--grijs)}
+.tabs button.aan{background:var(--groen);color:#fff}
+input[type=search]{border:1px solid var(--rand);border-radius:9px;padding:7px 10px;font:inherit;font-size:12.5px;min-width:180px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--rand);white-space:nowrap}
-td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--rand);white-space:nowrap;position:sticky;top:0;background:#fff}
+td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
 .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
 .pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
-.pil.bij{background:#ffedd5;color:var(--oranje)}.pil.teveel{background:#f3f4f6;color:#374151}.pil.goed{background:#eef2e6;color:var(--groen)}
-.iko{font-size:12px;color:var(--grijs)}
-.hidden{display:none!important}
-@media (max-width:700px){ .verberg-mob{display:none} }
-.kleuren{margin-top:10px}
-.kleurtab{width:100%;margin-top:6px;border-collapse:collapse;font-size:12.5px;background:#fff;color:#1f2937}
-.kleurtab th{background:#f3f4f6;text-align:left;font-weight:600;padding:5px 8px;white-space:nowrap}
-.kleurtab td{padding:5px 8px;border-top:1px solid #e5e7eb;overflow-wrap:break-word}
-.kleurtab .n{text-align:right;white-space:nowrap}
-.kleurtab .code{color:#6b7280;font-size:11px}
-.kleurtab tr.som td{border-top:2px solid #d1d5db;background:#fafafa}
-.contKnop{font-size:11.5px;padding:3px 10px;margin-left:8px;border-radius:999px;border:1px solid #c7d2cc;background:#fff;color:#144734;cursor:pointer;white-space:nowrap}
-.contUitleg{margin-top:6px;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 10px}
-.kleurtab .cont{color:#9ca3af}
+.pil.bij{background:#ffedd5;color:var(--oranje)}.pil.goed{background:#eef2e6;color:var(--groen)}
+.min{color:var(--grijs)}
+.melding{font-size:12.5px;color:var(--groen)}
 </style>
 </head>
 <body>
@@ -76,17 +77,20 @@ tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
 </header>
 <main>
   <div class="kaart">
-    <p class="lead">Wat er vrij beschikbaar is hoort in dezelfde verhouding te zijn als wat er verkocht wordt. Verkoopt de Renew 10%, dan hoort 10% van wat er vrij is een Renew te zijn. <b>Vrij</b> = op voorraad in Uddel + op zee + in productie, min wat al gereserveerd is: precies de cijfers uit Voorraadbeheer &gt; Overzicht. Klik een model open voor de hele berekening.</p>
+    <p class="lead" id="uitleg">De lijst zoals Chantal hem maakt met de Rapportage Wizard in Logic4. Elke week: wat bij <b>Advies</b> boven nul staat, bestelt Chantal.</p>
     <div class="kop3" id="kop"></div>
-    <p class="lead" id="basis" style="margin-top:8px"></p>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <label style="font-size:12.5px">Nieuwe bestelling: <input type="number" id="nieuw" min="0" step="10" value="0" style="width:80px;padding:4px 6px;font:inherit"> spa's</label>
-      <label style="font-size:12.5px"><input type="checkbox" id="alles"> ook modellen tonen die kloppen of te veel hebben</label>
-      <button class="knop" id="vers">Opnieuw uit Logic4</button>
-      <span id="stand" style="font-size:12px;color:var(--grijs)"></span>
+    <div class="balk">
+      <div class="tabs"><button type="button" id="tUit" class="aan">Per uitvoering</button><button type="button" id="tSpa">Per spa</button></div>
+      <label style="font-size:12.5px"><input type="checkbox" id="bestellen"> alleen wat besteld moet worden</label>
+      <input type="search" id="zoek" placeholder="Zoek op spa of kleur">
+      <button type="button" class="knop" id="vers">Opnieuw uitrekenen</button>
+      <button type="button" class="knop" id="excel">Download Excel</button>
+      <button type="button" class="knop vol" id="vast">Vastleggen voor deze week</button>
+      <span id="stand" class="melding"></span>
     </div>
+    <div class="balk" id="weken" style="font-size:12px;color:var(--grijs)"></div>
   </div>
-  <div class="kaart"><div style="overflow:auto"><table><thead><tr><th>Model</th><th class="n">Verkocht</th><th class="n">Aandeel</th><th class="n">Besteld</th><th class="n" title="op voorraad + op zee + in productie - gereserveerd">Vrij</th><th class="n verberg-mob">Hoort</th><th>Advies</th></tr></thead><tbody id="lijst"><tr><td colspan="7" class="lead">Ophalen uit Logic4…</td></tr></tbody></table></div></div>
+  <div class="kaart"><table><thead><tr><th id="kolNaam">Spa uitvoering</th><th class="n">Verkocht</th><th class="n">Vrije voorraad Fonteyn/onderweg</th><th class="n">In productie</th><th class="n">Spas te produceren</th><th class="n">Advies te produceren</th><th></th></tr></thead><tbody id="lijst"><tr><td colspan="7" class="lead">Lijst ophalen…</td></tr></tbody></table></div>
 </main>
 <script>
 var W = "https://fonteyn-data-store.g-mulder.workers.dev";
@@ -94,93 +98,87 @@ var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
 function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
-function nl(n){ return Number(n||0).toLocaleString("nl-NL"); }
+function nl(n, d){ return Number(n||0).toLocaleString("nl-NL", { maximumFractionDigits: d == null ? 2 : d }); }
 function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
-var MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
-function mnd(m){ var p=String(m||"").split("-"); return p.length===2 ? MND[Number(p[1])-1]+" "+p[0] : m; }
-var data=null, open={};
+function kop(){ return { "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }; }
+var data = null, weergave = "uit";
+try { weergave = localStorage.getItem("fp.vb.weergave") || "uit"; } catch(e) {}
 async function laad(vers){
   $("stand").textContent = vers ? "Opnieuw uitrekenen…" : "";
   try{
-    var r = await fetch(W+"/voorraadbepaling"+(vers?"?vers=1":""), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
-    var j = await r.json(); if (!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    var r = await fetch(W+"/voorraadbepaling?vb2=tegel"+(vers?"&vers=1":""), { headers: kop() });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.uitleg || j.error || ("HTTP "+r.status));
     data = j; teken();
-    $("stand").textContent = "Stand "+new Date(j.ts).toLocaleString("nl-NL");
-  }catch(e){ $("lijst").innerHTML = '<tr><td colspan="7" style="color:#b91c1c">Ophalen vraagt een nieuwe poging: '+esc(e.message)+'</td></tr>'; }
+    $("stand").textContent = "Stand " + new Date(j.ts).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" });
+  }catch(e){ $("lijst").innerHTML = '<tr><td colspan="7" class="lead">'+esc(e.message)+'</td></tr>'; $("stand").textContent = ""; }
+}
+function rijen(){
+  if (!data) return [];
+  var l = weergave === "spa" ? data.spas.map(function(x){ return Object.assign({ naam: x.model }, x); })
+                             : data.uitvoeringen.map(function(x){ return Object.assign({ naam: x.uitvoering }, x); });
+  var z = ($("zoek").value||"").trim().toLowerCase();
+  if (z) l = l.filter(function(x){ return x.naam.toLowerCase().indexOf(z) >= 0; });
+  if ($("bestellen").checked) l = l.filter(function(x){ return x.advies > 0; });
+  return l;
 }
 function teken(){
-  var j=data, N=Math.max(0,Number($("nieuw").value)||0);
-  /* De berekening, per model:
-       vrij   = op voorraad NL + op zee + in productie - gereserveerd (Overzicht)
-       hoort  = aandeel in de verkoop x (alles wat vrij is + de nieuwe bestelling)
-       advies = hoort - vrij, en nooit minder dan het tekort uit Overzicht */
-  var totVrij=j.modellen.reduce(function(n,m){ return n+(m.vrij||0); },0);
-  var basisT=totVrij+N;
-  j.modellen.forEach(function(m){
-    m._hoort=(m.aandeel/100)*basisT;
-    m._advies=Math.max(Math.round(m._hoort-(m.vrij||0)), m.tekortOverzicht||0);
-    m._teveel=Math.max(0, Math.round((m.vrij||0)-m._hoort));
-  });
-  j.modellen.sort(function(a,b){ return b._advies-a._advies || b.verkocht-a.verkocht; });
-  var bij=j.modellen.filter(function(m){ return m._advies>0; });
-  var nodig=bij.reduce(function(n,m){ return n+m._advies; },0);
-  var res=j.modellen.reduce(function(n,m){ return n+(m.res||0); },0);
-  $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s verkocht in de laatste 12 maanden, voor Uddel</span></div>'+
-    '<div><b>'+nl(j.totaalBesteld)+'</b><span>spa\'s besteld bij de fabrieken (open inkooporders)</span></div>'+
-    '<div><b>'+nl(totVrij)+'</b><span>spa\'s vrij: voorraad, zee en productie min '+nl(res)+' gereserveerd</span></div>'+
-    '<div><b>'+bij.length+'</b><span>modellen om bij te bestellen, samen '+nl(nodig)+' spa\'s</span></div>';
-  var b=(j.overzicht||{}).bron||{};
-  $("basis").innerHTML = esc("Verkocht = orders met orderdatum van "+(j.periode.vanafDag?datumNL(j.periode.vanafDag)+" tot en met "+datumNL(j.periode.totDag):mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot))+", magazijn Fonteyn, status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland: dezelfde selectie als de Rapportage Wizard in Logic4. Particulier en partner samen. Partnercontainers, Outlet, Showroommodel en Amerika blijven buiten de telling, ook de "+j.ikosAmerika+" inkooporders voor Houston.")+
-    '<br>'+esc("Uit Overzicht (Voorraadbeheer), stand: reserveringen "+tijd(b.reserveringen)+", voorraad "+tijd(b.hallen)+", schepen "+tijd(b.schepen)+", productie "+tijd(b.productie)+". Ook hier blijven partnercontainers buiten de telling.")+
-    (N?'<br><b>'+esc("Met een nieuwe bestelling van "+nl(N)+" spa's: per model staat bij Advies hoeveel daarvan het moeten zijn.")+'</b>':'');
-  var lijst = $("alles").checked ? j.modellen : bij;
-  $("lijst").innerHTML = lijst.length ? lijst.map(function(m){
-    var pil = m._advies>0 ? '<span class="pil bij">'+m._advies+' bijbestellen</span>' : m._teveel>0 ? '<span class="pil teveel">'+m._teveel+' meer dan de verhouding</span>' : '<span class="pil goed">klopt</span>';
-    var uitleg = '<div style="line-height:1.6">'+
-      '<b>Overzicht:</b> '+nl(m.res)+' gereserveerd · '+nl(m.nl)+' op voorraad NL · '+nl(m.zee)+' op zee · '+nl(m.prod)+' in productie → <b>'+nl(m.vrij)+' vrij</b><br>'+
-      '<b>Verkoop:</b> '+nl(m.verkocht)+' verkocht voor Uddel = '+m.aandeel.toLocaleString("nl-NL")+'% van alles · '+m.aandeel.toLocaleString("nl-NL")+'% van '+nl(basisT)+(N?' (vrij '+nl(totVrij)+' + nieuwe bestelling '+nl(N)+')':' vrij')+' = <b>hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</b><br>'+
-      '<b>Advies:</b> hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+' - vrij '+nl(m.vrij)+(m.tekortOverzicht?' (en het tekort in Overzicht is '+m.tekortOverzicht+', dat moet er minstens bij)':'')+' → <b>'+(m._advies>0?m._advies+' bijbestellen':(m._teveel>0?m._teveel+' meer dan de verhouding':'klopt'))+'</b></div>'+
-      '<div style="margin-top:6px">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Voor dit model staan nu 0 stuks besteld.')+'</div>';
-    return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+(open[m.model]?'▾ ':'▸ ')+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n">'+nl(m.vrij)+'</td><td class="n verberg-mob">'+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
-      (open[m.model] ? '<tr><td colspan="7" class="iko">'+uitleg+kleurTabel(m.model)+'</td></tr>' : '');
-  }).join("") : '<tr><td colspan="7" class="lead">Alle modellen zitten op of boven de verhouding.</td></tr>';
-  document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; if(open[tr.dataset.m]) laadKleuren(tr.dataset.m); teken(); }); });
-  document.querySelectorAll(".contKnop").forEach(function(b){ b.addEventListener("click", function(e){ e.stopPropagation(); toonCont=!toonCont; try{ localStorage.setItem("fp.vb.containers", toonCont?"1":"0"); }catch(x){} teken(); }); });
+  var j = data;
+  $("tUit").classList.toggle("aan", weergave !== "spa"); $("tSpa").classList.toggle("aan", weergave === "spa");
+  $("kolNaam").textContent = weergave === "spa" ? "Spa" : "Spa uitvoering";
+  var bij = j.uitvoeringen.filter(function(x){ return x.advies > 0; });
+  var stuks = bij.reduce(function(n, x){ return n + Math.ceil(x.advies); }, 0);
+  $("kop").innerHTML =
+    '<div><b>'+nl(j.totaal.regels,0)+'</b><span>verkocht (orderregels) van '+datumNL(j.periode.vanaf)+' t/m '+datumNL(j.periode.tot)+'</span></div>'+
+    '<div><b>'+bij.length+'</b><span>uitvoeringen om te bestellen</span></div>'+
+    '<div><b>'+nl(stuks,0)+'</b><span>spa\'s volgens het advies (naar boven afgerond)</span></div>';
+  $("uitleg").innerHTML = 'De lijst zoals Chantal hem maakt met de Rapportage Wizard in Logic4: orders van '+datumNL(j.periode.vanaf)+' t/m '+datumNL(j.periode.tot)+
+    ', magazijn Fonteyn, status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland, leverancier Jazzi, spa\'s en zwemspa\'s. '+
+    '<b>Spas te produceren</b> = 7 weken verkoop. <b>Advies</b> = te produceren min vrije voorraad min in productie. Elke week: wat bij Advies boven nul staat, bestelt Chantal.';
+  var l = rijen();
+  $("lijst").innerHTML = l.length ? l.map(function(x){
+    var pil = x.advies > 0 ? '<span class="pil bij">'+Math.ceil(x.advies)+' bestellen</span>' : '<span class="pil goed">genoeg</span>';
+    return '<tr><td>'+esc(x.naam)+'</td><td class="n">'+nl(x.regels,0)+'</td><td class="n">'+nl(x.vrij,0)+'</td><td class="n">'+nl(x.inProductie,0)+'</td><td class="n">'+nl(x.teProduceren)+'</td><td class="n'+(x.advies>0?'':' min')+'">'+nl(x.advies)+'</td><td>'+pil+'</td></tr>';
+  }).join("") : '<tr><td colspan="7" class="lead">Alles is voldoende op voorraad of in productie.</td></tr>';
+  $("weken").innerHTML = (j.vastgelegd && j.vastgelegd.length) ? 'Vastgelegd: ' + j.vastgelegd.map(function(w){ return '<a href="#" data-w="'+esc(w)+'">'+esc(w.replace("-W"," week "))+'</a>'; }).join(" · ") : "";
+  $("weken").querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(e){ e.preventDefault(); toonWeek(a.dataset.w); }); });
 }
-/* Per kleur: wat er verkocht is (orders, magazijn Fonteyn) en wat voor partnercontainers
-   (Gerrit, 19 okt 2026). Wordt opgehaald bij het openklikken van een model. */
-var kleuren={};
-async function laadKleuren(model){
-  if(kleuren[model]&&!kleuren[model].fout) return;
-  kleuren[model]={bezig:true};
+async function toonWeek(w){
   try{
-    var r=await fetch(W+"/voorraadbepaling?kleuren="+encodeURIComponent(model)+"&vanaf="+encodeURIComponent((data&&data.periode&&(data.periode.vanafDag||data.periode.vanaf))||""), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
-    var j=await r.json(); if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
-    kleuren[model]=j;
-  }catch(e){ kleuren[model]={fout:e.message}; }
-  if(open[model]) teken();
+    var r = await fetch(W+"/voorraadbepaling?vb2=week&w="+encodeURIComponent(w), { headers: kop() });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || "HTTP "+r.status);
+    data = j; teken();
+    $("stand").textContent = "Vastgelegd " + w.replace("-W"," week ") + " door " + String((j.vastgelegd||{}).door||"").split("@")[0] + " · terug naar vandaag met Opnieuw uitrekenen";
+  }catch(e){ $("stand").textContent = e.message; }
 }
-var toonCont=false; try{ toonCont=localStorage.getItem("fp.vb.containers")==="1"; }catch(e){}
-function kleurTabel(model){
-  var k=kleuren[model];
-  if(!k||k.bezig) return '<div class="kleuren"><span class="lead">Kleuren ophalen…</span></div>';
-  if(k.fout) return '<div class="kleuren"><span style="color:#b91c1c">Kleuren ophalen vraagt een nieuwe poging: '+esc(k.fout)+'</span></div>';
-  if(!k.regels.length) return '<div class="kleuren"><span class="lead">In deze periode staat van dit model 0 verkocht.</span></div>';
-  var t=k.totaal;
-  var regels=k.regels.filter(function(x){ return x.uddel || toonCont; });
-  var kop='<b>Per kleur</b> <span class="lead">(verkocht, magazijn Fonteyn, vanaf '+esc(datumNL(k.vanaf))+')</span> '+
-    '<button type="button" class="contKnop">'+(toonCont?'Partnercontainers verbergen':'Partnercontainers tonen')+'</button>';
-  return '<div class="kleuren">'+kop+
-    (toonCont?'<div class="contUitleg">Partnercontainers blijven buiten de voorraadbepaling: die spa\'s gaan van de fabriek rechtstreeks naar de partner. Ze staan hier alleen ter informatie.</div>':'')+
-    '<table class="kleurtab"><thead><tr><th>Uitvoering</th><th class="n">Verkocht</th><th class="n">Aandeel</th>'+(toonCont?'<th class="n cont">Partnercontainers</th>':'')+'</tr></thead><tbody>'+
-    regels.map(function(x){ return '<tr><td>'+esc(x.omschrijving)+' <span class="code">'+esc(x.code)+'</span></td><td class="n"><b>'+nl(x.uddel)+'</b></td><td class="n">'+(t.uddel?Math.round(x.uddel/t.uddel*100):0)+'%</td>'+(toonCont?'<td class="n cont">'+nl(x.containers)+'</td>':'')+'</tr>'; }).join('')+
-    '<tr class="som"><td>Totaal</td><td class="n"><b>'+nl(t.uddel)+'</b></td><td class="n">100%</td>'+(toonCont?'<td class="n cont">'+nl(t.containers)+'</td>':'')+'</tr>'+
-    '</tbody></table></div>';
+function excel(){
+  if (!data) return;
+  var l = rijen(), sep = ";";
+  var kopRij = [weergave === "spa" ? "Spa" : "Spa uitvoering", "Verkocht", "Vrije voorraad Fonteyn/onderweg", "In productie", "Spas te produceren", "Advies te produceren"];
+  var regels = [kopRij.join(sep)].concat(l.map(function(x){
+    return ['"'+String(x.naam).replace(/"/g,'""')+'"', x.regels, x.vrij, x.inProductie, String(x.teProduceren).replace(".",","), String(x.advies).replace(".",",")].join(sep);
+  }));
+  var blob = new Blob(["﻿" + regels.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "Voorraadbepaling " + (data.periode ? data.periode.tot : "") + (weergave === "spa" ? " per spa" : " per uitvoering") + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
 }
-function tijd(v){ if(!v) return "onbekend"; var d=new Date(v); return isNaN(d)?String(v):d.toLocaleString("nl-NL",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}); }
-$("nieuw").addEventListener("input", teken);
-$("alles").addEventListener("change", teken);
+async function vastleggen(){
+  if (!(await fpBevestig("De lijst van vandaag vastleggen voor deze week? Dan kun je later terugzien op welke stand er besteld is.", { knop: "Vastleggen" }))) return;
+  try{
+    var r = await fetch(W+"/voorraadbepaling?vb2=vastleggen", { method: "POST", headers: kop() });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || "HTTP "+r.status);
+    $("stand").textContent = "Vastgelegd voor " + j.week.replace("-W"," week ");
+    laad(false);
+  }catch(e){ $("stand").textContent = "Vastleggen vraagt een nieuwe poging: " + e.message; }
+}
+$("tUit").addEventListener("click", function(){ weergave = "uit"; try{ localStorage.setItem("fp.vb.weergave", weergave); }catch(e){} teken(); });
+$("tSpa").addEventListener("click", function(){ weergave = "spa"; try{ localStorage.setItem("fp.vb.weergave", weergave); }catch(e){} teken(); });
+$("bestellen").addEventListener("change", function(){ if (data) teken(); });
+$("zoek").addEventListener("input", function(){ if (data) teken(); });
 $("vers").addEventListener("click", function(){ laad(true); });
+$("excel").addEventListener("click", excel);
+$("vast").addEventListener("click", vastleggen);
 (async function(){ for (var i=0;i<20&&!teamKey();i++) await new Promise(function(r){ setTimeout(r,500); }); laad(false); })();
 </script>
 <script>

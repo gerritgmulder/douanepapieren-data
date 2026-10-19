@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-19", bestand: "voorraadbepaling.html", soort: "nieuw",
+      titel: "Voorraadbepaling: de lijst van Chantal, elke week vers",
+      wat:   "De tegel maakt nu dezelfde lijst als de Rapportage Wizard in Logic4: per uitvoering wat er verkocht is, de vrije voorraad Fonteyn/onderweg, wat in productie is, de spa's te produceren (7 weken verkoop) en het advies. Met een knop voor alleen wat besteld moet worden, een download naar Excel en Vastleggen voor deze week."
+    },
+    {
       datum: "2026-10-19", bestand: "voorraadbepaling.html", soort: "beter",
       titel: "Voorraadbepaling zonder partnercontainers",
       wat:   "Verkocht telt nu zoals de Rapportage Wizard in Logic4: orders van precies de laatste 12 maanden, magazijn Fonteyn, status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland. Klik een model open en je ziet per kleur hoeveel er verkocht is en welk aandeel dat is. Partnercontainers kun je erbij tonen; die blijven buiten de berekening."

@@ -8849,6 +8849,244 @@ async function vbVerkochtPerCode(env, vanafDatum, codes) {
   if (codes) for (let i = 0; i < codes.length; i += 90) await run(codes.slice(i, i + 90)); else await run(null);
   return uit;
 }
+/* VOORRAADBEPALING ZOALS CHANTAL HAAR LIJST MAAKT (Gerrit, 19 okt 2026)
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal maakt de lijst in Logic4 met de Rapportage Wizard: orders (geen
+   facturen), magazijn Fonteyn, orderdatum de laatste 12 maanden op de dag af,
+   status afgehandeld / 30% aanbetaald / volledig betaald / te factureren /
+   gepland, crediteur Jazzi, artikelgroepen Spa's, Spa's Gebruikt en Spa's
+   Gebruikt Garantie, klantspecifieke regels vervangen door het standaard
+   artikel. Haar Excel (script, 15 okt 2026) telt per uitvoering (model plus
+   kleurgroep) het AANTAL ORDERREGELS en rekent:
+     te produceren = aantal / 52 x 7 (tussen 0 en 1: 1; tussen 3 en 7: naar boven)
+     advies        = te produceren - vrije voorraad Fonteyn/onderweg - in productie
+   Vrije voorraad Fonteyn/onderweg = voorraad Uddel + op zee (zonder reserveringen).
+
+   ZUINIG (na de D1-storing van 19 okt): geen tabel met een rij per order,
+   maar per week één bestandje met de spa-regels van de afgehandelde orders
+   (vb2-wk-<maandag>) en één met de open orders (vb2-open). Een ronde schrijft
+   een handvol sleutels; de lijst leest er ±55. */
+const VB2_STATUS = [3, 25, 30, 17, 28], VB2_OPEN = [25, 30, 17, 28];
+/* Haar Wizard-scherm noemt Spa's, Spa's Gebruikt en Spa's Gebruikt Garantie;
+   haar lijst van 15 okt 2026 bevat ook de zwemspa's (groep Zwemspa's). */
+const VB2_GROEPEN = /^(spa'?s( gebruikt( garantie)?)?|zwemspa'?s)$/i;
+const VB2_DAGEN = 400;
+function vb2Maandag(d) { const t = new Date(String(d).slice(0, 10) + "T00:00:00Z"); const w = (t.getUTCDay() + 6) % 7; return new Date(t.getTime() - w * 86400000).toISOString().slice(0, 10); }
+function vb2Catalogus(catalog) {
+  const codeModel = {}, codeDesc = {}, namen = [];
+  for (const [m, vs] of Object.entries(catalog.models || {})) {
+    if (DP_GEEN_SPA.test(m)) continue;
+    namen.push(m);
+    for (const v of (vs || [])) { codeModel[String(v.code)] = m; codeDesc[String(v.code)] = String(v.desc || ""); }
+  }
+  namen.sort((a, b) => b.length - a.length);
+  const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const modelRe = namen.length ? new RegExp("\\b(" + namen.map(esc).join("|") + ")\\b", "i") : /$^/;
+  return { codeModel, codeDesc, namen, modelRe };
+}
+function vb2ModelUitTekst(cat, t) {
+  const m = String(t || "").match(cat.modelRe);
+  if (!m) return null;
+  return cat.namen.find(n => n.toLowerCase() === m[1].toLowerCase()) || m[1];
+}
+/* Kleurgroep zoals Chantals lijst: uit het standaard artikel (tweede stuk van
+   de omschrijving), bij een vrije regel uit de tekst zelf. */
+function vb2KleurGroep(model, tekst) {
+  if (/^(corsica|mallorca|malta|tenerife)\b/i.test(model || "")) return "White";
+  if (/^blackpool\b/i.test(model || "")) return "";
+  const delen = String(tekst || "").split("|");
+  const k = (delen.length > 1 ? delen[1] : delen[0]).toLowerCase();
+  // De fabriek schrijft op de paklijst "Sterling Silver #30" voor Sterling White.
+  if (/sterling (white|silver)/.test(k) || /^\s*with dark grey/.test(k)) return "Sterling White";
+  if (/mystic mountain|^\s*mm\b/.test(k)) return "Mystic Mountain";
+  if (/solid white/.test(k)) return "Solid White";
+  return "Other";
+}
+function vb2Naam(model) { return String(model || "").replace(/^spa\s+/i, "").trim(); }
+function vb2Uitvoering(model, groep) { return vb2Naam(model) + " Spa" + (groep ? " | " + groep : ""); }
+function vb2Rijen(o, cat) {
+  const uit = [];
+  for (const rw of (o.OrderRows || [])) {
+    const c = String(rw.ProductCode || ""), t = String(rw.Description || "");
+    if (!(cat.codeModel[c] || /\b(swim\s*spa|spa)\b/i.test(t) || cat.modelRe.test(t))) continue;
+    uit.push({ o: Number(o.Id), r: Number(rw.Id) || 0, d: String(o.CreationDate || "").slice(0, 10), s: Number(o.OrderStatus && o.OrderStatus.Id) || 0,
+               b: Number(o.DebtorId) || 0, w: Number(rw.WarehouseId) || 0, c, p: Number(rw.ProductId) || 0,
+               t: t.slice(0, 140), q: Number(rw.Qty) || 0, k: (rw.IsAssemblyChild || rw.ComposedProductOrderRowParentId) ? 1 : 0 });
+  }
+  return uit;
+}
+async function vb2Inlezen(env, maxVragen, opnieuw) {
+  const kv = env.FONTEYN_DATA, token = await l4Token(env);
+  const cat = vb2Catalogus((await kv.get("spa-catalog", { type: "json" })) || {});
+  let vragen = 0;
+  const haal = async (filter) => {
+    const alle = [];
+    for (let skip = 0; skip < 20000; skip += 500) {
+      if (vragen >= maxVragen) return null;
+      vragen++;
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...filter, TakeRecords: 500, SkipRecords: skip }) });
+      if (!r.ok) throw new Error("GetOrders HTTP " + r.status);
+      const j = await r.json().catch(() => null);
+      const l = Array.isArray(j) ? j : ((j && j.Records) || []);
+      alle.push(...l);
+      if (l.length < 500) return alle;
+    }
+    return alle;
+  };
+  const vanaf = new Date(Date.now() - VB2_DAGEN * 86400000).toISOString().slice(0, 10);
+  const nu = new Date().toISOString();
+  // 1. Open orders: elke ronde helemaal opnieuw, één sleutel.
+  const open = [], openIds = new Set();
+  for (const st of VB2_OPEN) {
+    const l = await haal({ StatusId: st, CreationDateFrom: vanaf + "T00:00:00" });
+    if (!l) return { ok: false, uitleg: "te weinig vragen over voor de open orders", vragen };
+    for (const o of l) { if (openIds.has(Number(o.Id))) continue; openIds.add(Number(o.Id)); open.push(...vb2Rijen(o, cat)); }
+  }
+  await kv.put("vb2-open", JSON.stringify({ ts: nu, rijen: open }));
+  // 2. Afgehandeld: eerst per week terug, daarna wat er in Logic4 is bijgewerkt.
+  let stand = (await kv.get("vb2-stand", { type: "json" })) || {};
+  if (opnieuw || !stand.cursor) stand = { cursor: vb2Maandag(vanaf), laatst: stand.laatst || null };
+  let weken = 0;
+  if (stand.cursor !== "bij") {
+    const vandaag = nu.slice(0, 10);
+    while (stand.cursor <= vandaag && vragen < maxVragen - 2) {
+      const eind = new Date(Date.parse(stand.cursor + "T00:00:00Z") + 7 * 86400000).toISOString().slice(0, 10);
+      const l = await haal({ StatusId: 3, CreationDateFrom: stand.cursor + "T00:00:00", CreationDateTo: eind + "T00:00:00" });
+      if (!l) break;
+      // Logic4 geeft bij bladeren soms dezelfde order op twee pagina's: één keer per order.
+      const rijen = []; const ids = new Set();
+      for (const o of l) { if (ids.has(Number(o.Id))) continue; ids.add(Number(o.Id)); rijen.push(...vb2Rijen(o, cat)); }
+      await kv.put("vb2-wk-" + stand.cursor, JSON.stringify({ ts: nu, rijen }));
+      weken++; stand.cursor = eind;
+    }
+    if (stand.cursor > vandaag) { stand.cursor = "bij"; stand.laatst = nu; }
+  } else {
+    const sinds = new Date(Date.parse(stand.laatst || nu) - 2 * 3600000).toISOString().slice(0, 19);
+    const l = await haal({ StatusId: 3, LastActionFrom: sinds });
+    if (l && l.length) {
+      const perWeek = {};
+      for (const o of l) { const wk = vb2Maandag(String(o.CreationDate || "").slice(0, 10)); if (wk < vb2Maandag(vanaf)) continue; (perWeek[wk] = perWeek[wk] || []).push(o); }
+      for (const [wk, orders] of Object.entries(perWeek)) {
+        const blob = (await kv.get("vb2-wk-" + wk, { type: "json" })) || { rijen: [] };
+        const ids = new Set(orders.map(o => Number(o.Id)));
+        const rijen = (blob.rijen || []).filter(r => !ids.has(r.o));
+        for (const o of orders) rijen.push(...vb2Rijen(o, cat));
+        await kv.put("vb2-wk-" + wk, JSON.stringify({ ts: nu, rijen }));
+        weken++;
+      }
+    }
+    if (l) stand.laatst = nu;
+  }
+  await kv.put("vb2-stand", JSON.stringify(stand));
+  return { ok: true, vragen, open: open.length, weken, stand };
+}
+/* Artikelgroep en leverancier per artikel (de Wizard selecteert daarop). Eén
+   sleutel als geheugen; alleen onbekende artikelen worden opgevraagd. */
+async function vb2Producten(env, pids) {
+  const kv = env.FONTEYN_DATA;
+  const geh = (await kv.get("vb2-producten", { type: "json" })) || {};
+  const nodig = [...new Set(pids.filter(p => p && !geh[p]))];
+  if (nodig.length) {
+    const token = await l4Token(env);
+    const post = (pad, body) => fetch("https://api.logic4server.nl" + pad, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()).catch(() => null);
+    for (let i = 0; i < nodig.length; i += 500) {
+      const deel = nodig.slice(i, i + 500);
+      const pr = await post("/v3/Products/GetProducts", { ProductIds: deel, LoadProductGroups: true, TakeRecords: 500 });
+      const lv = await post("/v3/Products/GetSuppliersForProducts", { ProductIds: deel, TakeRecords: 5000 });
+      for (const p of deel) geh[p] = { g: [], l: [], n: "" };
+      for (const x of (Array.isArray(pr) ? pr : ((pr && pr.Records) || []))) {
+        const e = geh[Number(x.ProductId)]; if (!e) continue;
+        e.g = (x.ProductGroups || []).map(g => String(g.Name || g.Description || "")).filter(Boolean);
+        e.n = String(x.ProductName1 || "");
+      }
+      for (const x of (Array.isArray(lv) ? lv : ((lv && lv.Records) || []))) { const e = geh[Number(x.ProductId)]; if (e && x.CreditorName) e.l.push(String(x.CreditorName)); }
+    }
+    await kv.put("vb2-producten", JSON.stringify(geh));
+  }
+  return geh;
+}
+function vb2TeProduceren(n) {
+  const x = n / 52 * 7;
+  if (x > 0 && x < 1) return 1;
+  if (x >= 3 && x <= 7) return Math.ceil(x);
+  return Math.round(x * 100) / 100;
+}
+async function vb2Lijst(env, opties) {
+  const kv = env.FONTEYN_DATA;
+  const cat = vb2Catalogus((await kv.get("spa-catalog", { type: "json" })) || {});
+  const stand = (await kv.get("vb2-stand", { type: "json" })) || {};
+  if (stand.cursor !== "bij") return { ok: false, uitleg: "De orders worden ingelezen; daarna staat de lijst klaar." };
+  const tot = (opties && opties.tot) || new Date().toISOString().slice(0, 10);
+  const jt = new Date(tot + "T12:00:00Z"); jt.setUTCFullYear(jt.getUTCFullYear() - 1);
+  const vanaf = (opties && opties.vanaf) || jt.toISOString().slice(0, 10);
+  const rijen = [];
+  const open = (await kv.get("vb2-open", { type: "json" })) || { rijen: [] };
+  for (let wk = vb2Maandag(vanaf); wk <= tot; wk = new Date(Date.parse(wk + "T00:00:00Z") + 7 * 86400000).toISOString().slice(0, 10)) {
+    const b = await kv.get("vb2-wk-" + wk, { type: "json" });
+    if (b && b.rijen) rijen.push(...b.rijen);
+  }
+  // Een order die net van open naar afgehandeld ging, staat in beide: dan telt de afgehandelde.
+  const afgehandeld = new Set(rijen.map(r => r.o));
+  for (const r of (open.rijen || [])) if (!afgehandeld.has(r.o)) rijen.push(r);
+  const regelGezien = new Set();
+  const kandidaten = rijen.filter(r => {
+    if (!(VB2_STATUS.includes(r.s) && r.d >= vanaf && r.d <= tot && r.w === WH_FONTEYN)) return false;
+    const sl = r.o + ":" + (r.r || (r.c + r.t + r.q));
+    if (regelGezien.has(sl)) return false;
+    regelGezien.add(sl); return true;
+  });
+  const prod = await vb2Producten(env, kandidaten.map(r => r.p));
+  const per = {}, perSpa = {}, buiten = { leverancier: 0, groep: 0, model: 0 };
+  const debug = opties && opties.model ? [] : null;
+  for (const r of kandidaten) {
+    const pi = prod[r.p] || { g: [], l: [] };
+    const model0 = cat.codeModel[r.c] || vb2ModelUitTekst(cat, r.t) || vb2ModelUitTekst(cat, pi.n);
+    const groepOk = (pi.g || []).some(g => VB2_GROEPEN.test(g.trim()) || (opties && opties.groepen === "zwem" && /^zwemspa'?s$/i.test(g.trim())));
+    const reden = !groepOk ? "groep" : !(pi.l || []).some(l => /jazzi/i.test(l)) ? "leverancier" : !model0 ? "model" : "telt";
+    if (debug && model0 === opties.model) debug.push({ ...r, groepen: pi.g, leveranciers: pi.l, naam: pi.n, reden, catalogus: !!cat.codeModel[r.c] });
+    if (reden !== "telt") { buiten[reden]++; continue; }
+    const model = model0;
+    // Kleur uit de tekst van de orderregel, zoals Chantals script (een regel met alleen "Devotion" is Other).
+    const groep = vb2KleurGroep(model, r.t || cat.codeDesc[r.c]);
+    const u = vb2Uitvoering(model, groep);
+    const a = (per[u] = per[u] || { uitvoering: u, model: vb2Naam(model), groep, regels: 0, stuks: 0 });
+    a.regels++; a.stuks += r.q;
+    const sp = (perSpa[vb2Naam(model)] = perSpa[vb2Naam(model)] || { model: vb2Naam(model), regels: 0, stuks: 0 });
+    sp.regels++; sp.stuks += r.q;
+  }
+  // Vrije voorraad Fonteyn/onderweg en in productie, per uitvoering.
+  const [hal, ship, prodK] = await Promise.all(["voorraad-hallen", "voorraad-schepen", "voorraad-productie"].map(k => kv.get(k, { type: "json" }).then(x => x || {}).catch(() => ({}))));
+  const vrij = {}, inProd = {};
+  const zet = (o, m, g, n) => { if (!n) return; const u = vb2Uitvoering(m, g); o[u] = (o[u] || 0) + n; };
+  for (const [m, rec] of Object.entries(hal.models || {}))
+    for (const [code, q] of Object.entries(rec.variants || {})) zet(vrij, m, vb2KleurGroep(m, cat.codeDesc[code] || ""), Number(q) || 0);
+  const vandaag = tot;
+  for (const sh of (ship.ships || [])) {
+    if (!globalThis.fpVoorraadReken.schipOnderweg(sh, vandaag)) continue;
+    for (const [m, q] of Object.entries(sh.models || {})) {
+      const kl = (sh.modelColors || {})[m] || {};
+      let gekleurd = 0;
+      for (const [k, n] of Object.entries(kl)) { zet(vrij, m, vb2KleurGroep(m, " | " + k), Number(n) || 0); gekleurd += Number(n) || 0; }
+      if ((Number(q) || 0) > gekleurd) zet(vrij, m, "Other", (Number(q) || 0) - gekleurd);
+    }
+  }
+  for (const [m, lijst] of Object.entries(prodK.models || {}))
+    for (const x of (lijst || [])) { if (/texas|houston|\busa\b|amerika|america/i.test(String(x.ref || ""))) continue; zet(inProd, m, vb2KleurGroep(m, cat.codeDesc[x.code] || (" | " + (x.kleur || ""))), Number(x.qty) || 0); }
+  const uitvoeringen = Object.values(per).map(a => {
+    const v = vrij[a.uitvoering] || 0, ip = inProd[a.uitvoering] || 0, tp = vb2TeProduceren(a.regels);
+    return { ...a, vrij: v, inProductie: ip, teProduceren: tp, advies: Math.round((tp - v - ip) * 100) / 100 };
+  }).sort((x, y) => x.uitvoering.localeCompare(y.uitvoering));
+  const spas = Object.values(perSpa).map(sp => {
+    const us = uitvoeringen.filter(u => u.model === sp.model);
+    const v = us.reduce((n, u) => n + u.vrij, 0), ip = us.reduce((n, u) => n + u.inProductie, 0), tp = vb2TeProduceren(sp.regels);
+    return { ...sp, vrij: v, inProductie: ip, teProduceren: tp, advies: Math.round((tp - v - ip) * 100) / 100 };
+  }).sort((x, y) => x.model.localeCompare(y.model));
+  if (debug) return { ok: true, model: opties.model, rijen: debug };
+  return { ok: true, ts: new Date().toISOString(), periode: { vanaf, tot }, uitvoeringen, spas, buiten,
+           totaal: { regels: uitvoeringen.reduce((n, u) => n + u.regels, 0), stuks: uitvoeringen.reduce((n, u) => n + u.stuks, 0) },
+           bron: { open: open.ts || null, hallen: hal.updated || null, schepen: ship.updated || null, productie: prodK.updated || null } };
+}
 async function voorraadbepalingBereken(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
@@ -9750,6 +9988,42 @@ async function voorraadbepalingHandle(request, env, url) {
   const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
   if (!(await toegangMag(env, "voorraadbepaling", wie))) return reply(403, { ok: false, error: "geen toegang" });
   /* Orders inlezen met de hand, naast de ronde op :45. */
+  if (url.searchParams.get("vb2") === "groepen") {
+    const token = await l4Token(env);
+    const l = [];
+    for (let skip = 0; skip < 5000; skip += 500) {
+      const r = await fetch("https://api.logic4server.nl/v3/ProductGroups/GetProductGroups", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ TakeRecords: 500, SkipRecords: skip }) });
+      const j = await r.json().catch(() => null);
+      const d = Array.isArray(j) ? j : ((j && j.Records) || []);
+      l.push(...d); if (d.length < 500) break;
+    }
+    return reply(200, { ok: true, groepen: l.filter(g => /spa|zwem/i.test(String(g.Name || g.Description || ""))).map(g => ({ id: g.Id, naam: g.Name || g.Description, ouder: g.ParentProductGroupId })) , alle: l.length });
+  }
+  if (url.searchParams.get("vb2") === "inlezen") return reply(200, await vb2Inlezen(env, 300, url.searchParams.get("opnieuw") === "1").catch(e => ({ ok: false, error: String(e.message || e) })));
+  /* De tegel: de lijst uit het geheugen (na elke inleesronde vers), of opnieuw uitgerekend. */
+  if (url.searchParams.get("vb2") === "tegel") {
+    let l = url.searchParams.get("vers") === "1" ? null : await env.FONTEYN_DATA.get("vb2-lijst", { type: "json" });
+    if (!l || !l.ok || Date.now() - Date.parse(l.ts) > 2 * 3600000) { l = await vb2Lijst(env, {}); if (l.ok) await env.FONTEYN_DATA.put("vb2-lijst", JSON.stringify(l)); }
+    const vast = await env.FONTEYN_DATA.list({ prefix: "vb2-vast-" }).catch(() => ({ keys: [] }));
+    return reply(200, { ...l, vastgelegd: (vast.keys || []).map(k => k.name.slice(9)).sort().reverse().slice(0, 20) });
+  }
+  if (url.searchParams.get("vb2") === "vastleggen" && request.method === "POST") {
+    const l = (await env.FONTEYN_DATA.get("vb2-lijst", { type: "json" })) || await vb2Lijst(env, {});
+    if (!l.ok) return reply(409, { ok: false, error: l.uitleg || "de lijst staat nog niet klaar" });
+    const d = new Date(); const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const dag = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - dag + 3);
+    const j1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+    const wk = t.getUTCFullYear() + "-W" + String(1 + Math.round(((t - j1) / 86400000 - 3 + ((j1.getUTCDay() + 6) % 7)) / 7)).padStart(2, "0");
+    await env.FONTEYN_DATA.put("vb2-vast-" + wk, JSON.stringify({ ...l, vastgelegd: { door: wie, ts: new Date().toISOString(), week: wk } }));
+    try { await actSchrijf(env, "dashboard", new Date().toISOString().slice(0, 7), { ts: new Date().toISOString(), user: wie, tile: "voorraadbepaling", action: "vastgelegd", detail: "week " + wk, wijziging: true }); } catch (e) {}
+    return reply(200, { ok: true, week: wk });
+  }
+  if (url.searchParams.get("vb2") === "week") {
+    const w = String(url.searchParams.get("w") || "").replace(/[^0-9W-]/g, "");
+    const l = await env.FONTEYN_DATA.get("vb2-vast-" + w, { type: "json" });
+    return reply(l ? 200 : 404, l || { ok: false, error: "die week is niet vastgelegd" });
+  }
+  if (url.searchParams.get("vb2") === "lijst") return reply(200, await vb2Lijst(env, { model: url.searchParams.get("model") || null, vanaf: url.searchParams.get("vanaf") || null, tot: url.searchParams.get("tot") || null, groepen: url.searchParams.get("groepen") || null }).catch(e => ({ ok: false, error: String(e.message || e) })));
   if (url.searchParams.get("kvNoodTerug")) {
     const v = url.searchParams.get("kvNoodTerug");
     const doen = v === "alles" ? true : v === "lijst" ? false : v.split(",");
@@ -18600,10 +18874,13 @@ const FP_WORKER = {
             console.log("[cron] spa-catalogus: " + JSON.stringify({ ok: cr.ok, modellen: cr.modellen, nieuweModellen: cr.nieuweModellen, nieuweKleuren: (cr.nieuweKleuren || []).length, fout: cr.error || null }));
           } else if (PRODUCTIE_UREN.includes(uur)) await automaat();
           else {
-            // De overige uren: facturen inlezen voor de partnercontainers (Voorraadbepaling).
-            /* Uit sinds 19 okt 2026: deze ronde maakte de leeslimiet van D1 op
-               (DELETE per order zonder index). Pas weer aan na een proef met
-               indexen en een telling van de gelezen rijen. */
+            /* Voorraadbepaling (vb2, zuinig: een handvol sleutels per ronde).
+               Maandag 03:45 UTC eenmaal alles opnieuw, de rest van de week
+               alleen de open orders en wat er in Logic4 is bijgewerkt. */
+            const opnieuw = new Date().getUTCDay() === 1 && uur === 3;
+            const vr = await vb2Inlezen(env, 300, opnieuw).catch(e => ({ ok: false, error: String(e.message || e) }));
+            if (vr.ok) { const l = await vb2Lijst(env, {}).catch(e => ({ ok: false, error: String(e.message || e) })); if (l.ok) await env.FONTEYN_DATA.put("vb2-lijst", JSON.stringify(l)); }
+            console.log("[cron] voorraadbepaling: " + JSON.stringify({ ok: vr.ok, vragen: vr.vragen, weken: vr.weken, fout: vr.error || null }));
           }
           return;
         }
