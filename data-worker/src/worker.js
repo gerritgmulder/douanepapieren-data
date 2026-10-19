@@ -8742,11 +8742,22 @@ async function vbDb(env) {
    terug), afgehandeld eenmalig per week terug tot 400 dagen, daarna elke
    ronde wat er in Logic4 de laatste twee dagen is bijgewerkt. */
 const VB_TELT = [3, 25, 30, 17, 28], VB_OPEN = [25, 30, 17, 28];
+const VB_SPA_TEKST = /\b(swim\s*spa|spa)\s*\|/i;
 async function vbOrdersInlezen(env, maxVragen) {
   const db = await vbDb(env);
   await db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS vb_order (orderid INTEGER PRIMARY KEY, status INTEGER, datum TEXT, debiteur INTEGER)"),
     db.prepare("CREATE TABLE IF NOT EXISTS vb_orderregel (id TEXT PRIMARY KEY, orderid INTEGER, code TEXT, qty REAL, wh INTEGER)"),
+    /* Regels die een spa noemen maar een ander artikelnummer hebben dan de
+       standaardartikelen: klantspecifieke orderregels (Chantal zet in de
+       Rapportage Wizard "klantspecifieke orderregels vervangen door standaard
+       artikel" aan, 19 okt 2026). */
+    db.prepare("CREATE TABLE IF NOT EXISTS vb_ksregel (id TEXT PRIMARY KEY, orderid INTEGER, code TEXT, productid INTEGER, omschrijving TEXT, qty REAL, wh INTEGER)"),
+    // Zonder deze indexen las elke DELETE per order de hele tabel (19 okt 2026: D1-daglimiet op).
+    db.prepare("CREATE INDEX IF NOT EXISTS vb_orderregel_order ON vb_orderregel (orderid)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS vb_orderregel_code ON vb_orderregel (code)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS vb_ksregel_order ON vb_ksregel (orderid)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS vb_order_status_datum ON vb_order (status, datum)"),
   ]);
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const spaCodes = new Set();
@@ -8772,13 +8783,17 @@ async function vbOrdersInlezen(env, maxVragen) {
     const st = [];
     for (const o of lijst) {
       const rijen = (o.OrderRows || []).filter(rw => rw.ProductCode && spaCodes.has(String(rw.ProductCode)));
-      if (!rijen.length) continue;
+      const ks = (o.OrderRows || []).filter(rw => !(rw.ProductCode && spaCodes.has(String(rw.ProductCode))) && VB_SPA_TEKST.test(String(rw.Description || "")) && !rw.IsAssemblyChild && !rw.ComposedProductOrderRowParentId);
+      if (!rijen.length && !ks.length) continue;
       orders++;
       const sid = Number(o.OrderStatus && o.OrderStatus.Id) || 0;
       st.push(db.prepare("INSERT OR REPLACE INTO vb_order (orderid, status, datum, debiteur) VALUES (?, ?, ?, ?)").bind(Number(o.Id), sid, String(o.CreationDate || "").slice(0, 10), Number(o.DebtorId) || null));
       st.push(db.prepare("DELETE FROM vb_orderregel WHERE orderid = ?").bind(Number(o.Id)));
       for (const rw of rijen) st.push(db.prepare("INSERT OR REPLACE INTO vb_orderregel (id, orderid, code, qty, wh) VALUES (?, ?, ?, ?, ?)")
         .bind(o.Id + ":" + rw.Id, Number(o.Id), String(rw.ProductCode), Number(rw.Qty) || 0, Number(rw.WarehouseId) || 0));
+      st.push(db.prepare("DELETE FROM vb_ksregel WHERE orderid = ?").bind(Number(o.Id)));
+      for (const rw of ks) st.push(db.prepare("INSERT OR REPLACE INTO vb_ksregel (id, orderid, code, productid, omschrijving, qty, wh) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(o.Id + ":" + rw.Id, Number(o.Id), String(rw.ProductCode || ""), Number(rw.ProductId) || null, String(rw.Description || "").slice(0, 200), Number(rw.Qty) || 0, Number(rw.WarehouseId) || 0));
     }
     return st;
   };
@@ -9735,7 +9750,13 @@ async function voorraadbepalingHandle(request, env, url) {
   const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
   if (!(await toegangMag(env, "voorraadbepaling", wie))) return reply(403, { ok: false, error: "geen toegang" });
   /* Orders inlezen met de hand, naast de ronde op :45. */
-  if (url.searchParams.get("inlezen") === "1") return reply(200, await vbOrdersInlezen(env, 40).catch(e => ({ ok: false, error: String(e.message || e) })));
+  if (url.searchParams.get("kvNoodTerug")) {
+    const v = url.searchParams.get("kvNoodTerug");
+    const doen = v === "alles" ? true : v === "lijst" ? false : v.split(",");
+    return reply(200, await kvNoodTerug(env, 2000, doen).catch(e => ({ ok: false, error: String(e.message || e) })));
+  }
+  if (url.searchParams.get("inlezen") === "opnieuw") { const db = await vbDb(env); await db.prepare("DELETE FROM vb_scan WHERE k = 'ocursor'").run(); }
+  if (url.searchParams.get("inlezen") === "1" || url.searchParams.get("inlezen") === "opnieuw") return reply(200, await vbOrdersInlezen(env, 40).catch(e => ({ ok: false, error: String(e.message || e) })));
   /* Per kleur voor de tegel (Gerrit, 19 okt 2026: "zo'n mooi tabelletje zie ik
      niet als ik op Refresh druk"). Alleen D1: verkochte orders per artikel, met de
      partnercontainers apart. Zelfde periode als de tegel (vanaf = jjjj-mm). */
@@ -9791,6 +9812,14 @@ async function voorraadbepalingHandle(request, env, url) {
       if (Number(x.wh) === WH_FONTEYN && !x.usa) { p.regels += x.regels; p.stuks += x.stuks; }
     }
     return reply(200, { ok: true, vanaf, per });
+  }
+  if (url.searchParams.get("ksregels") === "1") {
+    const jt = new Date(); jt.setUTCFullYear(jt.getUTCFullYear() - 1);
+    const vanaf = url.searchParams.get("vanaf") || jt.toISOString().slice(0, 10);
+    const db = await vbDb(env);
+    const r = await db.prepare("SELECT k.orderid AS orderid, o.datum AS datum, o.status AS status, k.code AS code, k.productid AS productid, k.omschrijving AS omschrijving, k.qty AS qty, k.wh AS wh FROM vb_ksregel k JOIN vb_order o ON o.orderid = k.orderid WHERE o.status IN (" + VB_TELT.join(",") + ") AND o.datum >= ? AND (o.debiteur IS NULL OR o.debiteur != ?) ORDER BY o.datum")
+      .bind(vanaf, AMERIKA_DEBTOR).all();
+    return reply(200, { ok: true, vanaf, regels: r.results || [] });
   }
   /* Per magazijn voor één model: om naast een selectie op magazijn te leggen. */
   if (url.searchParams.get("perMagazijn")) {
@@ -18320,15 +18349,32 @@ function kvSoort(key) {
    stukken; binaire waarden gaan naar het Archief (kvbin/<sleutel>).
    De rest van de code merkt hier niets van: het is dezelfde get/put/list. */
 const KVD1_STUK = 500000;   // tekens per rij; ook bij 4 bytes per teken < 2 MB
+/* D1 DICHT (19 okt 2026): de daglimiet van gelezen rijen was op, en tot 00:00
+   UTC weigert D1 elke query. Dan werkt alles via KV: lezen uit KV, opslaan in
+   KV met metadata __nood (tijd), weghalen als lege waarde met __weg. Na
+   middernacht zet kvNoodTerug (ronde op :15) die waarden terug in D1. */
+let _d1DichtTot = 0;
+function d1IsDicht(e) {
+  const m = String((e && e.message) || e || "");
+  if (/daily row read limit|exceeded D1|free tier daily/i.test(m)) {
+    const morgen = new Date(); morgen.setUTCHours(24, 0, 30, 0);
+    _d1DichtTot = morgen.getTime();
+    return true;
+  }
+  return false;
+}
+function d1Dicht() { return Date.now() < _d1DichtTot; }
 function kvMetTeller(env, ctx) {
   const kv = env && env.FONTEYN_DATA, db = env && env.ACTIVITEIT;
   if (!kv || !db || kv.__teller) return env;
   const tel = (soort, key) => {
+    if (d1Dicht()) return;
     const w = db.prepare("INSERT INTO kv_teller (dag, sleutel, n) VALUES (?1, ?2, 1) ON CONFLICT(dag, sleutel) DO UPDATE SET n = n + 1")
       .bind(new Date().toISOString().slice(0, 10), soort + " " + kvSoort(key)).run().catch(() => {});
     if (ctx && ctx.waitUntil) ctx.waitUntil(w);
   };
   const leesD1 = async (key) => {
+    if (d1Dicht()) return null;
     try {
       const r = await db.prepare("SELECT deel, waarde, soort, meta, verloopt FROM kv WHERE sleutel = ?1 ORDER BY deel").bind(String(key)).all();
       const rijen = r.results || [];
@@ -18339,7 +18385,13 @@ function kvMetTeller(env, ctx) {
       let meta = null; try { meta = kop.meta ? JSON.parse(kop.meta) : null; } catch (e) {}
       if (kop.soort === "bin") return { bin: true, meta };
       return { tekst: rijen.map(x => x.waarde || "").join(""), meta };
-    } catch (e) { console.log("[kv-d1] lezen " + key + ": " + (e.message || e)); return null; }
+    } catch (e) { d1IsDicht(e); console.log("[kv-d1] lezen " + key + ": " + (e.message || e)); return null; }
+  };
+  /* KV-waarde bij een dichte D1: een met __weg gemarkeerde sleutel bestaat niet. */
+  const kvNoodGet = async (key, opt) => {
+    const r = await kv.getWithMetadata(key, opt);
+    if (r && r.metadata && r.metadata.__weg) return { value: null, metadata: null };
+    return r || { value: null, metadata: null };
   };
   const typeVan = (opt) => typeof opt === "string" ? opt : ((opt && opt.type) || "text");
   const omzetten = async (key, d, type) => {
@@ -18359,11 +18411,13 @@ function kvMetTeller(env, ctx) {
   const get = async (key, opt) => {
     const d = await leesD1(key);
     if (d) return d.weg ? null : omzetten(key, d, typeVan(opt));
+    if (d1Dicht()) return (await kvNoodGet(key, opt)).value;
     return kv.get(key, opt);
   };
   const getWithMetadata = async (key, opt) => {
     const d = await leesD1(key);
     if (d) return d.weg ? { value: null, metadata: null } : { value: await omzetten(key, d, typeVan(opt)), metadata: d.meta || null };
+    if (d1Dicht()) return kvNoodGet(key, opt);
     return kv.getWithMetadata(key, opt);
   };
   const put = async (key, value, opts) => {
@@ -18395,16 +18449,24 @@ function kvMetTeller(env, ctx) {
     /* Vangnet: lukt D1 niet (storing, of ooit zijn eigen daglimiet), dan
        toch bewaren in KV, en de oude D1-regel weghalen zodat de nieuwe
        KV-waarde niet wordt overschaduwd. */
+    const viaKv = async () => {
+      const o2 = { ...o, metadata: { ...(o.metadata || {}), __nood: nu } };
+      await kv.put(key, soort === "bin" ? await bestandLees(env, "kvbin/" + key) : tekst, o2);
+      if (!globalThis.__kvNoodVlag) { globalThis.__kvNoodVlag = true; try { await kv.put("kv-nood-actief", String(nu)); } catch (e) {} }
+    };
+    if (d1Dicht()) { await viaKv(); return; }
     try { await db.batch(stmts); }
     catch (e) {
+      d1IsDicht(e);
       console.log("[kv-d1] opslaan " + key + " via KV: " + (e.message || e));
-      await kv.put(key, soort === "bin" ? await bestandLees(env, "kvbin/" + key) : tekst, opts);
-      try { await db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(key).run(); } catch (e2) {}
+      await viaKv();
+      if (!d1Dicht()) try { await db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(key).run(); } catch (e2) {}
     }
   };
   const del = async (key) => {
     tel("delete", key);
     key = String(key);
+    if (d1Dicht()) { await kv.put(key, "", { metadata: { __nood: Date.now(), __weg: true } }); return; }
     await db.batch([
       db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(key),
       db.prepare("INSERT INTO kv (sleutel, deel, waarde, soort, ts) VALUES (?1, 0, NULL, 'weg', ?2)").bind(key, Date.now()),
@@ -18415,6 +18477,7 @@ function kvMetTeller(env, ctx) {
     const o = opt || {};
     let res;
     try { res = await kv.list(o); } catch (e) { res = { keys: [], list_complete: true }; }
+    if (d1Dicht()) return { ...res, keys: (res.keys || []).filter(k => !(k.metadata && k.metadata.__weg)) };
     try {
       const prefix = String(o.prefix || "");
       const r = await db.prepare("SELECT sleutel, soort, meta, verloopt FROM kv WHERE deel = 0 AND substr(sleutel, 1, ?2) = ?1").bind(prefix, prefix.length).all();
@@ -18433,8 +18496,57 @@ function kvMetTeller(env, ctx) {
       return { ...res, keys };
     } catch (e) { console.log("[kv-d1] list: " + (e.message || e)); return res; }
   };
-  const omhulsel = { __teller: true, get, getWithMetadata, put, delete: del, list };
+  const omhulsel = { __teller: true, __kv: kv, get, getWithMetadata, put, delete: del, list };
   return Object.assign({}, env, { FONTEYN_DATA: omhulsel });
+}
+
+/* Na een dichte D1: alles wat in KV met __nood is opgeslagen terug in D1,
+   als het nieuwer is dan wat D1 heeft. Draait op :15 zolang de vlag
+   kv-nood-actief bestaat, en met de hand via /beheer/kv-nood-terug. */
+async function kvNoodTerug(env, maxPerRonde, doen) {
+  /* Zonder doen alleen een lijst: een tegel die vandaag op een oude KV-kopie
+     werkte, bewaarde die oude stand plus zijn wijziging. Blind terugzetten
+     overschrijft dan wat D1 nieuwer heeft. Eerst per sleutel kijken. */
+  const kv = (env.FONTEYN_DATA && env.FONTEYN_DATA.__kv) || env.FONTEYN_DATA, db = env.ACTIVITEIT;
+  const lijst = [];
+  if (d1Dicht()) return { ok: false, uitleg: "D1 is nog dicht" };
+  const vlag = await kv.get("kv-nood-actief");
+  if (!vlag) return { ok: true, niets: true };
+  let cursor, terug = 0, bekeken = 0, gedaan = 0, klaar = false;
+  for (let i = 0; i < 5; i++) {
+    const res = await kv.list({ cursor, limit: 1000 });
+    for (const k of (res.keys || [])) {
+      bekeken++;
+      const m = k.metadata || {};
+      if (!m.__nood) continue;
+      if (gedaan >= maxPerRonde) break;
+      const rij = await db.prepare("SELECT ts FROM kv WHERE sleutel = ?1 AND deel = 0").bind(k.name).first();
+      if (rij && Number(rij.ts) >= Number(m.__nood)) continue;
+      gedaan++;
+      lijst.push({ sleutel: k.name, nood: new Date(Number(m.__nood)).toISOString(), d1: rij ? new Date(Number(rij.ts)).toISOString() : null, weg: !!m.__weg });
+      if (!doen || (Array.isArray(doen) && !doen.includes(k.name))) continue;
+      const { __nood, __weg, ...meta } = m;
+      if (__weg) {
+        await db.batch([db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(k.name),
+          db.prepare("INSERT INTO kv (sleutel, deel, waarde, soort, ts) VALUES (?1, 0, NULL, 'weg', ?2)").bind(k.name, Number(__nood))]);
+      } else {
+        const tekst = await kv.get(k.name);
+        if (tekst == null) continue;
+        const n = Math.max(1, Math.ceil(tekst.length / KVD1_STUK));
+        const metaTekst = Object.keys(meta).length ? JSON.stringify(meta) : null;
+        const stmts = [db.prepare("DELETE FROM kv WHERE sleutel = ?1").bind(k.name)];
+        for (let d = 0; d < n; d++) stmts.push(db.prepare("INSERT INTO kv (sleutel, deel, waarde, soort, meta, verloopt, delen, ts) VALUES (?1, ?2, ?3, 'tekst', ?4, ?5, ?6, ?7)")
+          .bind(k.name, d, tekst.slice(d * KVD1_STUK, (d + 1) * KVD1_STUK), metaTekst, k.expiration || null, n, Number(__nood)));
+        await db.batch(stmts);
+      }
+      terug++;
+    }
+    if (gedaan >= maxPerRonde) break;
+    if (res.list_complete) { klaar = true; break; }
+    cursor = res.cursor;
+  }
+  if (doen === true && klaar) { await kv.delete("kv-nood-actief"); try { await kv.delete("kv-nood-cursor"); } catch (e) {} }
+  return { ok: true, bekeken, terug, klaar, lijst };
 }
 
 const FP_WORKER = {
@@ -18452,6 +18564,9 @@ const FP_WORKER = {
            QuickBooks-aanroepen en die horen niet af te gaan van het budget van
            de voorraadronde op het hele uur. */
         if (String(event && event.cron || "").startsWith("15 ")) {
+          // Na een dichte D1 (19 okt 2026): de noodopslag terug in D1.
+          // Alleen melden; terugzetten gebeurt met de hand na controle per sleutel.
+          try { if (!d1Dicht()) { const nt = await kvNoodTerug(env, 2000, false); if (!nt.niets) console.log("[cron] kv-nood (alleen lijst): " + nt.lijst.length + " sleutels"); } } catch (e) { console.log("[cron] kv-nood: " + (e.message || e)); }
           // Eerst de welkomstmails (licht: 8 per ronde), dan de wire-bewaking.
           const wq = await ppWachtrijRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           /* De berichten (Chantal, Manon): licht, vooral KV, een enkele mail. */
@@ -18486,8 +18601,9 @@ const FP_WORKER = {
           } else if (PRODUCTIE_UREN.includes(uur)) await automaat();
           else {
             // De overige uren: facturen inlezen voor de partnercontainers (Voorraadbepaling).
-            const vr = await vbOrdersInlezen(env, 40).catch(e => ({ ok: false, error: String(e.message || e) }));
-            console.log("[cron] voorraadbepaling orders: " + JSON.stringify(vr));
+            /* Uit sinds 19 okt 2026: deze ronde maakte de leeslimiet van D1 op
+               (DELETE per order zonder index). Pas weer aan na een proef met
+               indexen en een telling van de gelezen rijen. */
           }
           return;
         }
