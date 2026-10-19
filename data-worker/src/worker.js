@@ -8794,6 +8794,108 @@ async function vbDealerInlezen(env, maxVragen) {
   const bij = await db.prepare("SELECT v FROM vb_scan WHERE k = 'bij2'").first();
   return { ok: true, vragen, facturen, regels, cursor: volgende, bijSinds: (bij && bij.v) || null };
 }
+/* VERKOCHT = ZOALS CHANTAL HET TELT (Gerrit, 19 okt 2026: "het moet 100% kloppen")
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal telt in de Rapportage Wizard orders op ORDERDATUM met de statussen
+   afgehandeld (3), 30% aanbetaald (25), volledig betaald (30), te factureren
+   (17) en gepland, wacht op betaling (28). Nagerekend voor Refresh 131390
+   vanaf nov 2025: precies haar 44. Op factuurdatum kwam er 42 uit (7 oude
+   orders erin, 9 betaalde maar nog niet gefactureerde eruit), en zonder
+   Texas-filter zelfs 54.
+
+   Inlezen in D1: de open statussen elke ronde helemaal opnieuw (weg en
+   terug), afgehandeld eenmalig per week terug tot 400 dagen, daarna elke
+   ronde wat er in Logic4 de laatste twee dagen is bijgewerkt. */
+const VB_TELT = [3, 25, 30, 17, 28], VB_OPEN = [25, 30, 17, 28];
+async function vbOrdersInlezen(env, maxVragen) {
+  const db = await vbDb(env);
+  await db.batch([
+    db.prepare("CREATE TABLE IF NOT EXISTS vb_order (orderid INTEGER PRIMARY KEY, status INTEGER, datum TEXT, debiteur INTEGER)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS vb_orderregel (id TEXT PRIMARY KEY, orderid INTEGER, code TEXT, qty REAL, wh INTEGER)"),
+  ]);
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const spaCodes = new Set();
+  for (const [model, variants] of Object.entries(catalog.models || {}))
+    if (!DP_GEEN_SPA.test(model)) for (const v of variants) spaCodes.add(String(v.code));
+  const token = await l4Token(env);
+  let vragen = 0, orders = 0;
+  const haal = async (filter) => {
+    const alle = [];
+    for (let skip = 0; ; skip += 500) {
+      if (vragen >= maxVragen) return null;
+      vragen++;
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...filter, TakeRecords: 500, SkipRecords: skip }) });
+      if (!r.ok) throw new Error("GetOrders HTTP " + r.status);
+      const j = await r.json().catch(() => null);
+      const l = Array.isArray(j) ? j : ((j && j.Records) || []);
+      alle.push(...l);
+      if (l.length < 500) return alle;
+    }
+  };
+  const zetten = (lijst) => {
+    const st = [];
+    for (const o of lijst) {
+      const rijen = (o.OrderRows || []).filter(rw => rw.ProductCode && spaCodes.has(String(rw.ProductCode)));
+      if (!rijen.length) continue;
+      orders++;
+      const sid = Number(o.OrderStatus && o.OrderStatus.Id) || 0;
+      st.push(db.prepare("INSERT OR REPLACE INTO vb_order (orderid, status, datum, debiteur) VALUES (?, ?, ?, ?)").bind(Number(o.Id), sid, String(o.CreationDate || "").slice(0, 10), Number(o.DebtorId) || null));
+      st.push(db.prepare("DELETE FROM vb_orderregel WHERE orderid = ?").bind(Number(o.Id)));
+      for (const rw of rijen) st.push(db.prepare("INSERT OR REPLACE INTO vb_orderregel (id, orderid, code, qty, wh) VALUES (?, ?, ?, ?, ?)")
+        .bind(o.Id + ":" + rw.Id, Number(o.Id), String(rw.ProductCode), Number(rw.Qty) || 0, Number(rw.WarehouseId) || 0));
+    }
+    return st;
+  };
+  const vanaf400 = new Date(Date.now() - VB_DEALER_DAGEN * 86400000).toISOString().slice(0, 10) + "T00:00:00";
+  // 1. De open statussen helemaal opnieuw. Pas weggooien als alles binnen is.
+  const open = [];
+  for (const sid of VB_OPEN) {
+    const l = await haal({ StatusId: sid, CreationDateFrom: vanaf400 });
+    if (!l) return { ok: false, error: "budget op bij de open statussen", vragen };
+    open.push(...l);
+  }
+  const openSt = zetten(open);
+  await db.batch([db.prepare("DELETE FROM vb_order WHERE status IN (" + VB_OPEN.join(",") + ")"), ...openSt]);
+  // 2. Afgehandeld: eerst per week terug, daarna wat er net is bijgewerkt.
+  const c = await db.prepare("SELECT v FROM vb_scan WHERE k = 'ocursor'").first();
+  const vandaag = new Date().toISOString().slice(0, 10);
+  let cursor = (c && c.v) || vanaf400.slice(0, 10);
+  if (cursor !== "bij") {
+    while (vragen < maxVragen - 2 && cursor <= vandaag) {
+      const eind = new Date(Date.parse(cursor + "T00:00:00Z") + 7 * 86400000).toISOString().slice(0, 10);
+      const l = await haal({ StatusId: 3, CreationDateFrom: cursor + "T00:00:00", CreationDateTo: eind + "T00:00:00" });
+      if (!l) break;
+      const st = zetten(l); if (st.length) await db.batch(st);
+      cursor = eind;
+    }
+    const klaar = cursor > vandaag;
+    await db.prepare("INSERT OR REPLACE INTO vb_scan (k, v) VALUES ('ocursor', ?)").bind(klaar ? "bij" : cursor).run();
+    if (klaar) await db.prepare("INSERT OR REPLACE INTO vb_scan (k, v) VALUES ('obij', ?)").bind(new Date().toISOString()).run();
+  } else {
+    const l = await haal({ StatusId: 3, LastActionFrom: new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 19) });
+    if (l) { const st = zetten(l); if (st.length) await db.batch(st); }
+  }
+  const bij = await db.prepare("SELECT v FROM vb_scan WHERE k = 'obij'").first();
+  return { ok: true, vragen, orders, open: open.length, cursor: cursor === "bij" ? "bij" : cursor, bijSinds: (bij && bij.v) || null };
+}
+/* Verkocht per artikelcode en maand (orderdatum), Uddel en partnercontainers
+   apart; Amerika (debiteur of magazijn Texas) eruit. */
+async function vbVerkochtPerCode(env, vanafDatum, codes) {
+  const db = await vbDb(env);
+  const bij = await db.prepare("SELECT v FROM vb_scan WHERE k = 'obij'").first().catch(() => null);
+  if (!(bij && bij.v)) return null;
+  let sql = "SELECT r.code AS code, substr(o.datum, 1, 7) AS m, (r.wh = ?) AS c, SUM(r.qty) AS q FROM vb_orderregel r JOIN vb_order o ON o.orderid = r.orderid " +
+    "WHERE o.status IN (" + VB_TELT.join(",") + ") AND o.datum >= ? AND r.wh != ? AND (o.debiteur IS NULL OR o.debiteur != ?)";
+  const uit = [];
+  const run = async (deel) => {
+    const q = sql + (deel ? " AND r.code IN (" + deel.map(() => "?").join(",") + ")" : "") + " GROUP BY r.code, m, c";
+    const r = await db.prepare(q).bind(WH_DEALER, vanafDatum, WH_TEXAS, AMERIKA_DEBTOR, ...(deel || [])).all();
+    uit.push(...(r.results || []));
+  };
+  if (codes) for (let i = 0; i < codes.length; i += 90) await run(codes.slice(i, i + 90)); else await run(null);
+  return uit;
+}
 /* Partnercontainers per artikelcode en maand vanaf een datum, van de facturen (D1). */
 async function vbDealerPerCode(env, vanafDatum) {
   const per = {};
@@ -8858,27 +8960,25 @@ async function voorraadbepalingBereken(env) {
       (ikosPerModel[m] = ikosPerModel[m] || []).push({ iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 90), qty: q, eta: String(r.ExpectedDeliveryDate || "").slice(0, 10) || null });
     }
   }
-  /* Partnercontainers eraf (Gerrit, 19 okt 2026). Zijn de facturen ingelezen,
-     dan komt de hele verkoop uit D1: gefactureerd, magazijn 27 apart. Dezelfde
-     bron als de tabel per kleur, zodat de som van de kleuren gelijk is aan het
-     model. Logic4's eigen telling (hierboven) is dan alleen de terugval. */
+  /* Verkocht zoals Chantal het telt (zie vbOrdersInlezen): orders op orderdatum
+     met de vijf statussen, partnercontainers apart, Amerika eruit. Dezelfde
+     bron als de tabel per kleur. Logic4's eigen telling (hierboven) is alleen
+     de terugval zolang de orders nog niet zijn ingelezen. */
   const containers = {}, verkochtMet = { ...verkocht };
   const dealer = { open: 0, ingelezen: false, fout: null };
   try {
-    const db = await vbDb(env);
-    const bij = await db.prepare("SELECT v FROM vb_scan WHERE k = 'bij2'").first();
-    dealer.ingelezen = !!(bij && bij.v);
-    if (dealer.ingelezen && vanaf) {
-      const r = await db.prepare("SELECT code, substr(datum, 1, 7) AS m, (wh = ?) AS c, SUM(qty) AS q FROM vb_factuurregel WHERE datum >= ? GROUP BY code, m, c").bind(WH_DEALER, vanaf + "-01").all();
+    const rijen = vanaf ? await vbVerkochtPerCode(env, vanaf + "-01", null) : null;
+    dealer.ingelezen = !!rijen;
+    if (rijen) {
       for (const k of Object.keys(verkocht)) delete verkocht[k];
       for (const k of Object.keys(perMaand)) perMaand[k] = 0;
       for (const k of Object.keys(verkochtMet)) delete verkochtMet[k];
-      for (const x of (r.results || [])) {
+      for (const x of rijen) {
         const m = codeToModel[String(x.code)]; if (!m) continue;
         const q = Number(x.q) || 0;
         verkochtMet[m] = (verkochtMet[m] || 0) + q;
         if (Number(x.c)) containers[m] = (containers[m] || 0) + q;
-        else { verkocht[m] = (verkocht[m] || 0) + q; if (perMaand[x.m] != null || x.m >= vanaf) perMaand[x.m] = (perMaand[x.m] || 0) + q; }
+        else { verkocht[m] = (verkocht[m] || 0) + q; perMaand[x.m] = (perMaand[x.m] || 0) + q; }
       }
       for (const m of Object.keys(verkocht)) if (verkocht[m] < 0) verkocht[m] = 0;
     }
@@ -9720,8 +9820,8 @@ async function voorraadbepalingHandle(request, env, url) {
   /* Uitsplitsing van één model per artikel (Chantal, 19 okt 2026: "Refresh 196
      verkocht, maar in Logic4 staan 44 Refresh Sterling White"). Per artikelcode
      de kleur, de stuks zonder Amerika (wat de tegel telt) en met Amerika. */
-  /* Containerregels inlezen met de hand (beheer), naast de ronde op :45. */
-  if (url.searchParams.get("inlezen") === "1") return reply(200, await vbDealerInlezen(env, 40));
+  /* Orders inlezen met de hand, naast de ronde op :45. */
+  if (url.searchParams.get("inlezen") === "1") return reply(200, await vbOrdersInlezen(env, 40).catch(e => ({ ok: false, error: String(e.message || e) })));
   /* Per kleur voor de tegel (Gerrit, 19 okt 2026: "zo'n mooi tabelletje zie ik
      niet als ik op Refresh druk"). Alleen D1: gefactureerd per artikel, met de
      partnercontainers apart. Zelfde periode als de tegel (vanaf = jjjj-mm). */
@@ -9741,19 +9841,29 @@ async function voorraadbepalingHandle(request, env, url) {
       const j = await r.json().catch(() => null);
       const lijst = Array.isArray(j) ? j : ((j && j.Records) || []);
       if (!lijst.length) continue;
-      const s = { naam: DP_STATUS_NAMEN[id] || null, orders: lijst.length, uddel: 0, container: 0, amerika: 0 };
+      const s = { naam: DP_STATUS_NAMEN[id] || null, orders: lijst.length, uddel: 0, container: 0, amerika: 0, lijst: [] };
       for (const o of lijst) {
         if (!s.naam && o.OrderStatus) s.naam = o.OrderStatus.Value || o.OrderStatus.Name || null;
+        let u = 0;
         for (const rw of (o.OrderRows || [])) {
           if (String(rw.ProductCode) !== code) continue;
           const q = Number(rw.Qty) || 0;
           if (Number(o.DebtorId) === AMERIKA_DEBTOR || Number(rw.WarehouseId) === WH_TEXAS) s.amerika += q;
-          else if (Number(rw.WarehouseId) === WH_DEALER) s.container += q; else s.uddel += q;
+          else if (Number(rw.WarehouseId) === WH_DEALER) s.container += q; else { s.uddel += q; u += q; }
         }
+        if (u) s.lijst.push({ order: o.Id, datum: String(o.CreationDate || "").slice(0, 10), qty: u, klant: (o.InvoiceAddress && (o.InvoiceAddress.CompanyName || o.InvoiceAddress.ContactName)) || "" });
       }
       uit[id] = s;
     }
-    return reply(200, { ok: true, code, vanaf, tot, perStatus: uit });
+    // De facturen voor Uddel uit D1, met het ordernummer erbij.
+    let facturen = [];
+    try {
+      const db = await vbDb(env);
+      const r = await db.prepare("SELECT orderid, factuur, datum, SUM(qty) AS q FROM vb_factuurregel WHERE code = ? AND wh != ? AND wh != ? AND debiteur != ? AND datum >= ? GROUP BY orderid, factuur, datum ORDER BY datum")
+        .bind(code, WH_DEALER, WH_TEXAS, AMERIKA_DEBTOR, vanaf.slice(0, 10)).all();
+      facturen = (r.results || []).map(x => ({ order: x.orderid, factuur: x.factuur, datum: x.datum, qty: x.q }));
+    } catch (e) {}
+    return reply(200, { ok: true, code, vanaf, tot, perStatus: uit, facturen });
   }
   if (url.searchParams.get("kleuren")) {
     const model = url.searchParams.get("kleuren");
@@ -9761,16 +9871,10 @@ async function voorraadbepalingHandle(request, env, url) {
     const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
     const varianten = (catalog.models || {})[model] || [];
     if (!varianten.length) return reply(404, { ok: false, error: "model onbekend in de spa-catalogus" });
-    const db = await vbDb(env);
     const per = {};
     for (const v of varianten) per[String(v.code)] = { code: String(v.code), omschrijving: String(v.desc || "").replace(/^[^|]*\|\s*/, "").trim() || String(v.desc || ""), uddel: 0, containers: 0 };
-    const codes = Object.keys(per);
-    for (let i = 0; i < codes.length; i += 90) {
-      const deel = codes.slice(i, i + 90);
-      const r = await db.prepare("SELECT code, SUM(CASE WHEN wh = ? THEN qty ELSE 0 END) AS c, SUM(CASE WHEN wh != ? THEN qty ELSE 0 END) AS u FROM vb_factuurregel WHERE datum >= ? AND code IN (" + deel.map(() => "?").join(",") + ") GROUP BY code")
-        .bind(WH_DEALER, WH_DEALER, vanaf, ...deel).all();
-      for (const x of (r.results || [])) { const p = per[String(x.code)]; if (p) { p.uddel = Number(x.u) || 0; p.containers = Number(x.c) || 0; } }
-    }
+    const rijen = (await vbVerkochtPerCode(env, vanaf, Object.keys(per))) || [];
+    for (const x of rijen) { const p = per[String(x.code)]; if (!p) continue; if (Number(x.c)) p.containers += Number(x.q) || 0; else p.uddel += Number(x.q) || 0; }
     const regels = Object.values(per).filter(p => p.uddel || p.containers).sort((a, b) => b.uddel - a.uddel || b.containers - a.containers);
     return reply(200, { ok: true, model, vanaf, regels,
                         totaal: { uddel: regels.reduce((a, p) => a + p.uddel, 0), containers: regels.reduce((a, p) => a + p.containers, 0) } });
@@ -18450,8 +18554,8 @@ const FP_WORKER = {
           } else if (PRODUCTIE_UREN.includes(uur)) await automaat();
           else {
             // De overige uren: facturen inlezen voor de partnercontainers (Voorraadbepaling).
-            const vr = await vbDealerInlezen(env, 40).catch(e => ({ ok: false, error: String(e.message || e) }));
-            console.log("[cron] voorraadbepaling containers: " + JSON.stringify(vr));
+            const vr = await vbOrdersInlezen(env, 40).catch(e => ({ ok: false, error: String(e.message || e) }));
+            console.log("[cron] voorraadbepaling orders: " + JSON.stringify(vr));
           }
           return;
         }

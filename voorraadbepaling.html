@@ -64,6 +64,9 @@ tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
 .kleurtab .n{text-align:right;white-space:nowrap}
 .kleurtab .code{color:#6b7280;font-size:11px}
 .kleurtab tr.som td{border-top:2px solid #d1d5db;background:#fafafa}
+.contKnop{font-size:11.5px;padding:3px 10px;margin-left:8px;border-radius:999px;border:1px solid #c7d2cc;background:#fff;color:#144734;cursor:pointer;white-space:nowrap}
+.contUitleg{margin-top:6px;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 10px}
+.kleurtab .cont{color:#9ca3af}
 </style>
 </head>
 <body>
@@ -122,12 +125,12 @@ function teken(){
   var bij=j.modellen.filter(function(m){ return m._advies>0; });
   var nodig=bij.reduce(function(n,m){ return n+m._advies; },0);
   var res=j.modellen.reduce(function(n,m){ return n+(m.res||0); },0);
-  $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s gefactureerd in de laatste 12 maanden, partnercontainers eraf'+(j.zonderContainers?' ('+nl(j.zonderContainers.aantal)+')':'')+'</span></div>'+
+  $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s verkocht in de laatste 12 maanden, voor Uddel</span></div>'+
     '<div><b>'+nl(j.totaalBesteld)+'</b><span>spa\'s besteld bij de fabrieken (open inkooporders)</span></div>'+
     '<div><b>'+nl(totVrij)+'</b><span>spa\'s vrij: voorraad, zee en productie min '+nl(res)+' gereserveerd</span></div>'+
     '<div><b>'+bij.length+'</b><span>modellen om bij te bestellen, samen '+nl(nodig)+' spa\'s</span></div>';
   var b=(j.overzicht||{}).bron||{};
-  $("basis").innerHTML = esc("Verkoop = gefactureerd, van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Partnercontainers blijven buiten de telling"+(j.zonderContainers?" ("+nl(j.zonderContainers.aantal)+" spa's)":"")+": die gaan van de fabriek rechtstreeks naar de partner, buiten Uddel om. Amerika ook: de verkoop én de "+j.ikosAmerika+" inkooporders voor Houston.")+
+  $("basis").innerHTML = esc("Verkocht = orders met orderdatum van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+" en status afgehandeld, 30% aanbetaald, volledig betaald, te factureren of gepland: dezelfde telling als de Rapportage Wizard in Logic4. Particulier en partner samen. Partnercontainers en Amerika blijven buiten de telling, ook de "+j.ikosAmerika+" inkooporders voor Houston.")+
     '<br>'+esc("Uit Overzicht (Voorraadbeheer), stand: reserveringen "+tijd(b.reserveringen)+", voorraad "+tijd(b.hallen)+", schepen "+tijd(b.schepen)+", productie "+tijd(b.productie)+". Ook hier blijven partnercontainers buiten de telling.")+
     (N?'<br><b>'+esc("Met een nieuwe bestelling van "+nl(N)+" spa's: per model staat bij Advies hoeveel daarvan het moeten zijn.")+'</b>':'');
   var lijst = $("alles").checked ? j.modellen : bij;
@@ -135,13 +138,14 @@ function teken(){
     var pil = m._advies>0 ? '<span class="pil bij">'+m._advies+' bijbestellen</span>' : m._teveel>0 ? '<span class="pil teveel">'+m._teveel+' meer dan de verhouding</span>' : '<span class="pil goed">klopt</span>';
     var uitleg = '<div style="line-height:1.6">'+
       '<b>Overzicht:</b> '+nl(m.res)+' gereserveerd · '+nl(m.nl)+' op voorraad NL · '+nl(m.zee)+' op zee · '+nl(m.prod)+' in productie → <b>'+nl(m.vrij)+' vrij</b><br>'+
-      '<b>Verkoop:</b> '+nl(m.verkocht)+' gefactureerd'+(m.containers?' ('+nl(m.verkochtMetContainers)+' min '+nl(m.containers)+' voor partnercontainers)':'')+' = '+m.aandeel.toLocaleString("nl-NL")+'% van alles · '+m.aandeel.toLocaleString("nl-NL")+'% van '+nl(basisT)+(N?' (vrij '+nl(totVrij)+' + nieuwe bestelling '+nl(N)+')':' vrij')+' = <b>hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</b><br>'+
+      '<b>Verkoop:</b> '+nl(m.verkocht)+' verkocht voor Uddel = '+m.aandeel.toLocaleString("nl-NL")+'% van alles · '+m.aandeel.toLocaleString("nl-NL")+'% van '+nl(basisT)+(N?' (vrij '+nl(totVrij)+' + nieuwe bestelling '+nl(N)+')':' vrij')+' = <b>hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</b><br>'+
       '<b>Advies:</b> hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+' - vrij '+nl(m.vrij)+(m.tekortOverzicht?' (en het tekort in Overzicht is '+m.tekortOverzicht+', dat moet er minstens bij)':'')+' → <b>'+(m._advies>0?m._advies+' bijbestellen':(m._teveel>0?m._teveel+' meer dan de verhouding':'klopt'))+'</b></div>'+
       '<div style="margin-top:6px">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Voor dit model staan nu 0 stuks besteld.')+'</div>';
     return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+(open[m.model]?'▾ ':'▸ ')+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n">'+nl(m.vrij)+'</td><td class="n verberg-mob">'+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
       (open[m.model] ? '<tr><td colspan="7" class="iko">'+uitleg+kleurTabel(m.model)+'</td></tr>' : '');
   }).join("") : '<tr><td colspan="7" class="lead">Alle modellen zitten op of boven de verhouding.</td></tr>';
   document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; if(open[tr.dataset.m]) laadKleuren(tr.dataset.m); teken(); }); });
+  document.querySelectorAll(".contKnop").forEach(function(b){ b.addEventListener("click", function(e){ e.stopPropagation(); toonCont=!toonCont; try{ localStorage.setItem("fp.vb.containers", toonCont?"1":"0"); }catch(x){} teken(); }); });
 }
 /* Per kleur: wat er voor Uddel gefactureerd is en wat voor partnercontainers
    (Gerrit, 19 okt 2026). Wordt opgehaald bij het openklikken van een model. */
@@ -156,16 +160,21 @@ async function laadKleuren(model){
   }catch(e){ kleuren[model]={fout:e.message}; }
   if(open[model]) teken();
 }
+var toonCont=false; try{ toonCont=localStorage.getItem("fp.vb.containers")==="1"; }catch(e){}
 function kleurTabel(model){
   var k=kleuren[model];
   if(!k||k.bezig) return '<div class="kleuren"><span class="lead">Kleuren ophalen…</span></div>';
   if(k.fout) return '<div class="kleuren"><span style="color:#b91c1c">Kleuren ophalen vraagt een nieuwe poging: '+esc(k.fout)+'</span></div>';
-  if(!k.regels.length) return '<div class="kleuren"><span class="lead">In deze periode staat van dit model 0 gefactureerd.</span></div>';
+  if(!k.regels.length) return '<div class="kleuren"><span class="lead">In deze periode staat van dit model 0 verkocht.</span></div>';
   var t=k.totaal;
-  return '<div class="kleuren"><b>Per kleur</b> <span class="lead">(gefactureerd vanaf '+esc(mnd(String(k.vanaf).slice(0,7)))+')</span>'+
-    '<table class="kleurtab"><thead><tr><th>Uitvoering</th><th class="n">Uddel</th><th class="n">Aandeel</th><th class="n">Partnercontainers</th></tr></thead><tbody>'+
-    k.regels.map(function(x){ return '<tr><td>'+esc(x.omschrijving)+' <span class="code">'+esc(x.code)+'</span></td><td class="n"><b>'+nl(x.uddel)+'</b></td><td class="n">'+(t.uddel?Math.round(x.uddel/t.uddel*100):0)+'%</td><td class="n">'+nl(x.containers)+'</td></tr>'; }).join('')+
-    '<tr class="som"><td>Totaal</td><td class="n"><b>'+nl(t.uddel)+'</b></td><td class="n">100%</td><td class="n">'+nl(t.containers)+'</td></tr>'+
+  var regels=k.regels.filter(function(x){ return x.uddel || toonCont; });
+  var kop='<b>Per kleur</b> <span class="lead">(verkocht voor Uddel vanaf '+esc(mnd(String(k.vanaf).slice(0,7)))+')</span> '+
+    '<button type="button" class="contKnop">'+(toonCont?'Partnercontainers verbergen':'Partnercontainers tonen')+'</button>';
+  return '<div class="kleuren">'+kop+
+    (toonCont?'<div class="contUitleg">Partnercontainers blijven buiten de voorraadbepaling: die spa\'s gaan van de fabriek rechtstreeks naar de partner. Ze staan hier alleen ter informatie.</div>':'')+
+    '<table class="kleurtab"><thead><tr><th>Uitvoering</th><th class="n">Verkocht</th><th class="n">Aandeel</th>'+(toonCont?'<th class="n cont">Partnercontainers</th>':'')+'</tr></thead><tbody>'+
+    regels.map(function(x){ return '<tr><td>'+esc(x.omschrijving)+' <span class="code">'+esc(x.code)+'</span></td><td class="n"><b>'+nl(x.uddel)+'</b></td><td class="n">'+(t.uddel?Math.round(x.uddel/t.uddel*100):0)+'%</td>'+(toonCont?'<td class="n cont">'+nl(x.containers)+'</td>':'')+'</tr>'; }).join('')+
+    '<tr class="som"><td>Totaal</td><td class="n"><b>'+nl(t.uddel)+'</b></td><td class="n">100%</td>'+(toonCont?'<td class="n cont">'+nl(t.containers)+'</td>':'')+'</tr>'+
     '</tbody></table></div>';
 }
 function tijd(v){ if(!v) return "onbekend"; var d=new Date(v); return isNaN(d)?String(v):d.toLocaleString("nl-NL",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}); }
