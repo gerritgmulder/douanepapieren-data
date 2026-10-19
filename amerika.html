@@ -91,6 +91,12 @@
 #audPlak:focus{outline:none;border-color:var(--fonteyn-green,#144734)}
 #audPlak table{border-collapse:collapse;font-size:12px}
 #audPlak td,#audPlak th{border:1px solid #e5e7eb;padding:2px 6px}
+  .t1Kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .t1Kpi div{background:#f8faf5;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+  .t1Kpi b{display:block;font-size:19px}
+  .t1Kpi span{font-size:11.5px;color:var(--muted)}
+  .t1Det{border:1px solid var(--border);border-radius:9px;padding:9px 12px;margin:8px 0;background:#fff}
+  .t1Det summary{cursor:pointer;font-size:13px}
 </style>
 </head>
 <body>
@@ -115,6 +121,36 @@
     <button class="tab" data-tab="audrey" type="button">Ontvangen Audrey</button>
     <button class="tab" data-tab="voorraad" type="button">Voorraad Houston</button>
     <button class="tab" data-tab="maand" type="button">Maandfactuur</button>
+    <button class="tab" data-tab="t1160" type="button">Tussenrekening 1160</button>
+  </div>
+
+  <!-- ===== Tussenrekening 1160 per uitbetaling =====
+       Gerrit (19 okt 2026), voor Osman. Sinds 7 okt 2026 boekt de automaat
+       elke betaling in QuickBooks meteen op de order in Logic4 (dagboek 45 =
+       1160). Hier per uitbetaling van Audrey welke facturen erin zitten en hoe
+       ze geboekt zijn, en bovenaan wat er nu nog onderweg is. Alleen lezen;
+       de worker rekent (/amerika/1160). -->
+  <div id="tab-t1160" class="hidden">
+    <div class="card">
+      <h3>Tussenrekening 1160</h3>
+      <p class="lead" style="font-size:13px;margin-bottom:10px">Betaalt een klant in Amerika, dan boekt het Dashboard die betaling meteen op de order in Logic4, op 1160. Het geld staat dan in Amerika en komt met de volgende uitbetaling van Audrey naar Fonteyn. Boek je die uitbetaling (netto op 1160, bankkosten op 4630, koersverschil op 9075), dan komt 1160 voor die uitbetaling weer op nul.</p>
+      <div class="t1Kpi" id="t1Kpi"></div>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:10px">
+        <button class="btn" type="button" id="t1Vers">Opnieuw ophalen</button>
+        <button class="btn" type="button" id="t1Excel">Download Excel</button>
+        <span id="t1Stand" style="font-size:12.5px;color:var(--muted)"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Nu onderweg uit Amerika</h3>
+      <p class="lead" style="font-size:12.5px;margin-bottom:6px">Betalingen die al op 1160 staan en met de volgende uitbetaling van Audrey meekomen.</p>
+      <div class="tablewrap"><table class="grid"><thead><tr><th>Betaald in Amerika</th><th>Factuur</th><th>Klant</th><th>Order</th><th style="text-align:right">Dollar</th><th style="text-align:right">Euro (op 1160)</th></tr></thead><tbody id="t1Onderweg"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h3>Per uitbetaling van Audrey</h3>
+      <p class="lead" style="font-size:12.5px;margin-bottom:6px">Klik een uitbetaling open voor de facturen. Groen = de facturen min de bankkosten zijn precies wat er is ontvangen.</p>
+      <div id="t1Uit"></div>
+    </div>
   </div>
 
   <!-- ===== Maandfactuur van Audrey =====
@@ -397,6 +433,8 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   document.getElementById("tab-audrey").classList.toggle("hidden",tab!=="audrey");
   document.getElementById("tab-voorraad").classList.toggle("hidden",tab!=="voorraad");
   document.getElementById("tab-maand").classList.toggle("hidden",tab!=="maand");
+  document.getElementById("tab-t1160").classList.toggle("hidden",tab!=="t1160");
+  if(tab==="t1160") t1Init();
   if(tab==="maand") mfInit();
   if(tab==="quickbooks") qbInit();
   if(tab==="audrey") audInit();
@@ -404,6 +442,58 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
 }));
 
 const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+
+/* ═══ Tussenrekening 1160 ═══════════════════════════════════════════════ */
+let t1Data=null;
+function t1Usd(n){ return "$ "+Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function t1Eur(n){ return "€ "+Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function t1Dag(d){ const p=String(d||"").slice(0,10).split("-"); return p.length===3?p[2]+"-"+p[1]+"-"+p[0]:(d||""); }
+function t1Esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+const T1_STAND={ "automatisch geboekt":["#dcfce7","#15803d","automatisch geboekt"], "met de batch geboekt":["#dcfce7","#15803d","met de batch geboekt"],
+  "met de hand verwerkt":["#dcfce7","#15803d","met de hand verwerkt"], "klaar om te boeken":["#fef3c7","#92400e","nog te boeken"] };
+function t1Pil(st){ const k=T1_STAND[st]||["#f3f4f6","#374151",st]; return "<span style='display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap;background:"+k[0]+";color:"+k[1]+"'>"+t1Esc(k[2])+"</span>"; }
+async function t1Init(vers){
+  if(t1Data&&!vers){ t1Teken(); return; }
+  document.getElementById("t1Stand").textContent="Ophalen…";
+  try{
+    const r=await fetch(WORKER+"/amerika/1160",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||""),"X-Fonteyn-User":(localStorage.getItem("fp.email")||"").toLowerCase()}});
+    const j=await r.json(); if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    t1Data=j; t1Teken();
+    document.getElementById("t1Stand").textContent="Stand "+new Date(j.ts).toLocaleString("nl-NL",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+  }catch(e){ document.getElementById("t1Stand").textContent="Ophalen vraagt een nieuwe poging: "+e.message; }
+}
+function t1Teken(){
+  const d=t1Data, nog=d.uitbetalingen.reduce((n,u)=>n+u.nogTeBoeken,0), open=d.uitbetalingen.filter(u=>!u.sluit).length;
+  document.getElementById("t1Kpi").innerHTML=
+    "<div><b>"+t1Eur(d.onderwegEur)+"</b><span>nu onderweg op 1160 ("+t1Usd(d.onderwegUsd)+", "+d.onderweg.length+" betalingen)</span></div>"+
+    "<div><b>"+nog+"</b><span>facturen in uitbetalingen nog te boeken</span></div>"+
+    "<div><b>"+(d.uitbetalingen.length-open)+" van "+d.uitbetalingen.length+"</b><span>uitbetalingen sluiten precies aan</span></div>";
+  document.getElementById("t1Onderweg").innerHTML=d.onderweg.length?d.onderweg.map(x=>
+    "<tr><td>"+t1Dag(x.datum)+"</td><td>"+t1Esc(x.factuur)+"</td><td>"+t1Esc(x.klant||"")+"</td><td>"+t1Esc(x.order||"")+"</td><td style='text-align:right'>"+t1Usd(x.usd)+"</td><td style='text-align:right'>"+t1Eur(x.eur)+"</td></tr>").join("")+
+    "<tr style='font-weight:700'><td colspan='4'>Samen</td><td style='text-align:right'>"+t1Usd(d.onderwegUsd)+"</td><td style='text-align:right'>"+t1Eur(d.onderwegEur)+"</td></tr>"
+    :"<tr><td colspan='6' style='color:var(--muted)'>Alles wat in Amerika is betaald, zit al in een uitbetaling.</td></tr>";
+  document.getElementById("t1Uit").innerHTML=d.uitbetalingen.map(u=>{
+    const pil=u.sluit?"<span style='color:#15803d;font-weight:700'>✓ sluit aan</span>":(u.verschil!=null?"<span style='color:#b91c1c;font-weight:700'>verschil "+t1Usd(u.verschil)+"</span>":"<span style='color:#92400e;font-weight:700'>ontvangen bedrag ontbreekt</span>");
+    const nog=u.nogTeBoeken?" · <span style='color:#92400e;font-weight:600'>"+u.nogTeBoeken+" nog te boeken</span>":"";
+    return "<details class='t1Det'><summary><b>"+t1Dag(u.datum)+"</b> · ontvangen "+(u.netto!=null?t1Usd(u.netto):"?")+" · "+u.regels.length+" regels · "+pil+nog+"</summary>"+
+      "<div style='font-size:12.5px;margin:8px 0'>Facturen "+t1Usd(u.bruto)+" min bankkosten "+t1Usd(u.kosten)+" = "+t1Usd(Math.round((u.bruto-u.kosten)*100)/100)+(u.netto!=null?", ontvangen "+t1Usd(u.netto):"")+"</div>"+
+      (u.redenen&&u.redenen.length?"<div style='font-size:12px;color:#92400e;margin-bottom:6px'>"+u.redenen.map(t1Esc).join("<br>")+"</div>":"")+
+      "<div class='tablewrap'><table class='grid'><thead><tr><th>Factuur</th><th>Klant</th><th>Order</th><th style='text-align:right'>Bedrag</th><th style='text-align:right'>Bankkosten</th><th>Stand</th></tr></thead><tbody>"+
+      u.regels.map(r=>"<tr><td>"+t1Esc(r.factuur||"")+"</td><td>"+t1Esc(r.naam)+"</td><td>"+t1Esc(r.order||"")+"</td><td style='text-align:right'>"+t1Usd(r.bedrag)+"</td><td style='text-align:right'>"+(r.kosten?t1Usd(r.kosten):"")+"</td><td>"+t1Pil(r.stand)+"</td></tr>").join("")+
+      "</tbody></table></div></details>";
+  }).join("");
+}
+function t1Excel(){
+  if(!t1Data) return;
+  const sep=";", rij=a=>a.map(x=>{ const t=String(x==null?"":x); return /[;"\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t; }).join(sep), num=n=>String(Math.round(Number(n||0)*100)/100).replace(".",",");
+  const regels=[rij(["Soort","Uitbetaling","Datum","Factuur","Klant","Order","Dollar","Bankkosten dollar","Euro","Stand"])];
+  t1Data.onderweg.forEach(x=>regels.push(rij(["onderweg","",t1Dag(x.datum),x.factuur,x.klant||"",x.order||"",num(x.usd),"",num(x.eur),"op 1160, nog in geen uitbetaling"])));
+  t1Data.uitbetalingen.forEach(u=>u.regels.forEach(r=>regels.push(rij(["uitbetaling",t1Dag(u.datum),"",r.factuur||"",r.naam,r.order||"",num(r.bedrag),num(r.kosten),"",(T1_STAND[r.stand]||[0,0,r.stand])[2]]))));
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+regels.join("\r\n")],{type:"text/csv;charset=utf-8"}));
+  a.download="Tussenrekening 1160 "+new Date().toISOString().slice(0,10)+".csv"; document.body.appendChild(a); a.click(); a.remove();
+}
+document.getElementById("t1Vers").addEventListener("click",()=>t1Init(true));
+document.getElementById("t1Excel").addEventListener("click",t1Excel);
 
 /* ═══ Maandfactuur van Audrey ════════════════════════════════════════════
    De pdf wordt hier in de browser gelezen (pdf.js). Elke regel met een

@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-19", bestand: "amerika.html", soort: "nieuw",
+      titel: "Amerika: tussenrekening 1160 per uitbetaling",
+      wat:   "Nieuw tabblad Tussenrekening 1160: wat er nu uit Amerika onderweg is, en per uitbetaling van Audrey welke facturen erin zitten en hoe ze geboekt zijn. Met een groen vinkje als de uitbetaling precies aansluit, en een download naar Excel."
+    },
+    {
       datum: "2026-10-19", bestand: "voorraad.html", soort: "beter",
       titel: "Reserveringen en schepen kloppen weer",
       wat:   "Een reservering op inplannen of gepland staat altijd als binnen in Uddel, ook als er eerder een schip bij gekozen was. Een schip dat binnen is gemeld telt als voorraad en staat niet meer bij Binnenkomende schepen. Kenai, Calgary en Believe pakken weer uit de containers die onderweg zijn."

@@ -20225,6 +20225,54 @@ const FP_WORKER = {
     if (url.pathname === "/amerika/qb/refund-reden" && request.method === "POST") return qbHandleRefundReden(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     /* De wire-bewaking: stand opvragen, of een proefronde die laat zien wat hij
        nu zou doen (welke mail, welk bedrag) zonder te versturen of op te slaan. */
+    /* TUSSENREKENING 1160 PER UITBETALING (Gerrit, 19 okt 2026, voor Osman).
+       Alleen lezen. Per uitbetaling van Audrey de facturen met hun stand (door
+       de automaat geboekt, met de batch geboekt, nog te boeken) en de controle
+       bruto - kosten = netto; bovenaan wat de automaat al boekte en nog in geen
+       enkele uitbetaling zit: dat is wat er nu op 1160 onderweg is. */
+    if (url.pathname === "/amerika/1160" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+      if (!(await toegangMag(env, "amerika", wie))) return reply(403, { ok: false, error: "geen toegang" });
+      const lees = async (k) => (await env.FONTEYN_DATA.get(k, { type: "json" })) || {};
+      const [wires, approved, geboekt, st, verwerkt] = await Promise.all([lees("qb-wires"), lees("qb-approved"), lees("qb-geboekt"), autoLees(env).then(x => x || {}), lees("qb-verwerkt")]);
+      // Wat Osman met de hand in Logic4 verwerkte (qb-verwerkt), telt als klaar.
+      const verwerktNrs = new Set(Object.values(verwerkt.ids || {}).map(v => String((v && v.docNr) || "")).filter(Boolean));
+      for (const k of Object.keys(verwerkt.ids || {})) if (!k.startsWith("qb:")) verwerktNrs.add(k);
+      geboekt.ids = geboekt.ids || {};
+      const perFactuur = await qbVerrijkDubbel(env, qbOrdersPerFactuur(approved));
+      const auto = await qbAutoPerFactuur(env).catch(() => ({}));
+      const klantVan = {};
+      for (const f of Object.values(st.factuurRij || {})) if (f && f.factuur) klantVan[String(f.factuur)] = f.klant || null;
+      for (const l of (st.log || [])) if (l && l.factuur && l.klant && !klantVan[String(l.factuur)]) klantVan[String(l.factuur)] = l.klant;
+      // Oudste uitbetaling eerst, zodat elke automaat-boeking bij de eerste uitbetaling hoort waar hij in zit.
+      const lijst = (wires.wires || []).slice().sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")));
+      const uitbetalingen = [];
+      for (const w of lijst) {
+        let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}, auto); } catch (e) { continue; }
+        const regels = (b.regels || []).filter(r => r.soort !== "totaal").map(r => ({
+          factuur: r.factuur || null, naam: r.naam || "", order: r.order || null, bedrag: r.bedrag, kosten: r.kosten || 0,
+          stand: r.auto ? "automatisch geboekt" : (geboekt.ids[r.sleutel] ? "met de batch geboekt" : (r.factuur && verwerktNrs.has(String(r.factuur)) ? "met de hand verwerkt" : r.status)) }));
+        uitbetalingen.push({ id: b.id, datum: b.datum, bruto: b.bruto, kosten: b.kosten, netto: b.netto, verschil: b.aansluiting ? b.aansluiting.verschil : null,
+          sluit: !!(b.aansluiting && Math.abs(b.aansluiting.verschil) <= 0.005), redenen: b.redenen || [],
+          nogTeBoeken: regels.filter(r => r.stand === "klaar om te boeken").length, regels });
+      }
+      // Wat de automaat boekte en nog in geen uitbetaling zit (auto loopt per factuur af in qbBatchLezen).
+      const onderweg = [];
+      for (const g of Object.values(st.geboekt || {})) {
+        if (!g || !g.factuur || !(Number(g.usd) > 0)) continue;
+        const rest = Number(auto[String(g.factuur)]) || 0;
+        if (rest <= 0.005) continue;
+        const usd = Math.min(Number(g.usd), rest);
+        auto[String(g.factuur)] = Math.round((rest - usd) * 100) / 100;
+        onderweg.push({ datum: g.datum || String(g.ts || "").slice(0, 10), factuur: g.factuur, klant: klantVan[String(g.factuur)] || null, order: g.orderId || null,
+                        usd: Math.round(usd * 100) / 100, eur: Math.round(usd / AMERIKA_KOERS * 100) / 100 });
+      }
+      onderweg.sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+      return reply(200, { ok: true, ts: new Date().toISOString(), koers: AMERIKA_KOERS, automaatSinds: st.start || null,
+        onderweg, onderwegUsd: Math.round(onderweg.reduce((n, x) => n + x.usd, 0) * 100) / 100, onderwegEur: Math.round(onderweg.reduce((n, x) => n + x.eur, 0) * 100) / 100,
+        uitbetalingen: uitbetalingen.reverse() });
+    }
     /* De Amerika-automaat. Stand, proefronde (doet niets, zegt wat hij zou doen),
        aan/uit en factureren aan/uit, en één order met de hand factureren. */
     if (url.pathname.startsWith("/amerika/automaat")) {
