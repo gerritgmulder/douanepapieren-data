@@ -147,7 +147,7 @@ function teken(){
   document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; if(open[tr.dataset.m]) laadKleuren(tr.dataset.m); teken(); }); });
   document.querySelectorAll(".contKnop").forEach(function(b){ b.addEventListener("click", function(e){ e.stopPropagation(); toonCont=!toonCont; try{ localStorage.setItem("fp.vb.containers", toonCont?"1":"0"); }catch(x){} teken(); }); });
 }
-/* Per kleur: wat er voor Uddel gefactureerd is en wat voor partnercontainers
+/* Per kleur: wat er verkocht is (orders, magazijn Fonteyn) en wat voor partnercontainers
    (Gerrit, 19 okt 2026). Wordt opgehaald bij het openklikken van een model. */
 var kleuren={};
 async function laadKleuren(model){
