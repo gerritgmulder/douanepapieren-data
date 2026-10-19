@@ -9771,6 +9771,27 @@ async function voorraadbepalingHandle(request, env, url) {
     }
     return reply(200, { ok: true, code, vanaf, tot, perStatus: uit });
   }
+  /* Per model regels én stuks (magazijn Fonteyn, vijf statussen, 12 maanden):
+     om naast de Rapportage Wizard te leggen, die orderregels telt. */
+  if (url.searchParams.get("regelsPerModel") === "1") {
+    const jt = new Date(); jt.setUTCFullYear(jt.getUTCFullYear() - 1);
+    const vanaf = url.searchParams.get("vanaf") || jt.toISOString().slice(0, 10);
+    const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+    const codeToModel = {};
+    for (const [m, vs] of Object.entries(catalog.models || {})) for (const v of vs) codeToModel[String(v.code)] = m;
+    const db = await vbDb(env);
+    const r = await db.prepare("SELECT r.code AS code, r.wh AS wh, (o.debiteur = ?) AS usa, COUNT(*) AS regels, SUM(r.qty) AS stuks FROM vb_orderregel r JOIN vb_order o ON o.orderid = r.orderid WHERE o.status IN (" + VB_TELT.join(",") + ") AND o.datum >= ? GROUP BY r.code, r.wh, usa")
+      .bind(AMERIKA_DEBTOR, vanaf).all();
+    const per = {};
+    for (const x of (r.results || [])) {
+      const m = codeToModel[String(x.code)] || ("?" + x.code);
+      const p = (per[m] = per[m] || { regels: 0, stuks: 0, alleMagazijnen: {} });
+      const w = (WH_NAMES[x.wh] || String(x.wh)) + (x.usa ? " (Amerika)" : "");
+      const a = (p.alleMagazijnen[w] = p.alleMagazijnen[w] || { regels: 0, stuks: 0 }); a.regels += x.regels; a.stuks += x.stuks;
+      if (Number(x.wh) === WH_FONTEYN && !x.usa) { p.regels += x.regels; p.stuks += x.stuks; }
+    }
+    return reply(200, { ok: true, vanaf, per });
+  }
   /* Per magazijn voor één model: om naast een selectie op magazijn te leggen. */
   if (url.searchParams.get("perMagazijn")) {
     const model = url.searchParams.get("perMagazijn");
