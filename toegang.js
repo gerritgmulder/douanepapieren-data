@@ -368,6 +368,12 @@
     "voorraadbepaling": [
       "arno", "chantal", "dolf", "fonteynbot", "gerrit",
     ],
+    /* Proforma's van elke leverancier inlezen en codes koppelen (Gerrit en
+       Chantal, 21 okt 2026). Chantal (spa's), Gretha (sauna's, tuinmeubelen),
+       Don (koper tuinmeubelen), Arno. */
+    "proformas": [
+      "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha",
+    ],
     // Rapportage
     "rapportage": [
       "accountant", "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",

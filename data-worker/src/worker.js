@@ -11954,6 +11954,238 @@ function vertaalGeenNeuronen(e) {
          m.includes("3040") || m.includes("capacity");
 }
 
+/* PROFORMA'S EN COMMERCIAL INVOICES LEZEN, VAN ELKE LEVERANCIER
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (21 okt 2026): "Het komt regelmatig voor dat ze documenten van
+   nieuwe leveranciers krijgt en die moet ze kunnen uploaden." Elke fabriek
+   heeft een eigen opmaak (Eurofar, EZI, Tai Ya, Mibin, Lodestone, Fukiafu,
+   FONL, Ease Spa, MEXDA); een lezer per opmaak gaat bij de volgende nieuwe
+   leverancier weer mis. Daarom leest hier het taalmodel van Cloudflare (net
+   als bij Vertalen) de tekst van het document, die de browser er al uit
+   haalde (pdf: pdf.js, Excel: SheetJS), en geeft vaste velden terug. De
+   worker rekent daarna na: aantal x prijs = bedrag per regel, en de regels
+   samen = het totaal op het document. */
+const PF_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const PF_SCHEMA = {
+  type: "object",
+  properties: {
+    soort: { type: "string", enum: ["proforma", "commercial invoice", "packing list", "anders"] },
+    leverancier: { type: "string" }, documentnummer: { type: "string" }, datum: { type: "string" },
+    valuta: { type: "string" }, leveringsvoorwaarde: { type: "string" }, betaling: { type: "string" },
+    levertijd: { type: "string" }, laadhaven: { type: "string" },
+    containers: { type: "array", items: { type: "string" } },
+    regels: { type: "array", items: { type: "object", properties: {
+      code: { type: "string" }, omschrijving: { type: "string" }, aantal: { type: "number" },
+      prijs: { type: "number" }, bedrag: { type: "number" } }, required: ["omschrijving", "aantal"] } },
+    totaalAantal: { type: "number" }, totaalBedrag: { type: "number" },
+  },
+  required: ["soort", "leverancier", "regels"],
+};
+const PF_INSTRUCTIE = [
+  "You read purchase documents that Fonteyn (a Dutch spa, sauna and garden furniture retailer in Uddel) receives from its factories:",
+  "proforma invoices (PI), commercial invoices (CI) and packing lists. Fonteyn is always the BUYER; the leverancier is the SELLER/supplier/factory.",
+  "Return ONLY JSON in the given schema. Rules:",
+  "- soort: 'proforma' for a proforma/PI/order confirmation, 'commercial invoice' for a commercial invoice (often with container numbers), 'packing list' if it only lists packing.",
+  "- datum as YYYY-MM-DD. valuta as ISO code (USD, EUR, CNY).",
+  "- regels: one entry per ordered product line. code = the supplier's item/model/article number for that line (for example 'WS-PC08T', 'COLYB0000020', 'MB1950(B05)', 'BS-270C'); empty string if the line has none.",
+  "  omschrijving = product name plus the essential specification (colour, size, material) in one short line, max 160 characters.",
+  "  aantal = quantity of that line, prijs = unit price, bedrag = line amount, all as plain numbers without currency or thousand separators.",
+  "- Skip lines that are only headers, subtotals, totals, freight notes, bank details or terms. A product line with an extra option price (like '+USD362') is ONE line with its unit price.",
+  "- totaalAantal and totaalBedrag: the totals written on the document itself (not your own sum).",
+  "- documentnummer: the number of THIS document as written after 'PI No', 'P/I NO', 'Invoice No', 'Proforma Invoice' (for example 'Arnoswim20260312', 'FKF20260420-NL4-72/5', 'MS26081701', '754231CN', 'TY-FO-2601'). Always fill it when the document shows one.",
+  "- containers: every container number on the document (4 capital letters + 7 digits, like HAMU2527309), also when several are written with a slash.",
+  "- Use '' for unknown text fields and leave numbers out when unknown. Never invent lines.",
+].join("\n");
+function pfGetal(x) {
+  if (typeof x === "number") return isFinite(x) ? x : null;
+  const t = String(x == null ? "" : x).replace(/[^\d,.\-]/g, "");
+  if (!t) return null;
+  const n = Number(/,\d{1,2}$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, ""));
+  return isFinite(n) ? n : null;
+}
+async function proformaLees(env, tekst, bestandsnaam) {
+  if (!env.AI) throw new Error("de AI-koppeling ontbreekt in de worker");
+  // Lege ruimte inkorten: pdf-tekst staat vol spaties die alleen kosten.
+  const kort = String(tekst || "").replace(/\r/g, "").replace(/[ \t]{3,}/g, " | ").replace(/\n{3,}/g, "\n\n").slice(0, 60000);
+  let a;
+  try {
+    a = await env.AI.run(PF_MODEL, {
+      messages: [{ role: "system", content: PF_INSTRUCTIE },
+                 { role: "user", content: "Bestandsnaam: " + String(bestandsnaam || "") + "\n\nDocument:\n" + kort }],
+      response_format: { type: "json_schema", json_schema: PF_SCHEMA },
+      temperature: 0, max_tokens: 6000,
+    });
+  } catch (e) { throw new Error("het lezen lukte niet: " + String(e.message || e)); }
+  let d = a && a.response;
+  if (typeof d === "string") { try { d = JSON.parse(d); } catch (e) { const m = d.match(/\{[\s\S]*\}/); d = m ? JSON.parse(m[0]) : null; } }
+  if (!d || !Array.isArray(d.regels)) throw new Error("het document gaf geen leesbare regels");
+  // Narekenen.
+  const regels = d.regels.map(r => {
+    const aantal = pfGetal(r.aantal), prijs = pfGetal(r.prijs), bedrag = pfGetal(r.bedrag);
+    const klopt = aantal != null && prijs != null && bedrag != null ? Math.abs(aantal * prijs - bedrag) <= Math.max(0.05, Math.abs(bedrag) * 0.001) : null;
+    return { code: String(r.code || "").trim(), omschrijving: String(r.omschrijving || "").trim().slice(0, 200), aantal, prijs, bedrag, klopt };
+  }).filter(r => r.omschrijving || r.code);
+  const somBedrag = Math.round(regels.reduce((n, r) => n + (r.bedrag != null ? r.bedrag : (r.aantal || 0) * (r.prijs || 0)), 0) * 100) / 100;
+  const somAantal = regels.reduce((n, r) => n + (r.aantal || 0), 0);
+  const totaalBedrag = pfGetal(d.totaalBedrag), totaalAantal0 = pfGetal(d.totaalAantal);
+  // Een document zonder totaal aantal geeft soms 0 terug: dat is "onbekend".
+  const totaalAantal = totaalAantal0 === 0 && somAantal > 0 ? null : totaalAantal0;
+  // Containernummers ook zelf uit de tekst halen (4 letters + 7 cijfers).
+  const containersTekst = [...new Set((String(tekst || "").match(/\b[A-Z]{4}\d{7}\b/g) || []))];
+  const controle = {
+    bedrag: totaalBedrag != null ? { document: totaalBedrag, regels: somBedrag, klopt: Math.abs(totaalBedrag - somBedrag) <= Math.max(0.5, totaalBedrag * 0.001) } : null,
+    aantal: totaalAantal != null ? { document: totaalAantal, regels: somAantal, klopt: Math.abs(totaalAantal - somAantal) < 0.01 } : null,
+    regelsFout: regels.filter(r => r.klopt === false).length,
+  };
+  return { ok: true, soort: d.soort || "anders", leverancier: String(d.leverancier || "").trim(), documentnummer: String(d.documentnummer || "").trim(),
+           datum: String(d.datum || "").trim(), valuta: String(d.valuta || "").trim().toUpperCase(), leveringsvoorwaarde: String(d.leveringsvoorwaarde || "").trim(),
+           betaling: String(d.betaling || "").trim(), levertijd: String(d.levertijd || "").trim(), laadhaven: String(d.laadhaven || "").trim(),
+           containers: [...new Set([...(Array.isArray(d.containers) ? d.containers.map(String).filter(Boolean) : []), ...containersTekst])], regels, controle,
+           gebruik: (a.usage && { in: a.usage.prompt_tokens, uit: a.usage.completion_tokens }) || null };
+}
+
+/* Opslag van de proforma's (Gerrit/Chantal, 21 okt 2026). Zuinig: één lijst
+   met de kopregels (pf-lijst), per document één sleutel (pf:<id>) en één
+   geheugen met koppelingen per leverancier (pf-koppel). Het bestand zelf gaat
+   naar het Archief. Koppelen: een fabriekscode (of, zonder code, de
+   omschrijving) bij een leverancier wordt één keer aan een Logic4-artikel
+   gekoppeld en daarna overal vanzelf ingevuld. */
+const PF_AFDELINGEN = ["Spa's", "Sauna's", "Tuinmeubelen", "Overig"];
+const PF_STATUS = ["in bestelling", "in productie", "onderweg", "binnen"];
+function pfLevSleutel(n) { return String(n || "").toLowerCase().replace(/\b(co|ltd|limited|b\.?v|llc|inc|import|export|and|&|the)\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim().split(" ").slice(0, 3).join(" "); }
+function pfRegelSleutel(r) { return r.code ? "c:" + String(r.code).toLowerCase().replace(/\s+/g, "") : "o:" + String(r.omschrijving || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 60); }
+function pfAfdelingRaad(d) {
+  const t = (d.leverancier + " " + d.regels.map(r => r.omschrijving).join(" ")).toLowerCase();
+  if (/sauna/.test(t) && !/\bspa\b|swim/.test(t)) return "Sauna's";
+  if (/swim|\bspa\b|spas\b|hot ?tub|acrylic/.test(t)) return "Spa's";
+  if (/chair|table|sofa|lounge|furniture|dining|parasol|kitchen|bbq|cushion|bench|daybed|hanging/.test(t)) return "Tuinmeubelen";
+  if (/sauna/.test(t)) return "Sauna's";
+  return "Overig";
+}
+function pfKoppelToepassen(rec, koppel) {
+  const k = koppel[pfLevSleutel(rec.leverancier)] || {};
+  for (const r of rec.regels) {
+    const g = k[pfRegelSleutel(r)];
+    if (g && !r.artikelHand) { r.artikel = { code: g.code, naam: g.naam }; r.koppelDoor = g.door; }
+  }
+  rec.gekoppeld = rec.regels.filter(r => r.artikel).length;
+  return rec;
+}
+function pfKop(rec) {
+  return { id: rec.id, ts: rec.ts, door: rec.door, bestandsnaam: rec.bestandsnaam, soort: rec.soort, afdeling: rec.afdeling, status: rec.status,
+           leverancier: rec.leverancier, documentnummer: rec.documentnummer, datum: rec.datum, valuta: rec.valuta, levertijd: rec.levertijd,
+           containers: rec.containers, totaal: rec.controle && rec.controle.bedrag ? rec.controle.bedrag.document : rec.regels.reduce((n, r) => n + (r.bedrag || 0), 0),
+           aantal: rec.regels.reduce((n, r) => n + (r.aantal || 0), 0), regels: rec.regels.length, gekoppeld: rec.gekoppeld || 0, klopt: !!(rec.controle && rec.controle.bedrag && rec.controle.bedrag.klopt) };
+}
+async function proformaHandle(request, env, url, wie) {
+  const kv = env.FONTEYN_DATA, p = url.pathname;
+  const lijst = async () => (await kv.get("pf-lijst", { type: "json" })) || { items: [] };
+  if (p === "/proforma/lijst" && request.method === "GET") return reply(200, { ok: true, ...(await lijst()), afdelingen: PF_AFDELINGEN, statussen: PF_STATUS });
+  if (p === "/proforma/item" && request.method === "GET") {
+    const rec = await kv.get("pf:" + url.searchParams.get("id"), { type: "json" });
+    if (!rec) return reply(404, { ok: false, error: "niet gevonden" });
+    return reply(200, { ok: true, item: pfKoppelToepassen(rec, (await kv.get("pf-koppel", { type: "json" })) || {}) });
+  }
+  if (p === "/proforma/bestand" && request.method === "GET") {
+    const rec = await kv.get("pf:" + url.searchParams.get("id"), { type: "json" });
+    if (!rec || !rec.archief) return reply(404, { ok: false });
+    const buf = await bestandLees(env, rec.archief);
+    if (!buf) return reply(404, { ok: false });
+    return new Response(buf, { headers: { "Content-Type": rec.mime || "application/octet-stream", "Content-Disposition": "inline; filename=\"" + String(rec.bestandsnaam || "document").replace(/"/g, "") + "\"", ...corsHeaders } });
+  }
+  if (p === "/proforma/opslaan" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const d = b.gelezen || {};
+    if (!Array.isArray(d.regels)) return reply(400, { ok: false, error: "eerst lezen" });
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    let archief = null;
+    if (b.bestand) {
+      const bytes = Uint8Array.from(atob(String(b.bestand).replace(/^data:[^,]*,/, "")), c => c.charCodeAt(0));
+      if (bytes.length > 15 * 1024 * 1024) return reply(413, { ok: false, error: "bestand groter dan 15 MB" });
+      archief = "proforma/" + id; await bestandZet(env, archief, bytes.buffer);
+    }
+    const rec = pfKoppelToepassen({ id, ts: new Date().toISOString(), door: wie, bestandsnaam: String(b.bestandsnaam || "").slice(0, 160), mime: String(b.mime || ""), archief,
+      soort: d.soort, afdeling: PF_AFDELINGEN.includes(b.afdeling) ? b.afdeling : pfAfdelingRaad(d), status: d.soort === "commercial invoice" ? "onderweg" : "in bestelling",
+      leverancier: d.leverancier, documentnummer: d.documentnummer, datum: d.datum, valuta: d.valuta, leveringsvoorwaarde: d.leveringsvoorwaarde,
+      betaling: d.betaling, levertijd: d.levertijd, laadhaven: d.laadhaven, containers: d.containers || [], controle: d.controle || null,
+      regels: d.regels.map(r => ({ code: r.code || "", omschrijving: r.omschrijving || "", aantal: r.aantal, prijs: r.prijs, bedrag: r.bedrag })) },
+      (await kv.get("pf-koppel", { type: "json" })) || {});
+    await kv.put("pf:" + id, JSON.stringify(rec));
+    const l = await lijst(); l.items = [pfKop(rec), ...(l.items || []).filter(x => x.id !== id)]; await kv.put("pf-lijst", JSON.stringify(l));
+    try { await actSchrijf(env, "dashboard", rec.ts.slice(0, 7), { ts: rec.ts, user: wie, tile: "proformas", action: "opgeslagen", detail: (rec.soort || "") + " " + (rec.leverancier || "") + " " + (rec.documentnummer || ""), wijziging: true }); } catch (e) {}
+    return reply(200, { ok: true, id, item: rec });
+  }
+  if (p === "/proforma/wijzig" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const rec = await kv.get("pf:" + b.id, { type: "json" });
+    if (!rec) return reply(404, { ok: false, error: "niet gevonden" });
+    if (b.weg === true) {
+      await kv.delete("pf:" + b.id);
+      const l = await lijst(); l.items = (l.items || []).filter(x => x.id !== b.id); await kv.put("pf-lijst", JSON.stringify(l));
+      return reply(200, { ok: true, weg: true });
+    }
+    if (PF_AFDELINGEN.includes(b.afdeling)) rec.afdeling = b.afdeling;
+    if (PF_STATUS.includes(b.status)) rec.status = b.status;
+    if (typeof b.leverancier === "string" && b.leverancier.trim()) rec.leverancier = b.leverancier.trim().slice(0, 120);
+    await kv.put("pf:" + b.id, JSON.stringify(rec));
+    const koppelW = (await kv.get("pf-koppel", { type: "json" })) || {};
+    const l = await lijst(); l.items = (l.items || []).map(x => x.id === b.id ? pfKop(pfKoppelToepassen(rec, koppelW)) : x); await kv.put("pf-lijst", JSON.stringify(l));
+    return reply(200, { ok: true });
+  }
+  /* Koppelen: deze code bij deze leverancier = dit Logic4-artikel. Werkt
+     meteen door in alle documenten van die leverancier. */
+  if (p === "/proforma/koppel" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const rec = await kv.get("pf:" + b.id, { type: "json" });
+    if (!rec || !rec.regels[b.regel]) return reply(404, { ok: false, error: "regel niet gevonden" });
+    const koppel = (await kv.get("pf-koppel", { type: "json" })) || {};
+    const ls = pfLevSleutel(rec.leverancier), rs = pfRegelSleutel(rec.regels[b.regel]);
+    koppel[ls] = koppel[ls] || {};
+    if (b.artikel && b.artikel.code) koppel[ls][rs] = { code: String(b.artikel.code), naam: String(b.artikel.naam || "").slice(0, 160), door: wie, ts: new Date().toISOString() };
+    else delete koppel[ls][rs];
+    await kv.put("pf-koppel", JSON.stringify(koppel));
+    // De kopregels van alle documenten van deze leverancier bijwerken (aantal gekoppeld).
+    const l = await lijst();
+    for (const x of (l.items || [])) if (pfLevSleutel(x.leverancier) === ls) {
+      const r2 = await kv.get("pf:" + x.id, { type: "json" }); if (!r2) continue;
+      for (const r of r2.regels) delete r.artikel;
+      Object.assign(x, pfKop(pfKoppelToepassen(r2, koppel)));
+    }
+    await kv.put("pf-lijst", JSON.stringify(l));
+    return reply(200, { ok: true, item: pfKoppelToepassen(rec, koppel) });
+  }
+  if (p === "/proforma/zoek" && request.method === "GET") {
+    const q = String(url.searchParams.get("q") || "").trim();
+    if (q.length < 2) return reply(200, { ok: true, artikelen: [] });
+    const token = await l4Token(env);
+    const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ FastSearchText: q, TakeRecords: 25 }) });
+    const j = await r.json().catch(() => null);
+    const l = Array.isArray(j) ? j : ((j && (j.Records || j.Products)) || []);
+    return reply(200, { ok: true, artikelen: l.filter(x => Number(x.StatusId) !== CAT_VERVALLEN).map(x => ({ code: String(x.ProductCode || ""), naam: String(x.ProductName1 || x.Description || "") })).slice(0, 20) });
+  }
+  /* Een taak naar Gretha: dit artikel bestaat nog niet in Logic4. */
+  if (p === "/proforma/taak" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const rec = await kv.get("pf:" + b.id, { type: "json" });
+    if (!rec || !rec.regels[b.regel]) return reply(404, { ok: false, error: "regel niet gevonden" });
+    const r = rec.regels[b.regel], nu = new Date().toISOString();
+    const opslag = (await kv.get("takenlijst", { type: "json" })) || { taken: {}, ritmes: {} };
+    opslag.taken = opslag.taken || {};
+    const tid = "proforma:" + rec.id + ":" + b.regel;
+    if (!opslag.taken[tid] || opslag.taken[tid].klaar) {
+      opslag.taken[tid] = { id: tid, eigenaar: "gretha", lijst: "eigen",
+        tekst: "Artikel aanmaken in Logic4 en koppelen in de tegel Proforma's: " + (rec.leverancier || "") + (rec.documentnummer ? " (" + rec.documentnummer + ")" : "") + ", regel \"" + (r.code ? r.code + " " : "") + String(r.omschrijving || "").slice(0, 90) + "\".",
+        wie: "", dag: nu.slice(0, 10), door: wie, op: nu, klaar: false, deelnemers: {}, bron: "proformas", tegel: "proformas.html", nieuw: true };
+      opslag.bijgewerkt = nu; opslag.door = wie;
+      await kv.put("takenlijst", JSON.stringify(opslag));
+    }
+    r.taakGretha = nu; await kv.put("pf:" + rec.id, JSON.stringify(rec));
+    return reply(200, { ok: true });
+  }
+  return reply(404, { ok: false, error: "onbekende route" });
+}
+
 async function vertaalAi(env, tekst, naar, formeel, namen) {
   if (!env.AI) throw new Error("De AI-koppeling ontbreekt in deze worker. Zet [ai] binding = \"AI\" in wrangler.toml en rol opnieuw uit.");
   const instructie = vertaalInstructie(naar, formeel, namen);
@@ -19951,6 +20183,18 @@ const FP_WORKER = {
         if (url.pathname === "/pick/stand" && request.method === "POST") return reply(200, await pickStand(env, wie, await request.json().catch(() => ({}))));
       } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
       return reply(404, { ok: false });
+    }
+    if (url.pathname.startsWith("/proforma/") && url.pathname !== "/proforma/lees") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const wieP = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+      if (!(await toegangMag(env, "proformas", wieP))) return reply(403, { ok: false, error: "geen toegang" });
+      return proformaHandle(request, env, url, wieP).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    if (url.pathname === "/proforma/lees" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      if (!b.tekst) return reply(400, { ok: false, error: "geen tekst" });
+      return reply(200, await proformaLees(env, b.tekst, b.bestandsnaam).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/logic4/lees" && request.method === "POST") {
       const b = await request.json().catch(() => ({}));
