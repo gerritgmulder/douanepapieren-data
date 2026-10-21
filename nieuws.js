@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-21", bestand: "voorraad.html", soort: "beter",
+      titel: "Ingepland met een schip dat nog onderweg is",
+      wat:   "Staat een reservering op inplannen of gepland en is er een schip bij gekozen dat nog onderweg is, dan staat bij de levering dat schip met zijn ETA (ingepland), en niet op voorraad. Is het schip binnen, of is er geen schip gekozen, dan staat hij als binnen in Uddel."
+    },
+    {
       datum: "2026-10-19", bestand: "amerika.html", soort: "nieuw",
       titel: "Amerika: tussenrekening 1160 per uitbetaling",
       wat:   "Nieuw tabblad Tussenrekening 1160: wat er nu uit Amerika onderweg is, en per uitbetaling van Audrey welke facturen erin zitten en hoe ze geboekt zijn. Met een groen vinkje als de uitbetaling precies aansluit, en een download naar Excel."

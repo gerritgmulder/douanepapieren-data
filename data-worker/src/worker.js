@@ -10543,9 +10543,20 @@ async function dpRefreshReservations(env) {
     const aantek0 = (await env.FONTEYN_DATA.get("voorraad-notities", { type: "json" })) || {};
     aantekBinnen = aantek0.regels || {};
   } catch {}
+  /* Behalve als er een schip bij gekozen is dat nog onderweg is: dan plant de
+     planning de levering vooruit en is de spa nog niet in Uddel (Chantal,
+     21 okt 2026: Natural Pearl Shadow op inplannen met Berlin Express stond
+     als "op voorraad", terwijl er 1 fysiek staat). */
+  const schipOnderwegMap = {};
+  for (const sch of (schepen.ships || [])) {
+    const sl = String(sch.ref || sch.trackRef || sch.file || sch.vessel || "");
+    if (sl) schipOnderwegMap[sl] = !sch.binnenGemeld;
+  }
   const isBinnenGevinkt = (r) => {
     const n = aantekBinnen[r.regelId] || aantekBinnen[r.regelIdOud];
-    return !!(n && !n.verwijderd && (n.inplannen || n.gepland));
+    if (!(n && !n.verwijderd && (n.inplannen || n.gepland))) return false;
+    if (n.schip && n.schip !== "__voorraad__" && schipOnderwegMap[n.schip] === true) return false;
+    return true;
   };
   for (const [model, list] of Object.entries(byModel)) {
     const buckets = [];
@@ -10681,8 +10692,9 @@ async function dpRefreshReservations(env) {
     for (const lijst of [byModel, byModelUSA]) for (const rows of Object.values(lijst)) for (const r of rows) {
       const n = regels[r.regelId] || regels[r.regelIdOud];
       if (!n || !n.schip) continue;
-      // Op inplannen of gepland gezet = binnen in Uddel; dat gaat vóór een eerder gekozen schip.
-      if (n.inplannen || n.gepland) continue;
+      /* Op inplannen of gepland gezet = binnen in Uddel; dat gaat vóór een eerder
+         gekozen schip, maar alleen als dat schip binnen is (zie isBinnenGevinkt). */
+      if (isBinnenGevinkt(r)) continue;
       r.verwachtAuto = r.verwacht || null;
       r.verwachtHandmatig = true;
       r.verwachtBron = "handmatig";

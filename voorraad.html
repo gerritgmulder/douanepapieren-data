@@ -2558,7 +2558,7 @@ function verwachtLabel(v,bron){
 function verwachtVanRegel(r){
   const n=notitie(r);
   if(n.schip===VOORRAAD_KEUZE) return {v:"voorraad", schip:null, hand:true};
-  if(n.inplannen||n.gepland) return {v:"voorraad", schip:null, hand:true};
+  if((n.inplannen||n.gepland) && !(n.schip && (function(){ var g=schipVan(n.schip); return g && !g.binnen; })())) return {v:"voorraad", schip:null, hand:true};
   if(n.schip){
     let g=schipVan(n.schip);
     if(!g && (n.schipEta||n.schipRef)) g={eta:n.schipEta||null, ref:n.schipRef||n.schip};
@@ -3307,7 +3307,9 @@ function leveringCel(r,n,id,uit){
      automatisch"), maar dat hij binnen is, en sinds wanneer dat zo is
      aangevinkt. Wie de zending alsnog wil aanwijzen kiest hem hieronder. */
   /* Inplannen of gepland wint ook van een eerder gekozen schip (Chantal, 19 okt 2026). */
-  var binnenGevinkt = !!(n.inplannen || n.gepland);
+  /* Het vinkje wint, behalve van een gekozen schip dat nog onderweg is: dan plant
+     de planning vooruit (Chantal, 21 okt 2026). */
+  var binnenGevinkt = !!(n.inplannen || n.gepland) && !(gekozen && !gekozen.binnen);
   var kop = (gekozen && !binnenGevinkt && gekozen.binnen)
     ? "<span style='color:#15803d;font-weight:600'>binnen in Uddel</span>"+
       " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig)</span>"
@@ -3315,7 +3317,7 @@ function leveringCel(r,n,id,uit){
     ? (zendingBinnen(gekozen) ? "<span style='color:#15803d;font-weight:600'>schip is binnen</span>"
        : "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>")+
       " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig"+
-      (zendingBinnen(gekozen)?", binnen":"")+")</span>"
+      (zendingBinnen(gekozen)?", binnen":"")+((n.inplannen||n.gepland)?", "+(n.gepland?"gepland":"ingepland"):"")+")</span>"
     : binnenGevinkt
     ? "<span style='color:#15803d;font-weight:600'>binnen in Uddel</span>"+
       " <span style='color:var(--muted);font-size:11px'>("+(n.gepland?"gepland":"inplannen")+
