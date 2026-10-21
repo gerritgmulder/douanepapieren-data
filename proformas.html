@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("proformas", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Proforma\'s</h2><p style="color:#6b7280">Deze tegel is voor inkoop.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Proforma's - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<!-- ═════════════════════════════════════════════════════════════════
+     PROFORMA'S - documenten van elke leverancier inlezen
+
+     Gerrit en Chantal (21 okt 2026): proforma's en commercial invoices
+     van nieuwe leveranciers moeten zonder maatwerk te lezen zijn. Spa's:
+     Chantal maakt de inkooporder via Voorraadbeheer. Sauna's en
+     tuinmeubelen: Gretha bestelt in Logic4; hier komt het overzicht van
+     wat er in bestelling en productie is. Commercial invoices horen bij
+     Schepen en ontvangst.
+
+     Werking: de browser haalt de tekst uit de pdf of het Excel-bestand,
+     de worker laat het taalmodel van Cloudflare de velden en regels
+     lezen (/proforma/lees) en rekent na of de regels optellen tot het
+     totaal op het document. Onbekende codes koppel je hier één keer aan
+     een Logic4-artikel; daarna gaat het per leverancier vanzelf.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ═════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --oranje:#c2410c; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.kaart h2{margin:0 0 8px;font-size:15px;color:var(--groen)}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.balk{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--groen);font-weight:600}
+.knop.vol{background:var(--groen);color:#fff;border-color:var(--groen)}
+.knop.klein{padding:4px 9px;font-size:12px}
+select,input[type=search],input[type=text]{border:1px solid var(--rand);border-radius:9px;padding:7px 10px;font:inherit;font-size:12.5px;background:#fff;min-width:0}
+.tabs{display:inline-flex;flex-wrap:wrap;border:1px solid var(--rand);border-radius:9px;overflow:hidden}
+.tabs button{border:0;background:#fff;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--grijs)}
+.tabs button.aan{background:var(--groen);color:#fff}
+.keuze{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center}
+.keuze label{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--rand);border-radius:999px;padding:5px 11px;font-size:12.5px;cursor:pointer;background:#fff;white-space:nowrap}
+.keuze label.aan{background:#e8f3ec;border-color:var(--groen);color:var(--groen);font-weight:600}
+.keuze input{margin:0;accent-color:var(--groen)}
+.klein-grijs{font-size:11px;color:var(--grijs)}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+.kpi div{background:#f8faf5;border:1px solid var(--rand);border-radius:10px;padding:10px 12px}
+.kpi b{display:block;font-size:18px}
+.kpi span{font-size:11.5px;color:var(--grijs)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--rand);white-space:nowrap}
+td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
+.pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pil.goed{background:#eef2e6;color:var(--groen)}.pil.let{background:#ffedd5;color:var(--oranje)}.pil.grijs{background:#f3f4f6;color:#374151}
+.melding{font-size:12.5px;color:var(--groen)}
+.melding.fout{color:var(--rood)}
+.velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px 14px;font-size:12.5px;margin:8px 0 10px}
+.velden b{display:block;font-size:10.5px;color:var(--grijs);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.code{color:var(--grijs);font-size:11.5px}
+.zoekres{margin-top:6px;border:1px solid var(--rand);border-radius:9px;max-height:240px;overflow:auto;background:#fff}
+.zoekres div{padding:6px 9px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:12.5px}
+.zoekres div:hover{background:#f8faf5}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>📑 Proforma's</h1>
+</header>
+<main>
+  <div class="kaart">
+    <h2>Document toevoegen</h2>
+    <p class="lead">Een proforma of commercial invoice van elke leverancier, als pdf of Excel. Het Dashboard leest de leverancier, het nummer en alle regels, en rekent na of de regels optellen tot het totaal op het document.</p>
+    <div class="balk">
+      <input type="file" id="bestand" accept=".pdf,.xlsx,.xls">
+      <button type="button" class="knop vol" id="lees">Lezen</button>
+      <span id="leesMelding" class="melding"></span>
+    </div>
+    <div id="voorstel" class="hidden" style="margin-top:12px"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Overzicht</h2>
+    <div class="kpi" id="kpi"></div>
+    <div class="balk" style="margin-bottom:8px">
+      <div class="keuze" id="afdKeuze"></div>
+      <select id="statusFilter"><option value="open">nog niet binnen</option><option value="">alle statussen</option></select>
+      <input type="search" id="zoek" placeholder="Zoek op leverancier, nummer of artikel">
+    </div>
+    <table><thead><tr><th>Datum</th><th>Leverancier</th><th>Nummer</th><th>Soort</th><th>Afdeling</th><th class="n">Totaal</th><th>Gekoppeld</th><th>Status</th></tr></thead>
+      <tbody id="lijst"><tr><td colspan="8" class="lead">Ophalen…</td></tr></tbody></table>
+  </div>
+
+  <div class="kaart hidden" id="detail"></div>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function kop(json){ var h = { "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }; if (json) h["Content-Type"] = "application/json"; return h; }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+function geld(n, v){ if (n == null || n === "") return ""; return (v === "EUR" ? "€ " : v === "USD" || !v ? "$ " : v + " ") + Number(n).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
+var lijstData = { items: [], afdelingen: ["Spa's","Sauna's","Tuinmeubelen","Overig"], statussen: ["in bestelling","in productie","onderweg","binnen"] };
+/* Ieder kiest zijn eigen overzicht: alles, of alleen de afdelingen die je
+   aanvinkt (Gerrit, 21 okt 2026). Onthouden per persoon op deze computer. */
+var AFD_SLEUTEL = "fp.pf.afdelingen." + ik;
+var afdUit = {};
+try { afdUit = JSON.parse(localStorage.getItem(AFD_SLEUTEL) || "{}") || {}; } catch(e) { afdUit = {}; }
+function afdAan(a){ return !afdUit[a]; }
+function afdBewaar(){ try { localStorage.setItem(AFD_SLEUTEL, JSON.stringify(afdUit)); } catch(e) {} }
+var gelezen = null, gelezenBestand = null, open = null;
+
+/* ── Tekst uit het bestand ─────────────────────────────────────────── */
+async function tekstUitPdf(f){
+  if (!window.pdfjsLib) throw new Error("de pdf-lezer moet nog laden; probeer het zo opnieuw");
+  if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  var pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise, uit = [];
+  for (var p = 1; p <= pdf.numPages; p++) {
+    var c = await (await pdf.getPage(p)).getTextContent(), pts = [];
+    c.items.forEach(function(it){ if (it.str && it.str.trim()) pts.push({ y: it.transform[5], x: it.transform[4], b: it.width || 0, s: it.str }); });
+    pts.sort(function(a,b){ return b.y - a.y; });
+    var groepen = [];
+    pts.forEach(function(q){ var g = groepen[groepen.length-1]; if (g && Math.abs(g.y - q.y) <= 3) g.i.push(q); else groepen.push({ y: q.y, i: [q] }); });
+    groepen.forEach(function(g){
+      g.i.sort(function(a,b){ return a.x - b.x; });
+      var t = "", eind = null;
+      g.i.forEach(function(q){ if (eind != null) t += (q.x - eind > 12 ? " | " : " "); t += q.s; eind = q.x + q.b; });
+      uit.push(t);
+    });
+    uit.push("--- einde bladzijde " + p + " ---");
+  }
+  return uit.join("\n");
+}
+async function tekstUitExcel(f){
+  if (!window.XLSX) throw new Error("de Excel-lezer moet nog laden; probeer het zo opnieuw");
+  var wb = XLSX.read(await f.arrayBuffer(), { type: "array" }), uit = [];
+  wb.SheetNames.forEach(function(n){
+    uit.push("### Blad: " + n);
+    XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: "" }).forEach(function(r){
+      var cel = r.map(function(c){ return String(c).trim(); }).filter(Boolean);
+      if (cel.length) uit.push(cel.join(" | "));
+    });
+  });
+  return uit.join("\n");
+}
+function alsBase64(f){ return new Promise(function(ok, nee){ var r = new FileReader(); r.onload = function(){ ok(r.result); }; r.onerror = nee; r.readAsDataURL(f); }); }
+
+async function lees(){
+  var f = $("bestand").files[0];
+  if (!f) { $("leesMelding").textContent = "Kies eerst een bestand."; return; }
+  $("leesMelding").className = "melding"; $("leesMelding").textContent = "Lezen… dit duurt een halve minuut";
+  try {
+    var tekst = /\.pdf$/i.test(f.name) ? await tekstUitPdf(f) : await tekstUitExcel(f);
+    var r = await fetch(W + "/proforma/lees", { method: "POST", headers: kop(true), body: JSON.stringify({ tekst: tekst, bestandsnaam: f.name }) });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    gelezen = j; gelezenBestand = f;
+    $("leesMelding").textContent = "";
+    toonVoorstel();
+  } catch(e) { $("leesMelding").className = "melding fout"; $("leesMelding").textContent = "Lezen vraagt een nieuwe poging: " + e.message; }
+}
+function raadAfdeling(d){
+  var t = (d.leverancier + " " + d.regels.map(function(r){ return r.omschrijving; }).join(" ")).toLowerCase();
+  if (/sauna/.test(t) && !/\bspa\b|swim/.test(t)) return "Sauna's";
+  if (/swim|\bspa\b|spas\b|hot ?tub|acrylic/.test(t)) return "Spa's";
+  if (/chair|table|sofa|lounge|furniture|dining|parasol|kitchen|bbq|cushion|bench|daybed|hanging/.test(t)) return "Tuinmeubelen";
+  if (/sauna/.test(t)) return "Sauna's";
+  return "Overig";
+}
+function controleTekst(c){
+  var uit = [];
+  if (c && c.bedrag) uit.push(c.bedrag.klopt ? '<span class="pil goed">totaal klopt: ' + geld(c.bedrag.document, gelezen && gelezen.valuta) + '</span>'
+                                              : '<span class="pil let">regels ' + geld(c.bedrag.regels) + ', document ' + geld(c.bedrag.document) + '</span>');
+  else uit.push('<span class="pil grijs">geen totaal op het document</span>');
+  if (c && c.regelsFout) uit.push('<span class="pil let">' + c.regelsFout + ' regel(s): aantal x prijs wijkt af</span>');
+  return uit.join(" ");
+}
+function toonVoorstel(){
+  var d = gelezen, afd = raadAfdeling(d);
+  var spaTip = d.soort === "proforma" && afd === "Spa's" ? '<p class="lead" style="margin-top:8px">Een proforma voor spa\'s maak je als inkooporder via <b>Voorraadbeheer → Inkoop naar Logic4</b>. Na het aanmaken staat hij daarna vanzelf ook hier.</p>' : "";
+  var ciTip = d.soort === "commercial invoice" ? '<p class="lead" style="margin-top:8px">Een commercial invoice hoort bij een zending. Upload hem bij <b>Voorraadbeheer → Schepen & ontvangst</b>: daar volg je de container, en hij komt vanzelf ook hier met status <b>onderweg</b>.</p>' : "";
+  $("voorstel").innerHTML =
+    '<div class="velden">' +
+      '<div><b>Soort</b>' + esc(d.soort) + '</div><div><b>Leverancier</b>' + esc(d.leverancier) + '</div>' +
+      '<div><b>Nummer</b>' + esc(d.documentnummer || "-") + '</div><div><b>Datum</b>' + esc(datumNL(d.datum)) + '</div>' +
+      '<div><b>Valuta</b>' + esc(d.valuta) + '</div><div><b>Levering</b>' + esc([d.leveringsvoorwaarde, d.laadhaven].filter(Boolean).join(", ")) + '</div>' +
+      '<div><b>Levertijd</b>' + esc(d.levertijd || "-") + '</div><div><b>Betaling</b>' + esc(d.betaling || "-") + '</div>' +
+      (d.containers && d.containers.length ? '<div><b>Containers</b>' + esc(d.containers.join(", ")) + '</div>' : '') +
+    '</div>' +
+    '<div class="balk" style="margin-bottom:8px">' + controleTekst(d.controle) + '</div>' +
+    '<table><thead><tr><th>Code</th><th>Omschrijving</th><th class="n">Aantal</th><th class="n">Prijs</th><th class="n">Bedrag</th></tr></thead><tbody>' +
+    d.regels.map(function(r){ return '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.omschrijving) + '</td><td class="n">' + (r.aantal == null ? "" : r.aantal) + '</td><td class="n">' + geld(r.prijs, d.valuta) + '</td><td class="n">' + geld(r.bedrag, d.valuta) + (r.klopt === false ? ' <span class="pil let">?</span>' : '') + '</td></tr>'; }).join("") +
+    '</tbody></table>' + spaTip + ciTip +
+    '<div class="balk" style="margin-top:10px"><label style="font-size:12.5px">Afdeling <select id="vAfd">' + lijstData.afdelingen.map(function(a){ return '<option' + (a === afd ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join("") + '</select></label>' +
+    '<button type="button" class="knop vol" id="vOpslaan">Opslaan</button><button type="button" class="knop" id="vWeg">Annuleren</button><span id="vMelding" class="melding"></span></div>';
+  $("voorstel").classList.remove("hidden");
+  $("vOpslaan").addEventListener("click", opslaan);
+  $("vWeg").addEventListener("click", function(){ $("voorstel").classList.add("hidden"); gelezen = null; $("bestand").value = ""; });
+}
+async function opslaan(){
+  $("vMelding").textContent = "Opslaan…";
+  try {
+    var b64 = await alsBase64(gelezenBestand);
+    var r = await fetch(W + "/proforma/opslaan", { method: "POST", headers: kop(true), body: JSON.stringify({ gelezen: gelezen, afdeling: $("vAfd").value, bestand: b64, bestandsnaam: gelezenBestand.name, mime: gelezenBestand.type }) });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    $("voorstel").classList.add("hidden"); $("bestand").value = ""; gelezen = null;
+    $("leesMelding").className = "melding"; $("leesMelding").textContent = "Opgeslagen.";
+    await laadLijst(); toonDetail(j.id);
+  } catch(e) { $("vMelding").className = "melding fout"; $("vMelding").textContent = "Opslaan vraagt een nieuwe poging: " + e.message; }
+}
+
+/* ── Overzicht ─────────────────────────────────────────────────────── */
+async function laadLijst(){
+  try {
+    var r = await fetch(W + "/proforma/lijst", { headers: kop() });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    lijstData = j; tekenLijst();
+  } catch(e) { $("lijst").innerHTML = '<tr><td colspan="8" class="lead">Ophalen vraagt een nieuwe poging: ' + esc(e.message) + '</td></tr>'; }
+}
+function tekenLijst(){
+  var items = lijstData.items || [];
+  var alles = lijstData.afdelingen.every(afdAan);
+  $("afdKeuze").innerHTML = '<span style="font-size:12.5px;color:var(--grijs)">Toon:</span>' +
+    '<label class="' + (alles ? 'aan' : '') + '"><input type="checkbox" data-alles="1"' + (alles ? ' checked' : '') + '>Alles</label>' +
+    lijstData.afdelingen.map(function(a){ var aan = afdAan(a); return '<label class="' + (aan ? 'aan' : '') + '"><input type="checkbox" data-a="' + esc(a) + '"' + (aan ? ' checked' : '') + '>' + esc(a) + '</label>'; }).join("");
+  $("afdKeuze").querySelectorAll("input").forEach(function(c){ c.addEventListener("change", function(){
+    if (c.dataset.alles) { afdUit = {}; if (!c.checked) lijstData.afdelingen.forEach(function(a){ afdUit[a] = true; }); }
+    else { if (c.checked) delete afdUit[c.dataset.a]; else afdUit[c.dataset.a] = true; }
+    afdBewaar(); tekenLijst();
+  }); });
+  var nogOpen = items.filter(function(x){ return x.status !== "binnen" && x.soort === "proforma"; });
+  $("kpi").innerHTML = lijstData.afdelingen.filter(afdAan).map(function(a){
+    var l = nogOpen.filter(function(x){ return x.afdeling === a; });
+    var som = {}; l.forEach(function(x){ som[x.valuta || "USD"] = (som[x.valuta || "USD"] || 0) + (Number(x.totaal) || 0); });
+    return '<div><b>' + (Object.keys(som).map(function(v){ return geld(som[v], v); }).join(" + ") || "0") + '</b><span>' + esc(a) + ' in bestelling of productie (' + l.length + ' proforma\'s)</span></div>';
+  }).join("");
+  var z = ($("zoek").value || "").trim().toLowerCase(), st = $("statusFilter").value;
+  var l = items.filter(function(x){
+    if (!afdAan(x.afdeling || "Overig")) return false;
+    if (st === "open" && x.status === "binnen") return false;
+    if (z && (x.leverancier + " " + x.documentnummer + " " + x.bestandsnaam).toLowerCase().indexOf(z) < 0) return false;
+    return true;
+  });
+  $("lijst").innerHTML = l.length ? l.map(function(x){
+    var kp = x.gekoppeld >= x.regels ? '<span class="pil goed">' + x.gekoppeld + ' van ' + x.regels + '</span>' : '<span class="pil let">' + x.gekoppeld + ' van ' + x.regels + '</span>';
+    return '<tr class="rij" data-id="' + esc(x.id) + '"><td>' + esc(datumNL(x.datum)) + '</td><td>' + esc(x.leverancier) + '</td><td>' + esc(x.documentnummer) + (x.inkooporder ? '<div class="klein-grijs">inkooporder ' + esc(x.inkooporder) + '</div>' : '') + '</td><td>' + esc(x.soort) + '</td><td>' + esc(x.afdeling) + '</td><td class="n">' + geld(x.totaal, x.valuta) + '</td><td>' + kp + '</td><td>' + esc(x.status) + '</td></tr>';
+  }).join("") : '<tr><td colspan="8" class="lead">' + (lijstData.afdelingen.some(afdAan) ? 'Hier verschijnen de documenten zodra er een is opgeslagen.' : 'Vink hierboven een afdeling aan om de documenten te zien.') + '</td></tr>';
+  $("lijst").querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ toonDetail(tr.dataset.id); }); });
+}
+
+/* ── Eén document, met koppelen ───────────────────────────────────── */
+async function toonDetail(id){
+  try {
+    var r = await fetch(W + "/proforma/item?id=" + encodeURIComponent(id), { headers: kop() });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    open = j.item; tekenDetail();
+    $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch(e) { $("detail").classList.remove("hidden"); $("detail").innerHTML = '<p class="melding fout">Openen vraagt een nieuwe poging: ' + esc(e.message) + '</p>'; }
+}
+function tekenDetail(){
+  var d = open;
+  $("detail").innerHTML =
+    '<h2>' + esc(d.leverancier) + (d.documentnummer ? ' · ' + esc(d.documentnummer) : '') + '</h2>' +
+    '<div class="velden">' +
+      '<div><b>Soort</b>' + esc(d.soort) + '</div><div><b>Datum</b>' + esc(datumNL(d.datum)) + '</div><div><b>Levertijd</b>' + esc(d.levertijd || "-") + '</div>' +
+      '<div><b>Betaling</b>' + esc(d.betaling || "-") + '</div>' + (d.containers && d.containers.length ? '<div><b>Containers</b>' + esc(d.containers.join(", ")) + '</div>' : '') +
+      '<div><b>Toegevoegd</b>' + esc(datumNL(d.ts)) + ' door ' + esc(String(d.door || "").split("@")[0]) + '</div>' +
+    '</div>' +
+    '<div class="balk" style="margin-bottom:8px">' +
+      '<label style="font-size:12.5px">Afdeling <select id="dAfd">' + lijstData.afdelingen.map(function(a){ return '<option' + (a === d.afdeling ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join("") + '</select></label>' +
+      '<label style="font-size:12.5px">Status <select id="dStatus">' + lijstData.statussen.map(function(a){ return '<option' + (a === d.status ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join("") + '</select></label>' +
+      (d.archief ? '<button type="button" class="knop" id="dOpen">Document openen</button>' : '') +
+      '<button type="button" class="knop" id="dWeg">Verwijderen</button><span id="dMelding" class="melding"></span>' +
+    '</div>' +
+    '<p class="lead">Koppel elke regel één keer aan het artikel in Logic4. Daarna vult het Dashboard dat bij deze leverancier vanzelf in. Bestaat het artikel nog niet, stuur dan een taak naar Gretha.</p>' +
+    '<table><thead><tr><th>Code</th><th>Omschrijving</th><th class="n">Aantal</th><th class="n">Bedrag</th><th>Artikel in Logic4</th></tr></thead><tbody>' +
+    d.regels.map(function(r, i){
+      var art = r.artikel
+        ? '<span class="pil goed">' + esc(r.artikel.code) + '</span> ' + esc(r.artikel.naam) + ' <button type="button" class="knop klein" data-ont="' + i + '">wijzigen</button>'
+        : (r.voorstel ? '<span class="pil let">voorstel</span> ' + esc(r.voorstel.code) + ' ' + esc(r.voorstel.naam) + ' <button type="button" class="knop klein vol" data-ja="' + i + '">Akkoord</button> ' : '') +
+          '<button type="button" class="knop klein" data-kop="' + i + '">' + (r.voorstel ? 'Ander artikel' : 'Koppelen') + '</button>' + (r.taakGretha ? ' <span class="pil grijs">taak bij Gretha</span>' : ' <button type="button" class="knop klein" data-taak="' + i + '">Taak naar Gretha</button>');
+      return '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.omschrijving) + '</td><td class="n">' + (r.aantal == null ? "" : r.aantal) + '</td><td class="n">' + geld(r.bedrag, d.valuta) + '</td><td id="art' + i + '">' + art + '</td></tr>';
+    }).join("") + '</tbody></table>';
+  $("detail").classList.remove("hidden");
+  $("dAfd").addEventListener("change", function(){ wijzig({ afdeling: $("dAfd").value }); });
+  $("dStatus").addEventListener("change", function(){ wijzig({ status: $("dStatus").value }); });
+  if ($("dOpen")) $("dOpen").addEventListener("click", openDocument);
+  $("dWeg").addEventListener("click", verwijder);
+  $("detail").querySelectorAll("[data-kop],[data-ont]").forEach(function(b){ b.addEventListener("click", function(){ zoekVeld(Number(b.dataset.kop != null ? b.dataset.kop : b.dataset.ont)); }); });
+  $("detail").querySelectorAll("[data-taak]").forEach(function(b){ b.addEventListener("click", function(){ taak(Number(b.dataset.taak)); }); });
+  $("detail").querySelectorAll("[data-ja]").forEach(function(b){ b.addEventListener("click", function(){ var i = Number(b.dataset.ja); koppel(i, open.regels[i].voorstel); }); });
+}
+function zoekVeld(i){
+  var r = open.regels[i], cel = $("art" + i);
+  cel.innerHTML = '<input type="search" id="zq' + i + '" placeholder="Zoek in Logic4 op code of naam" value="' + esc(r.code || "") + '" style="width:100%"><div class="zoekres hidden" id="zr' + i + '"></div>';
+  var inp = $("zq" + i), t = null;
+  function zoek(){
+    var q = inp.value.trim(); if (q.length < 2) return;
+    fetch(W + "/proforma/zoek?q=" + encodeURIComponent(q), { headers: kop() }).then(function(x){ return x.json(); }).then(function(j){
+      var box = $("zr" + i); box.classList.remove("hidden");
+      box.innerHTML = (j.artikelen || []).length ? j.artikelen.map(function(a, k){ return '<div data-k="' + k + '"><b>' + esc(a.code) + '</b> ' + esc(a.naam) + '</div>'; }).join("") : '<div style="cursor:default;color:var(--grijs)">Niets gevonden. Probeer een ander woord, of stuur een taak naar Gretha.</div>';
+      box.querySelectorAll("[data-k]").forEach(function(el){ el.addEventListener("click", function(){ koppel(i, j.artikelen[Number(el.dataset.k)]); }); });
+    }).catch(function(){});
+  }
+  inp.addEventListener("input", function(){ clearTimeout(t); t = setTimeout(zoek, 350); });
+  inp.focus(); if (inp.value.trim().length >= 2) zoek();
+}
+async function koppel(i, artikel){
+  try {
+    var r = await fetch(W + "/proforma/koppel", { method: "POST", headers: kop(true), body: JSON.stringify({ id: open.id, regel: i, artikel: artikel }) });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    open = j.item; tekenDetail(); laadLijst();
+  } catch(e) { $("dMelding").className = "melding fout"; $("dMelding").textContent = "Koppelen vraagt een nieuwe poging: " + e.message; }
+}
+async function taak(i){
+  try {
+    var r = await fetch(W + "/proforma/taak", { method: "POST", headers: kop(true), body: JSON.stringify({ id: open.id, regel: i }) });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    open.regels[i].taakGretha = new Date().toISOString(); tekenDetail();
+    $("dMelding").className = "melding"; $("dMelding").textContent = "Taak staat bij Gretha.";
+  } catch(e) { $("dMelding").className = "melding fout"; $("dMelding").textContent = "De taak vraagt een nieuwe poging: " + e.message; }
+}
+async function wijzig(w){
+  try {
+    var r = await fetch(W + "/proforma/wijzig", { method: "POST", headers: kop(true), body: JSON.stringify(Object.assign({ id: open.id }, w)) });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    Object.assign(open, w); $("dMelding").className = "melding"; $("dMelding").textContent = "Bewaard."; laadLijst();
+  } catch(e) { $("dMelding").className = "melding fout"; $("dMelding").textContent = "Bewaren vraagt een nieuwe poging: " + e.message; }
+}
+async function verwijder(){
+  if (!(await fpBevestig("Dit document uit het overzicht halen? De koppelingen die je maakte, blijven bewaard.", { knop: "Verwijderen" }))) return;
+  try {
+    var r = await fetch(W + "/proforma/wijzig", { method: "POST", headers: kop(true), body: JSON.stringify({ id: open.id, weg: true }) });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    $("detail").classList.add("hidden"); open = null; laadLijst();
+  } catch(e) { $("dMelding").className = "melding fout"; $("dMelding").textContent = e.message; }
+}
+async function openDocument(){
+  try {
+    var r = await fetch(W + "/proforma/bestand?id=" + encodeURIComponent(open.id), { headers: kop() });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var url = URL.createObjectURL(await r.blob());
+    var a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener";
+    if (!/\.pdf$/i.test(open.bestandsnaam || "")) a.download = open.bestandsnaam || "document";
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch(e) { $("dMelding").className = "melding fout"; $("dMelding").textContent = "Openen vraagt een nieuwe poging: " + e.message; }
+}
+$("lees").addEventListener("click", lees);
+$("zoek").addEventListener("input", tekenLijst);
+$("statusFilter").addEventListener("change", tekenLijst);
+(async function(){ for (var i=0;i<20&&!teamKey();i++) await new Promise(function(r){ setTimeout(r,500); }); laadLijst(); })();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:/Windows/i.test(ua)?"Windows":/Mac/i.test(ua)?"Mac":"anders", versie:m?m[1]:"" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"proformas",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

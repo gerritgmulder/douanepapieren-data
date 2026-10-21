@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-21", bestand: "proformas.html", soort: "nieuw",
+      titel: "Proforma's",
+      wat:   "Upload proforma's van sauna's, tuinmeubelen en andere producten, van elke leverancier, als pdf of Excel. Je ziet per afdeling wat er in bestelling, in productie en onderweg is. Bovenaan vink je zelf aan welke afdelingen je wilt zien. Koppel een regel één keer aan het artikel in Logic4, daarna staat het er bij die leverancier vanzelf."
+    },
+    {
+      datum: "2026-10-21", bestand: "voorraad.html", soort: "beter",
+      titel: "Inkoop naar Logic4 leest elke proforma",
+      wat:   "Ook de proforma's van Mexda komen er nu helemaal uit, met sauna's en onderdelen. De sauna's van Mexda krijgen vanzelf het juiste artikel. Staat een regel rood, klik dan op Koppelen en zoek het artikel in Logic4. Commercial invoices van sauna's en tuinmeubelen kun je kwijt bij Schepen & ontvangst om de container te volgen."
+    },
+    {
       datum: "2026-10-21", bestand: "voorraad.html", soort: "beter",
       titel: "Ingepland met een schip dat nog onderweg is",
       wat:   "Staat een reservering op inplannen of gepland en is er een schip bij gekozen dat nog onderweg is, dan staat bij de levering dat schip met zijn ETA (ingepland), en niet op voorraad. Is het schip binnen, of is er geen schip gekozen, dan staat hij als binnen in Uddel."

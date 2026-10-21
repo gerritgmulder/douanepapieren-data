@@ -21,6 +21,101 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){retu
 // de fabriek besteld wordt. We lezen de regels uit, laten ze controleren en
 // schrijven pas na akkoord een inkooporder in Logic4.
 var ikoLaatst=null;
+/* De algemene lezer (dezelfde als in de tegel Proforma's).
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal, 21 okt 2026, bij PI-Aronswim20260312 van MEXDA: "Bij deze fabriek
+   blijft het fout gaan, inmiddels heel irritant." De vaste lezer kende de
+   bladzijde van MEXDA zo slecht dat alle codes leeg bleven en de sauna's
+   ontbraken. Kent de vaste lezer een document goed (alle codes gevonden en
+   herkend als spa), dan blijft hij het doen, want hij leest ook de omkasting.
+   Anders leest de algemene lezer, die elk document aankan. */
+var ikoGelezen=null;   // wat straks in het overzicht Proforma's komt
+function ikoKop(){ return {"Content-Type":"application/json","X-Fonteyn-Auth":C.teamKey(),"X-Fonteyn-User":String(C.email||"").toLowerCase()}; }
+async function ikoPdfTekst(f){
+  if(!window.pdfjsLib) throw new Error("de pdf-lezer moet nog laden. Herstart het dashboard.");
+  if(pdfjsLib.GlobalWorkerOptions&&!pdfjsLib.GlobalWorkerOptions.workerSrc)
+    pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  var pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise, uit=[];
+  for(var p=1;p<=pdf.numPages;p++){
+    var c=await (await pdf.getPage(p)).getTextContent(), pts=[];
+    c.items.forEach(function(it){ if(it.str&&it.str.trim()) pts.push({y:it.transform[5],x:it.transform[4],b:it.width||0,s:it.str}); });
+    pts.sort(function(a,b){ return b.y-a.y; });
+    var groepen=[];
+    pts.forEach(function(q){ var g=groepen[groepen.length-1]; if(g&&Math.abs(g.y-q.y)<=3) g.i.push(q); else groepen.push({y:q.y,i:[q]}); });
+    groepen.forEach(function(g){
+      g.i.sort(function(a,b){ return a.x-b.x; });
+      var t="", eind=null;
+      g.i.forEach(function(q){ if(eind!=null) t+=(q.x-eind>12?" | ":" "); t+=q.s; eind=q.x+q.b; });
+      uit.push(t);
+    });
+    uit.push("--- einde bladzijde "+p+" ---");
+  }
+  return uit.join("\n");
+}
+function ikoExcelTekst(wb){
+  var uit=[];
+  wb.SheetNames.forEach(function(n){
+    uit.push("### Blad: "+n);
+    XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:""}).forEach(function(r){
+      var cel=r.map(function(c){ return String(c).trim(); }).filter(Boolean);
+      if(cel.length) uit.push(cel.join(" | "));
+    });
+  });
+  return uit.join("\n");
+}
+function ikoModel(code,kleur){
+  if(!code) return null;
+  var mo=(typeof spaModelMetKleur==="function") ? spaModelMetKleur(code,kleur||"") : (typeof spaModel==="function" ? spaModel(code) : null);
+  return (mo&&mo!=="(onbekend SKT-model)")?mo:null;
+}
+async function ikoAlgemeenLezen(tekst,naam){
+  ikoStatus("info","Lezen met de algemene lezer… dit duurt een halve minuut");
+  const r=await fetch(WORKER+"/proforma/lees",{method:"POST",headers:ikoKop(),body:JSON.stringify({tekst:tekst,bestandsnaam:naam})});
+  const d=await r.json().catch(function(){ return {}; });
+  if(!d.ok) throw new Error(d.error||("de lezer antwoordde met HTTP "+r.status));
+  ikoGelezen=d;
+  const regels=(d.regels||[]).filter(function(x){ return Number(x.aantal)>0; });
+  return { tabblad:(d.soort||"proforma"), leverancier:d.leverancier, referentie:d.documentnummer||null, algemeen:true,
+    regels:regels.map(function(x){
+      return { code:x.code||null, model:ikoModel(x.code,(x.kleur||"")+" "+(x.omschrijving||"")), kleur:x.kleur||null, skirt:null,
+               aantal:Number(x.aantal)||0, prijs:(x.prijs>0?x.prijs:null), omschrijving:x.omschrijving||"", kandidaten:ikoKandidaten(x.code) };
+    }) };
+}
+/* Gretha's Logic4-nummers bij saunacodes (spa-fabrikanten.js, saunaArtikelen).
+   De server kiest daaruit het artikel met de juiste houtsoort. */
+function ikoKandidaten(code){
+  if(!code||!window.fpFabrikanten) return undefined;
+  var n=function(c){ return String(c||"").toUpperCase().replace(/^WS-/,"").replace(/\s+/g,""); }, uit=null;
+  (window.fpFabrikanten.lijst||[]).forEach(function(f){
+    var sa=f.saunaArtikelen||{}; Object.keys(sa).forEach(function(k){ if(n(k)===n(code)) uit=sa[k]; });
+  });
+  return uit||undefined;
+}
+function ikoBase64(f){ return new Promise(function(ok,nee){ var r=new FileReader(); r.onload=function(){ ok(r.result); }; r.onerror=nee; r.readAsDataURL(f); }); }
+/* Na het aanmaken komt de proforma ook in het overzicht Proforma's, zodat
+   daar alles bij elkaar staat (spa's, sauna's, tuinmeubelen). Zelfde
+   leverancier en nummer = bijwerken, dus twee keer inlezen geeft één regel. */
+async function ikoNaarOverzicht(orderId){
+  try{
+    if(!ikoGelezen||!ikoGelezen.bestand) return;
+    const g=ikoGelezen;
+    const b64=await ikoBase64(g.bestand);
+    await fetch(WORKER+"/proforma/opslaan",{method:"POST",headers:ikoKop(),body:JSON.stringify({
+      gelezen:g.data, bestand:b64, bestandsnaam:g.bestand.name, mime:g.bestand.type, bron:"inkoop", inkooporder:orderId||null,
+      afdeling:(ikoLaatst&&(ikoLaatst.regels||[]).some(function(r){ return r.model; }))?"Spa's":undefined,
+      artikelen:((ikoLaatst&&ikoLaatst.regels)||[]).map(function(r){ return {code:r.code||"",omschrijving:r.regelOmschrijving||"",kleur:r.kleur||"",artikelcode:r.artikelcode||null,naam:r.omschrijving||""}; }) })});
+  }catch(e){}
+}
+/* Koppelingen die bij het aanmaken bevestigd zijn: een voorstel uit Logic4
+   of een hand-koppeling. Volgende keer staat het artikel er meteen. */
+async function ikoKoppelingBewaren(r,artikel){
+  try{
+    const lev=(ikoLaatst&&ikoLaatst.crediteur&&ikoLaatst.crediteur.naam)||(ikoGelezen&&ikoGelezen.data&&ikoGelezen.data.leverancier)||"";
+    if(!lev||!(r.code||r.regelOmschrijving)) return;
+    await fetch(WORKER+"/proforma/koppel-los",{method:"POST",headers:ikoKop(),body:JSON.stringify({
+      leverancier:(ikoGelezen&&ikoGelezen.data&&ikoGelezen.data.leverancier)||lev, code:r.code||"", omschrijving:r.regelOmschrijving||"", kleur:r.kleur||"", artikel:artikel })});
+  }catch(e){}
+}
 function ikoStatus(soort,tekst){
   const e=document.getElementById("ikoStatus"); if(!e) return;
   if(!tekst){ e.classList.add("hidden"); return; }
@@ -291,17 +386,21 @@ function renderIkoVoorstel(v){
         "<option value=''>- kies leverancier -</option>"+
         (v.leveranciers||[]).map(c=>"<option value='"+c.id+"'"+((v.crediteur&&v.crediteur.id===c.id)?" selected":"")+">"+esc(c.naam)+"</option>").join("")+
       "</select>"+
-      "<span style='font-size:12px;color:var(--muted)'>"+(v.regels||[]).length+" regel(s) · "+v.totaalStuks+" spa's</span>"+
+      "<span style='font-size:12px;color:var(--muted)'>"+(v.regels||[]).length+" regel(s) · "+v.totaalStuks+" stuks</span>"+
     "</div>"+
-    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Omkasting</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th><th>Overslaan</th></tr></thead><tbody>"+
+    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Artikel</th><th>Kleur</th><th>Omkasting</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th><th>Overslaan</th></tr></thead><tbody>"+
     (v.regels||[]).map((r,i)=>"<tr data-rij='"+i+"'"+(r.artikelcode?(r.zeker?"":" style='background:#fef3c7'"):" style='background:#fee2e2'")+">"+
-      "<td>"+esc(r.code||"-")+"</td><td><b>"+esc(r.model||"onbekend")+"</b>"+
+      "<td>"+esc(r.code||"-")+"</td><td>"+(r.model?"<b>"+esc(r.model)+"</b>":(r.regelOmschrijving?"<span style='font-size:12px'>"+esc(String(r.regelOmschrijving).slice(0,60))+"</span>":"<b>onbekend</b>"))+
         (r.uitvoering?" <span style='background:#dcfce7;color:#166534;border-radius:999px;padding:1px 6px;font-size:10.5px;font-weight:600'>"+esc(r.uitvoering)+"</span>":"")+
         (r.klantOrder?"<div style='font-size:11px;color:#3730a3;margin-top:2px'>voor order "+esc(r.klantOrder)+(r.klantNaam?" · "+esc(r.klantNaam):"")+"</div>":"")+
         "</td><td>"+esc(r.kleur||"-")+"</td>"+
       "<td style='font-size:11.5px'>"+esc(r.skirt||"-")+"</td>"+
-      "<td>"+r.aantal+"</td><td>"+esc(r.artikelcode||"- nog te koppelen -")+"</td>"+
-      "<td style='font-size:11.5px;color:var(--muted)'>"+esc(r.omschrijving||"")+"</td>"+
+      "<td>"+r.aantal+"</td><td>"+(r.artikelcode?esc(r.artikelcode)+(r.voorstel?"<div style='font-size:10.5px;color:#92400e'>voorstel uit Logic4</div>":"")+
+          (r.viaLijst?"<div style='font-size:10.5px;color:#166534'>uit de lijst van Gretha</div>":(r.gekoppeld?"<div style='font-size:10.5px;color:#166534'>eerder gekoppeld</div>":"")):"<span style='color:#b91c1c'>nog te koppelen</span>")+
+        "<div><button type='button' class='btn ikoKoppel' data-rij='"+i+"' style='margin-top:4px;padding:3px 8px;font-size:11px'>"+(r.artikelcode?"Ander artikel":"Koppelen")+"</button></div>"+
+        "<div class='ikoZoek hidden' data-rij='"+i+"' style='margin-top:6px'></div></td>"+
+      "<td style='font-size:11.5px;color:var(--muted)'>"+esc(r.omschrijving||"")+
+"</td>"+
       "<td style='text-align:center'>"+(r.artikelcode?"":"<input type='checkbox' class='ikoSkip' data-rij='"+i+"' title='deze regel overslaan'>")+"</td>"+
       "</tr>").join("")+
     "</tbody></table></div>"+
@@ -310,7 +409,7 @@ function renderIkoVoorstel(v){
       "<button class='btn' id='ikoWissen' type='button'>Opnieuw beginnen</button>"+
       "<span id='ikoTelling' style='font-size:11.5px;color:var(--muted)'></span>"+
     "</div>"+
-    "<p class='lead' style='font-size:11.5px;margin-top:6px'>Geel = de kleur is met twijfel herkend, controleer de artikelcode. Rood = Logic4 heeft voor dit model in deze kleur nog een artikel nodig; maak dat daar aan óf vink <b>Overslaan</b> aan. Aanmaken zet een inkooporder in Logic4 - de fabriek blijft erbuiten.</p>";
+    "<p class='lead' style='font-size:11.5px;margin-top:6px'>Geel = controleer de artikelcode (kleur met twijfel herkend, of een voorstel uit Logic4). Rood = nog te koppelen: klik <b>Koppelen</b> en zoek het artikel in Logic4, of vink <b>Overslaan</b> aan. Een koppeling onthoudt het Dashboard per leverancier, ook in de tegel Proforma's. Aanmaken zet een inkooporder in Logic4 - de fabriek blijft erbuiten.</p>";
   document.getElementById("ikoAanmaken").addEventListener("click",ikoAanmaken);
   // Een geüploade proforma wordt nergens bewaard — hij staat alleen op het
   // scherm. 'Opnieuw beginnen' maakt dat zichtbaar, zodat duidelijk is dat er
@@ -322,7 +421,37 @@ function renderIkoVoorstel(v){
     ikoStatus("ok","Leeggemaakt. Alles blijft zoals het was - je kunt de proforma opnieuw uploaden.");
   });
   document.querySelectorAll(".ikoSkip").forEach(cb=>cb.addEventListener("change",ikoTel));
+  document.querySelectorAll(".ikoKoppel").forEach(function(b){ b.addEventListener("click",function(){ ikoZoekOpen(Number(b.dataset.rij)); }); });
   ikoTel();
+}
+function ikoZoekOpen(i){
+  const vak=document.querySelector(".ikoZoek[data-rij='"+i+"']"); if(!vak) return;
+  const r=ikoLaatst.regels[i];
+  vak.classList.remove("hidden");
+  vak.innerHTML="<input type='search' class='ikoZoekVeld' placeholder='artikelcode of naam in Logic4' style='width:100%;min-width:180px;padding:6px'><div class='ikoZoekUit' style='max-height:180px;overflow:auto'></div>";
+  const veld=vak.querySelector(".ikoZoekVeld"), uit=vak.querySelector(".ikoZoekUit");
+  veld.value=r.model||r.code||"";
+  let wacht=null;
+  const zoek=async function(){
+    const q=veld.value.trim(); if(q.length<2){ uit.innerHTML=""; return; }
+    uit.innerHTML="<div style='font-size:11px;color:var(--muted)'>Zoeken…</div>";
+    try{
+      const rr=await fetch(WORKER+"/proforma/zoek?q="+encodeURIComponent(q),{headers:ikoKop()});
+      if(rr.status===403){ uit.innerHTML="<div style='font-size:11px;color:var(--muted)'>Koppelen gaat via een account met de tegel Proforma's.</div>"; return; }
+      const j=await rr.json();
+      const a=(j.artikelen||[]);
+      uit.innerHTML=a.length?a.map(function(x,k){ return "<div class='ikoKies' data-k='"+k+"' style='cursor:pointer;padding:4px 2px;border-bottom:1px solid var(--line,#e5e7eb);font-size:11.5px'><b>"+esc(x.code)+"</b> "+esc(x.naam)+"</div>"; }).join("")
+        :"<div style='font-size:11px;color:var(--muted)'>0 treffers. Probeer een ander woord, of vraag Gretha het artikel in Logic4 aan te maken.</div>";
+      uit.querySelectorAll(".ikoKies").forEach(function(d){ d.addEventListener("click",function(){
+        const x=a[Number(d.dataset.k)];
+        r.artikelcode=x.code; r.omschrijving=x.naam; r.zeker=true; r.voorstel=false; r.gekoppeld=true; r.productId=null; r.handGekoppeld=true;
+        ikoKoppelingBewaren(r,{code:x.code,naam:x.naam});
+        renderIkoVoorstel(ikoLaatst);
+      }); });
+    }catch(e){ uit.innerHTML="<div style='font-size:11px;color:#b91c1c'>Zoeken vraagt een nieuwe poging.</div>"; }
+  };
+  veld.addEventListener("input",function(){ clearTimeout(wacht); wacht=setTimeout(zoek,350); });
+  veld.focus(); zoek();
 }
 // Welke regels gaan er daadwerkelijk mee, en hoeveel laat je bewust liggen.
 function ikoMeeTeBestellen(){
@@ -338,7 +467,7 @@ function ikoTel(){
   const stuks=s.mee.reduce((n,r)=>n+r.aantal,0);
   t.innerHTML=s.blokkeert.length
     ? "<span style='color:#b91c1c'>"+s.blokkeert.length+" regel(s) zonder artikelcode - vul die aan of vink 'Overslaan' aan.</span>"
-    : s.mee.length+" regel(s) · "+stuks+" spa's"+(s.overgeslagen.length?(" · <b style='color:#c2410c'>"+s.overgeslagen.length+" regel(s) worden OVERGESLAGEN</b>"):"");
+    : s.mee.length+" regel(s) · "+stuks+" stuks"+(s.overgeslagen.length?(" · <b style='color:#c2410c'>"+s.overgeslagen.length+" regel(s) worden OVERGESLAGEN</b>"):"");
 }
 /* Aanvullen in een bestaande inkooporder (Chantal, 6 aug 2026).
    Een proforma wordt soms maar half besteld, bijvoorbeeld omdat een model nog
@@ -352,7 +481,7 @@ async function ikoAanvullen(bestaandeOrder){
   if(s.blokkeert.length){ ikoStatus("bad",s.blokkeert.length+" regel(s) wachten nog op een artikelcode - vul die aan of vink 'Overslaan' aan."); return; }
   if(!s.mee.length){ ikoStatus("bad","Er blijven 0 regels over om toe te voegen."); return; }
   const aantal=s.mee.reduce((n,r)=>n+r.aantal,0);
-  if(!confirm("Inkooporder "+bestaandeOrder+" bijwerken met deze proforma?\n\nHet Dashboard legt de proforma naast wat er al in de inkooporder staat en zet alleen de spa's erbij die nieuw zijn of waarvan er nu meer staan. Wat er al in staat, blijft zoals het is.")) return;
+  if(!(await fpBevestig("Inkooporder "+bestaandeOrder+" bijwerken met deze proforma?\n\nHet Dashboard legt de proforma naast wat er al in de inkooporder staat en zet alleen de artikelen erbij die nieuw zijn of waarvan er nu meer staan. Wat er al in staat, blijft zoals het is.",{knop:"Bijwerken"}))) return;
   const knop=document.getElementById("ikoAanvullen");
   if(knop){ knop.disabled=true; knop.textContent="Bezig…"; }
   try{
@@ -373,6 +502,8 @@ async function ikoAanvullen(bestaandeOrder){
       (j.mislukt&&j.mislukt.length?(" "+j.mislukt.length+" regel(s) nog open: "+j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")):""));
     if(knop){ knop.textContent="Aangevuld ✓"; }
     try{ if(C.log) C.log("inkooporder-aangevuld","order "+j.buyOrderId+", "+j.toegevoegd+" regel(s)"); }catch(e){}
+    s.mee.filter(function(r){ return r.voorstel; }).forEach(function(r){ ikoKoppelingBewaren(r,{code:r.artikelcode,naam:r.omschrijving||""}); });
+    ikoNaarOverzicht(j.buyOrderId);
   }catch(e){
     ikoStatus("bad","Aanvullen vraagt een nieuwe poging: "+e.message);
     if(knop){ knop.disabled=false; knop.textContent="Aanvullen in inkooporder "+bestaandeOrder; }
@@ -387,10 +518,10 @@ async function ikoAanmaken(){
   if(!s.mee.length){ ikoStatus("bad","Er blijven 0 regels over om te bestellen."); return; }
   const ref=(document.getElementById("ikoRef").value||"").trim();
   const aantal=s.mee.reduce((n,r)=>n+r.aantal,0);
-  if(!confirm("Inkooporder aanmaken in Logic4?\n\n"+s.mee.length+" regels · "+aantal+" spa's"+(ref?("\nProforma: "+ref):"")+
+  if(!(await fpBevestig("Inkooporder aanmaken in Logic4?\n\n"+s.mee.length+" regels · "+aantal+" stuks"+(ref?("\nProforma: "+ref):"")+
     (s.overgeslagen.length?("\n\nLET OP: "+s.overgeslagen.length+" regel(s) worden OVERGESLAGEN ("+
       s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)).join(", ")+"). Die bestel je zelf."):"")+
-    "\n\nDit maakt een inkooporder aan in Logic4. De fabriek blijft erbuiten.")) return;
+    "\n\nDit maakt een inkooporder aan in Logic4. De fabriek blijft erbuiten.",{knop:"Aanmaken"}))) return;
   knop.disabled=true; knop.textContent="Bezig…";
   try{
     /* In blokken, want een worker mag per aanroep maar een beperkt aantal
@@ -457,6 +588,8 @@ async function ikoAanmaken(){
       knop.textContent="Aangemaakt ✓";
     }
     try{ if(C.log) C.log("inkooporder-aangemaakt","Logic4 inkooporder "+j.buyOrderId+" · "+j.toegevoegd+" regels"+(ref?(" · proforma "+ref):"")); }catch(e){}
+    s.mee.filter(function(r){ return r.voorstel; }).forEach(function(r){ ikoKoppelingBewaren(r,{code:r.artikelcode,naam:r.omschrijving||""}); });
+    ikoNaarOverzicht(j.buyOrderId);
   }catch(e){ ikoStatus("bad","Aanmaken vraagt een nieuwe poging: "+e.message); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; }
 }
 // Een PDF komt hier geregeld langs, want fabrieken sturen hun proforma net zo
@@ -467,26 +600,39 @@ async function ikoAanmaken(){
 function isPdf(f){
   return /\.pdf$/i.test(f && f.name || "") || (f && f.type === "application/pdf");
 }
+/* De vaste lezer kent zijn eigen vorm; voor het overzicht Proforma's zetten
+   we die om naar de vorm van de algemene lezer. */
+function ikoVastNaarGelezen(p){
+  var d=p.pdf||{};
+  return { ok:true, soort:/commercial/i.test(p.tabblad||"")?"commercial invoice":"proforma", leverancier:p.leverancier||"",
+    documentnummer:p.referentie||null, datum:null, valuta:"USD", containers:d.container?[d.container]:[],
+    regels:(p.regels||[]).map(function(r){ var pr=r.prijs!=null?Number(r.prijs):null;
+      return { code:r.code||"", omschrijving:r.omschrijving||r.model||"", kleur:r.kleur||"", aantal:r.aantal, prijs:pr, bedrag:pr!=null?Math.round(pr*r.aantal*100)/100:null }; }) };
+}
 function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEventListener("change",async function(ev){
   const f=(ev.target.files||[])[0]; if(!f) return;
   ikoStatus("","");
   document.getElementById("ikoVoorstel").innerHTML="";
   ikoStatus("info","Inlezen…");
+  ikoGelezen=null;
   try{
     // MEXDA stuurt uitsluitend PDF; er is bij die fabriek geen Excel om naar
     // te vragen. ci-pdf.js leest de commercial invoice en de packing list uit
     // zo'n bladzijde (Chantal, 8 aug 2026).
     var p;
     if(isPdf(f)){
-      if(!window.fpCiPdf) throw new Error("de pdf-lezer moet nog laden. Herstart het dashboard.");
+      if(!window.pdfjsLib) throw new Error("de pdf-lezer moet nog laden. Herstart het dashboard.");
       // Twee soorten bladzijden: de commercial invoice van MEXDA en de
       // proforma van Huantong, met per spa een blok en de kleuren ernaast.
       // De lezer kiest zelf op de inhoud; de bestandsnaam zegt niets.
       // leesBestand kiest zelf de juiste lezer, ook voor formaten die de
       // x-posities nodig hebben (TOPIA-tuinmeubelen).
-      const doc=await window.fpCiPdf.leesBestand(f);
-      if(!doc.regels.length) throw new Error("in deze PDF staan 0 artikelregels. Staat er een tabel met een artikelnaam en een aantal in?");
-      p={ tabblad:(doc.soort==="proforma"?"proforma":"commercial invoice")+
+      let doc=null;
+      try{ doc=window.fpCiPdf?await window.fpCiPdf.leesBestand(f):null; }catch(e){ doc=null; }
+      const vastGoed=doc&&doc.regels&&doc.regels.length&&doc.regels.every(function(r){ return ikoModel(r.code,r.kleur); });
+      if(!vastGoed){
+        p=await ikoAlgemeenLezen(await ikoPdfTekst(f),f.name);
+      }else p={ tabblad:(doc.soort==="proforma"?"proforma":"commercial invoice")+
                   (doc.container?" · container "+doc.container:"")+
                   (doc.containers?" · "+doc.containers+" containers":""),
           leverancier:doc.leverancier,
@@ -522,11 +668,11 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
                      // bepaalt samen met de omkasting welk artikel het wordt.
                      kleur:r.kleur||null, skirt:r.skirt||null,
                      aantal:r.aantal, prijs:(r.prijsUsd>0?r.prijsUsd:null),
-                     omschrijving:r.omschrijving };
+                     omschrijving:r.omschrijving, kandidaten:ikoKandidaten(r.code) };
           }) };
       // Spreken factuur en pakbon elkaar tegen, dan mag daar niet overheen
       // gelezen worden: hierop wordt straks voorraad geteld.
-      if((doc.verschillen||[]).length){
+      if(vastGoed&&(doc.verschillen||[]).length){
         ikoStatus("bad","Let op - de commercial invoice en de packing list in dit bestand verschillen van elkaar: "+
           doc.verschillen.map(function(v){ return v.code+" ("+v.wat+")"; }).join("; ")+
           ". Zoek dit eerst uit met de fabriek; het voorstel hieronder volgt de factuur.");
@@ -534,9 +680,18 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
     }else{
       const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
       p=parseProforma(wb, f.name);
+      // Een Excel van een leverancier die de vaste lezer nog onbekend is:
+      // dan leest de algemene lezer hem.
+      if(p.fout||!p.regels.length||!p.regels.some(function(r){ return r.model; })){
+        const vast=p;
+        try{ p=await ikoAlgemeenLezen(ikoExcelTekst(wb),f.name); }
+        catch(e){ if(vast.fout||!vast.regels.length) throw e; p=vast; ikoGelezen=null; }
+      }
     }
     if(p.fout) throw new Error(p.fout);
-    if(!p.regels.length) throw new Error("op tabblad '"+p.tabblad+"' staan 0 spa-regels.");
+    if(ikoGelezen) ikoGelezen={data:ikoGelezen,bestand:f};
+    else ikoGelezen={data:ikoVastNaarGelezen(p),bestand:f};
+    if(!p.regels.length) throw new Error("in '"+p.tabblad+"' staan 0 artikelregels.");
     // Referentie uit het document zelf ("Order No.: RZ2009DF3352 to Rotterdam"),
     // want dat is waarop we later herkennen of een proforma al besteld is.
     if(!document.getElementById("ikoRef").value)
@@ -552,7 +707,7 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
       throw new Error((v.error||("de server antwoordde met HTTP "+r.status))+" - het bestand zelf is goed uitgelezen ("+p.regels.length+" regels).");
     }
     ikoLaatst=v; renderIkoVoorstel(v);
-    if(!p.pdf||!p.pdf.verschillen.length) ikoStatus("ok","Uitgelezen van '"+p.tabblad+"': "+v.regels.length+" regel(s), "+v.totaalStuks+" spa's"+
+    if(!p.pdf||!p.pdf.verschillen.length) ikoStatus("ok","Uitgelezen van '"+p.tabblad+"': "+v.regels.length+" regel(s), "+v.totaalStuks+" stuks"+
       (p.leverancier?(" · "+p.leverancier):"")+". Controleer hieronder en klik pas daarna op aanmaken.");
   }catch(e){ ikoStatus("bad","Inlezen vraagt een nieuwe poging: "+e.message); }
   ev.target.value="";
@@ -560,6 +715,31 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
 }
 
 window.fpProforma={
+  /* De algemene lezer, ook voor Schepen & ontvangst: een commercial invoice
+     van een leverancier die de vaste lezer nog onbekend is. */
+  algemeen:async function(f){
+    const tekst=isPdf(f)?await ikoPdfTekst(f):ikoExcelTekst(XLSX.read(await f.arrayBuffer(),{type:"array"}));
+    const r=await fetch(WORKER+"/proforma/lees",{method:"POST",headers:ikoKop(),body:JSON.stringify({tekst:tekst,bestandsnaam:f.name})});
+    const d=await r.json().catch(function(){ return {}; });
+    if(!d.ok) throw new Error(d.error||("de lezer antwoordde met HTTP "+r.status));
+    return d;
+  },
+  naarOverzicht:async function(gelezen,f,extra){
+    try{
+      const b64=await ikoBase64(f);
+      const r=await fetch(WORKER+"/proforma/opslaan",{method:"POST",headers:ikoKop(),body:JSON.stringify(Object.assign({
+        gelezen:gelezen, bestand:b64, bestandsnaam:f.name, mime:f.type },extra||{}))});
+      return await r.json().catch(function(){ return {}; });
+    }catch(e){ return {}; }
+  },
+  afdeling:function(d){
+    var t=((d.leverancier||"")+" "+(d.regels||[]).map(function(r){ return r.omschrijving; }).join(" ")).toLowerCase();
+    if(/sauna/.test(t)&&!/\bspa\b|swim/.test(t)) return "Sauna's";
+    if(/swim|\bspa\b|spas\b|hot ?tub|acrylic/.test(t)) return "Spa's";
+    if(/chair|table|sofa|lounge|furniture|dining|parasol|kitchen|bbq|cushion|bench|daybed|hanging/.test(t)) return "Tuinmeubelen";
+    if(/sauna/.test(t)) return "Sauna's";
+    return "Overig";
+  },
   start:function(opts){
     C=Object.assign(C,opts||{});
     koppelBestandsveld();

@@ -4994,7 +4994,9 @@ function renderSchepen(){
         (s.bestemmingOnbekend&&!s.bestemmingHand&&spas
           ? "<div style='font-size:11px;color:#92400e;margin-top:2px'>het papier laat de bestemming open - kies hem zelf</div>" : "")+
       "</td>"+
-      "<td>"+spas+(s.dealerContainer&&spas?" <span style='font-size:11px;color:#c2410c' title='rechtstreeks naar de dealer, buiten de voorraad'>buiten voorraad</span>":"")+"</td>"+
+      "<td>"+(s.alleenDocumenten&&!spas&&(s.afdeling||s.stuks)
+          ? "<span style='font-size:12px'>"+esc(s.afdeling||"overig")+"</span>"+(s.stuks?"<div style='font-size:11px;color:var(--muted)' title='"+esc((s.inhoud||[]).map(x=>x.aantal+"x "+x.omschrijving).join("\n"))+"'>"+s.stuks+" stuks</div>":"")
+          : spas+(s.dealerContainer&&spas?" <span style='font-size:11px;color:#c2410c' title='rechtstreeks naar de dealer, buiten de voorraad'>buiten voorraad</span>":""))+"</td>"+
       "<td>"+trackStatusCell(s.track)+"</td>"+
       "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12.5px'>"+
         (s.etaHand&&s.track&&s.track.eta&&s.track.eta!==s.eta
@@ -5519,6 +5521,36 @@ async function leesBinnenkomend(wb,bestandsnaam){
   return doc;
 }
 
+/* Een commercial invoice via de algemene lezer: een zending met alleen
+   papieren, zichtbaar en te volgen, maar buiten de spa-voorraad. Komt ook in
+   de tegel Proforma's met status onderweg, zodat daar per afdeling te zien is
+   wat er besteld en wat er onderweg is. */
+async function ciAlgemeen(file){
+  if(!window.fpProforma||!window.fpProforma.algemeen) return null;
+  let d=null;
+  try{ d=await window.fpProforma.algemeen(file); }catch(e){ console.warn("[schepen] algemene lezer:",e); return null; }
+  if(!d||!d.ok) return null;
+  if(d.soort==="proforma") return "proforma";
+  const cont=(d.containers||[]).filter(Boolean);
+  const ref=String(d.documentnummer||cont[0]||"").trim();
+  if(!ref&&!cont.length) return null;
+  const afdeling=window.fpProforma.afdeling(d);
+  const iA=(shipsData.ships||[]).findIndex(s=>(s.ref&&s.ref===ref)||(s.file&&s.file===file.name)||(cont[0]&&String(s.ref||"").toUpperCase()===cont[0]));
+  const oud=iA>=0?shipsData.ships[iA]:null;
+  const stuks=(d.regels||[]).reduce((n,r)=>n+(Number(r.aantal)||0),0);
+  const rec={file:file.name,ref:ref||cont[0],vessel:d.leverancier||"",containers:cont.length||1,containerNrs:cont,
+    models:{},modelColors:{},specials:[],total:0,eta:oud?oud.eta:"",etaHand:oud?oud.etaHand:undefined,etaHandTs:oud?oud.etaHandTs:undefined,
+    parser:2,alleenDocumenten:true,afdeling:afdeling,stuks:stuks,
+    inhoud:(d.regels||[]).slice(0,40).map(r=>({omschrijving:String(r.omschrijving||r.code||"").slice(0,90),aantal:Number(r.aantal)||0}))};
+  rec.trackRef=(oud&&String(oud.trackRef||"").trim())||cont[0]||"";
+  if(oud&&oud.track) rec.track=oud.track;
+  if(oud) rec.documenten=(oud.documenten||[]).slice();
+  try{ zetSchipDocument(rec,await bewaarSchipBestand(rec.ref,file,"commercial-invoice")); }
+  catch(e){ console.warn("[schepen] bestand bewaren:",e); }
+  if(iA>=0) shipsData.ships[iA]=rec; else shipsData.ships.push(rec);
+  window.fpProforma.naarOverzicht(d,file,{bron:"schepen",afdeling:afdeling});
+  return rec;
+}
 async function handleCIUpload(files,statusId){
   const st=document.getElementById(statusId||"ciStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen…";
   let added=0; const allUnmapped={...(shipsData.unmapped||{})}; const overgeslagen=[]; const blMeldingen=[];
@@ -5559,8 +5591,21 @@ async function handleCIUpload(files,statusId){
             raak+" gekoppeld aan een bestaande zending"+(nieuwe?", "+nieuwe+" nieuw aangemaakt":"")+".");
           continue;
         }
-        const ship=await parseCiPdf(file);
-        if(!ship){ overgeslagen.push({naam:file.name,codes:[],bladen:"PDF"}); continue; }
+        let ship=null;
+        try{ ship=await parseCiPdf(file); }catch(e){ if(/proforma/i.test(e.message)) throw e; ship=null; }
+        /* Een invoice die de vaste lezer niet kent, of zonder één spa erop
+           (sauna's, tuinmeubelen, onderdelen): de algemene lezer haalt de
+           leverancier, het nummer en de containers eruit, en de zending komt
+           in de lijst met zijn papieren. Chantal, 21 okt 2026: "Commercial
+           invoices horen bij Schepen & ontvangst, ook van sauna's en
+           tuinmeubelen." */
+        if(!ship||!ship.total){
+          st.textContent="Lezen met de algemene lezer… dit duurt een halve minuut";
+          const rec=await ciAlgemeen(file);
+          if(rec==="proforma"){ st.className="status-msg bad"; st.textContent="Dit is een proforma invoice ("+file.name+"). Die hoort bij de kaart Proforma invoice naar inkooporder, of in de tegel Proforma's. De schepen blijven zoals ze waren."; return; }
+          if(rec){ added++; continue; }
+          overgeslagen.push({naam:file.name,codes:[],bladen:"PDF"}); continue;
+        }
         for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
         const iP=(shipsData.ships||[]).findIndex(x=>
           (x.ref&&ship.ref&&x.ref===ship.ref) || (x.file&&file.name&&x.file===file.name));
@@ -5636,6 +5681,9 @@ async function handleCIUpload(files,statusId){
          onderweg, niet in Passion Partners en niet in de aantallen. */
       if(!ship.total){
         if(!ship.ref){
+          st.textContent="Lezen met de algemene lezer… dit duurt een halve minuut";
+          const rec=await ciAlgemeen(file);
+          if(rec&&rec!=="proforma"){ added++; continue; }
           for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
           overgeslagen.push({naam:file.name,codes:Object.keys(ship.unmapped||{}),bladen:wb.SheetNames.join(", ")});
           continue;

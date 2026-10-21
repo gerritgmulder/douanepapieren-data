@@ -136,6 +136,11 @@
       uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad" },
     { bestand:"voorraadbepaling.html", groep:"voorraadbepaling", ic:"📊", naam:"Voorraadbepaling",
       uit:"Bestellen in de verhouding van de verkoop: wat moet er nog bij", mobiel:"goed", tile:"tileVoorraadbepaling" },
+    /* Proforma's van elke leverancier (sauna's, tuinmeubelen, overig):
+       inlezen, koppelen aan Logic4, en zien wat er besteld is (Chantal en
+       Gerrit, 21 okt 2026). */
+    { bestand:"proformas.html", groep:"proformas", ic:"🧾", naam:"Proforma's",
+      uit:"Proforma's van elke leverancier: wat er besteld en onderweg is", mobiel:"goed", tile:"tileProformas" },
     /* Vertalen is een tekstvak met een knop: dat werkt op een telefoon net
        zo goed als op een pc, mits de twee vlakken onder elkaar vallen. Dat
        doen ze onder 900 pixels, dus geen aparte mobiele pagina nodig. */

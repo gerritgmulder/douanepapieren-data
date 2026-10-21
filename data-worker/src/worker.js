@@ -5814,21 +5814,89 @@ async function ikoVoorstel(env, body) {
     if (hit) crediteur = crediteuren[hit];
   }
   const uit = [], waarschuwingen = [];
+  let nogTeKoppelen = 0;
+  /* Wat iemand eerder bij deze leverancier koppelde (tegel Proforma's of hier),
+     en anders wat Logic4 zelf bij de fabriekscode kent (Gerrit en Chantal,
+     21 okt 2026: sauna's en onderdelen van MEXDA bleven "onbekend"). */
+  const koppelAlle = (await env.FONTEYN_DATA.get("pf-koppel", { type: "json" })) || {};
+  const koppelLev = koppelAlle[pfLevSleutel(body.leverancier)] || {};
+  let l4token = null, l4vragen = 0;
+  const l4OpCode = async (code) => {
+    if (!code || String(code).length < 3 || l4vragen >= 25) return null;
+    l4vragen++;
+    try {
+      l4token = l4token || await l4Token(env);
+      const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", { method: "POST", headers: { "Authorization": "Bearer " + l4token, "Content-Type": "application/json" }, body: JSON.stringify({ FastSearchText: String(code), TakeRecords: 5 }) });
+      const j = await r.json().catch(() => null);
+      const l = (Array.isArray(j) ? j : ((j && (j.Records || j.Products)) || [])).filter(x => Number(x.StatusId) !== CAT_VERVALLEN);
+      return l.length === 1 ? { code: String(l[0].ProductCode || ""), desc: String(l[0].ProductName1 || ""), productId: Number(l[0].ProductId) || null } : null;
+    } catch (e) { return null; }
+  };
+  /* Gretha gaf per saunacode van MEXDA de Logic4-artikelen (27 aug 2026), één
+     per houtsoort. Het scherm stuurt ze mee als kandidaten; hier kiezen we
+     op de kleur van de regel: red cedar, of anders black / white stone. */
+  const naamVan = {};
+  const kandidaatKies = async (r) => {
+    const lijst = (Array.isArray(r.kandidaten) ? r.kandidaten : []).slice(0, 6).map(String);
+    if (!lijst.length) return null;
+    for (const c of lijst) {
+      if (naamVan[c] !== undefined || l4vragen >= 25) continue;
+      l4vragen++;
+      try {
+        l4token = l4token || await l4Token(env);
+        const q = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", { method: "POST", headers: { "Authorization": "Bearer " + l4token, "Content-Type": "application/json" }, body: JSON.stringify({ FastSearchText: c, TakeRecords: 5 }) });
+        const j = await q.json().catch(() => null);
+        const l = (Array.isArray(j) ? j : ((j && (j.Records || j.Products)) || [])).filter(x => String(x.ProductCode) === c);
+        naamVan[c] = l.length ? { desc: String(l[0].ProductName1 || ""), productId: Number(l[0].ProductId) || null } : null;
+      } catch (e) { naamVan[c] = null; }
+    }
+    const kl = String(r.kleur || "").toLowerCase();
+    const woord = /cedar/.test(kl) ? /cedar/i : /black/.test(kl) ? /black/i : /white|aspen/.test(kl) ? /white/i : null;
+    if (!woord) return null;
+    const raak = lijst.filter(c => naamVan[c] && woord.test(naamVan[c].desc));
+    return raak.length === 1 ? { code: raak[0], desc: naamVan[raak[0]].desc, productId: naamVan[raak[0]].productId } : null;
+  };
   for (const r of regels) {
+    if (!r.model && Array.isArray(r.kandidaten) && r.kandidaten.length && !pfKoppelZoek(koppelLev, { code: r.code || "", omschrijving: r.omschrijving || "", kleur: r.kleur || "" })) {
+      const k = await kandidaatKies(r);
+      if (k) {
+        uit.push({ code: r.code || null, model: null, kleur: r.kleur || null, skirt: null, uitvoering: null, klantOrder: null, klantNaam: null,
+                   aantal: Number(r.aantal) || 0, prijs: r.prijs != null ? Number(r.prijs) : null, artikelcode: k.code, productId: k.productId,
+                   omschrijving: k.desc, zeker: true, gekoppeld: true, viaLijst: true, regelOmschrijving: r.omschrijving || null });
+        continue;
+      }
+    }
+    const gekoppeld = pfKoppelZoek(koppelLev, { code: r.code || "", omschrijving: r.omschrijving || "", kleur: r.kleur || "" });
+    if (gekoppeld && !r.model) {
+      uit.push({ code: r.code || null, model: null, kleur: r.kleur || null, skirt: r.skirt || null, uitvoering: r.uitvoering || null, klantOrder: null, klantNaam: null,
+                 aantal: Number(r.aantal) || 0, prijs: r.prijs != null ? Number(r.prijs) : null, artikelcode: gekoppeld.code, productId: null,
+                 omschrijving: gekoppeld.naam || null, zeker: true, gekoppeld: true, regelOmschrijving: r.omschrijving || null });
+      continue;
+    }
+    if (!r.model) {
+      const g = await l4OpCode(r.code);
+      if (g) {
+        waarschuwingen.push((r.code || "?") + ": voorstel uit Logic4 (" + g.code + " " + g.desc + ") - controleer of de uitvoering klopt.");
+        uit.push({ code: r.code || null, model: null, kleur: r.kleur || null, skirt: r.skirt || null, uitvoering: null, klantOrder: null, klantNaam: null,
+                   aantal: Number(r.aantal) || 0, prijs: r.prijs != null ? Number(r.prijs) : null, artikelcode: g.code, productId: g.productId,
+                   omschrijving: g.desc, zeker: false, voorstel: true, regelOmschrijving: r.omschrijving || null });
+        continue;
+      }
+    }
     const model = r.model || null;
     const art = model ? ikoZoekArtikel(catalog, model, r.kleur, r.skirt, aliassen, r.uitvoering) : null;
-    if (!model) waarschuwingen.push("Onbekende fabriekscode: " + (r.code || "?"));
+    if (!model) nogTeKoppelen++;
     else if (art && art.meerdere)
-      waarschuwingen.push(model + " komt in Logic4 onder meerdere namen voor (" + art.meerdere.join(", ") + ") — kies de juiste handmatig.");
+      waarschuwingen.push(model + " komt in Logic4 onder meerdere namen voor (" + art.meerdere.join(", ") + ") - kies de juiste handmatig.");
     else if (art && art.geenUitvoering)
       waarschuwingen.push(model + " staat op de proforma als " + art.geenUitvoering + ", maar in Logic4 is er in de kleur \"" + (r.kleur || "?") + "\" nog geen " + art.geenUitvoering + "-artikel" +
         (art.beschikbaar && art.beschikbaar.length ? (" (wél: " + art.beschikbaar.join(", ") + ")") : "") + ". Maak dat artikel in Logic4 aan of kies het handmatig.");
     else if (art && art.geenKleur)
       waarschuwingen.push(model + " bestaat in Logic4 niet in de kleur \"" + (r.kleur || "?") + "\"" +
-        (art.beschikbaar && art.beschikbaar.length ? (" — wél in: " + art.beschikbaar.join(", ")) : "") + ".");
-    else if (!art) waarschuwingen.push("Er is in Logic4 geen artikel voor " + model + " — de fabriekscode is wél herkend, maar het model zelf ontbreekt in de catalogus.");
-    else if (art.viaAndereNaam) waarschuwingen.push(model + " heet in Logic4 \"" + art.viaAndereNaam + "\" — controleer of dat klopt.");
-    else if (!art.zeker) waarschuwingen.push(model + ": kleur \"" + (r.kleur || "") + "\" niet herkend — controleer de artikelcode");
+        (art.beschikbaar && art.beschikbaar.length ? (" - wél in: " + art.beschikbaar.join(", ")) : "") + ".");
+    else if (!art) waarschuwingen.push("Er is in Logic4 geen artikel voor " + model + " - de fabriekscode is wél herkend, maar het model zelf ontbreekt in de catalogus.");
+    else if (art.viaAndereNaam) waarschuwingen.push(model + " heet in Logic4 \"" + art.viaAndereNaam + "\" - controleer of dat klopt.");
+    else if (!art.zeker) waarschuwingen.push(model + ": kleur \"" + (r.kleur || "") + "\" niet herkend - controleer de artikelcode");
     uit.push({
       code: r.code || null, model, kleur: r.kleur || null, skirt: r.skirt || null,
       uitvoering: r.uitvoering || null, klantOrder: r.klantOrder ? String(r.klantOrder).replace(/\D/g, "").slice(0, 12) : null,
@@ -5839,9 +5907,11 @@ async function ikoVoorstel(env, body) {
       productId: (art && !art.meerdere && !art.geenKleur) ? art.productId : null,
       omschrijving: (art && !art.meerdere && !art.geenKleur) ? art.desc : null,
       zeker: (art && !art.meerdere && !art.geenKleur) ? !!art.zeker : false,
+      regelOmschrijving: r.omschrijving || null,
     });
   }
-  if (!crediteur) waarschuwingen.push("Leverancier \"" + (body.leverancier || "") + "\" niet gevonden in Logic4 — kies hem handmatig.");
+  if (nogTeKoppelen) waarschuwingen.push(nogTeKoppelen + " regel(s) nog te koppelen (rood): klik Koppelen en zoek het artikel in Logic4, of vink Overslaan aan.");
+  if (!crediteur) waarschuwingen.push("Leverancier \"" + (body.leverancier || "") + "\" niet gevonden in Logic4 - kies hem handmatig.");
   return {
     ok: true, crediteur, leveranciers: Object.values(crediteuren).map(c => ({ id: c.id, naam: c.naam })).sort((a, b) => a.naam.localeCompare(b.naam)),
     regels: uit, waarschuwingen,
@@ -7098,6 +7168,8 @@ async function spaOntvangstVoorstel(env) {
       // Een container waarvan we alleen de papieren bewaren: tuinmeubelen,
       // sauna's. Zijn inhoud telt nergens mee (Chantal, 14 aug 2026).
       alleenDocumenten: !!s.alleenDocumenten,
+      // Gelezen met de algemene lezer: welke afdeling, en wat erin zit.
+      afdeling: s.afdeling || null, stuks: s.stuks || null, inhoud: s.inhoud || null, containerNrs: s.containerNrs || null,
       // Van de Bill of Lading: het zegel en het vrachtbriefnummer.
       zegel: s.zegel || null, blNo: s.blNo || null,
       trackRef: s.trackRef != null ? s.trackRef : (s.ref || ""),
@@ -11975,7 +12047,7 @@ const PF_SCHEMA = {
     levertijd: { type: "string" }, laadhaven: { type: "string" },
     containers: { type: "array", items: { type: "string" } },
     regels: { type: "array", items: { type: "object", properties: {
-      code: { type: "string" }, omschrijving: { type: "string" }, aantal: { type: "number" },
+      code: { type: "string" }, omschrijving: { type: "string" }, kleur: { type: "string" }, aantal: { type: "number" },
       prijs: { type: "number" }, bedrag: { type: "number" } }, required: ["omschrijving", "aantal"] } },
     totaalAantal: { type: "number" }, totaalBedrag: { type: "number" },
   },
@@ -11989,6 +12061,7 @@ const PF_INSTRUCTIE = [
   "- datum as YYYY-MM-DD. valuta as ISO code (USD, EUR, CNY).",
   "- regels: one entry per ordered product line. code = the supplier's item/model/article number for that line (for example 'WS-PC08T', 'COLYB0000020', 'MB1950(B05)', 'BS-270C'); empty string if the line has none.",
   "  omschrijving = product name plus the essential specification (colour, size, material) in one short line, max 160 characters.",
+  "  kleur = the colour or finish of that line exactly as written (for example 'Sterling White with GREY/oak trim', 'Mystic Mountain', 'Red cedar + salt stone', 'Chinese white acrylic'); empty string if none.",
   "  aantal = quantity of that line, prijs = unit price, bedrag = line amount, all as plain numbers without currency or thousand separators.",
   "- Skip lines that are only headers, subtotals, totals, freight notes, bank details or terms. A product line with an extra option price (like '+USD362') is ONE line with its unit price.",
   "- totaalAantal and totaalBedrag: the totals written on the document itself (not your own sum).",
@@ -12023,7 +12096,7 @@ async function proformaLees(env, tekst, bestandsnaam) {
   const regels = d.regels.map(r => {
     const aantal = pfGetal(r.aantal), prijs = pfGetal(r.prijs), bedrag = pfGetal(r.bedrag);
     const klopt = aantal != null && prijs != null && bedrag != null ? Math.abs(aantal * prijs - bedrag) <= Math.max(0.05, Math.abs(bedrag) * 0.001) : null;
-    return { code: String(r.code || "").trim(), omschrijving: String(r.omschrijving || "").trim().slice(0, 200), aantal, prijs, bedrag, klopt };
+    return { code: String(r.code || "").trim(), omschrijving: String(r.omschrijving || "").trim().slice(0, 200), kleur: String(r.kleur || "").trim().slice(0, 120), aantal, prijs, bedrag, klopt };
   }).filter(r => r.omschrijving || r.code);
   const somBedrag = Math.round(regels.reduce((n, r) => n + (r.bedrag != null ? r.bedrag : (r.aantal || 0) * (r.prijs || 0)), 0) * 100) / 100;
   const somAantal = regels.reduce((n, r) => n + (r.aantal || 0), 0);
@@ -12037,6 +12110,12 @@ async function proformaLees(env, tekst, bestandsnaam) {
     aantal: totaalAantal != null ? { document: totaalAantal, regels: somAantal, klopt: Math.abs(totaalAantal - somAantal) < 0.01 } : null,
     regelsFout: regels.filter(r => r.klopt === false).length,
   };
+  // Wat het model liet liggen, zelf uit de tekst halen.
+  const zoekIn = String(tekst || "");
+  const vind = (res) => { for (const re of res) { const m = zoekIn.match(re); if (m && m[1] && m[1].replace(/[|\s]/g, "").length > 2) return m[1].replace(/\s*\|.*$/, "").trim(); } return ""; };
+  if (!String(d.documentnummer || "").trim()) d.documentnummer = vind([/INVOICE\s*NO\.?\s*[:：]\s*([A-Za-z0-9][\w\-\/\.]*)/i, /P\s*\/?\s*I\s*NO\.?\s*[:：]?\s*([A-Za-z0-9][\w\-\/\.]*)/i, /PI\s*No\.?\s*[:：]?\s*([A-Za-z0-9][\w\-\/\.]*)/i, /Proforma\s*Invoice\s*[:：]\s*([A-Za-z0-9][\w\-\/\.]*)/i]);
+  if (!String(d.levertijd || "").trim()) d.levertijd = vind([/Delivery\s*(?:time|date)\s*[:：]\s*([^\n]{3,80})/i, /LDS\s*\|?\s*([0-9]{1,2}-[0-9]{1,2}-[0-9]{4})/i]);
+  if (!String(d.betaling || "").trim()) d.betaling = vind([/(?:Terms of payment|PAYMENT TERMS?)\s*[:：|]?\s*([^\n]{3,80})/i]);
   return { ok: true, soort: d.soort || "anders", leverancier: String(d.leverancier || "").trim(), documentnummer: String(d.documentnummer || "").trim(),
            datum: String(d.datum || "").trim(), valuta: String(d.valuta || "").trim().toUpperCase(), leveringsvoorwaarde: String(d.leveringsvoorwaarde || "").trim(),
            betaling: String(d.betaling || "").trim(), levertijd: String(d.levertijd || "").trim(), laadhaven: String(d.laadhaven || "").trim(),
@@ -12053,7 +12132,15 @@ async function proformaLees(env, tekst, bestandsnaam) {
 const PF_AFDELINGEN = ["Spa's", "Sauna's", "Tuinmeubelen", "Overig"];
 const PF_STATUS = ["in bestelling", "in productie", "onderweg", "binnen"];
 function pfLevSleutel(n) { return String(n || "").toLowerCase().replace(/\b(co|ltd|limited|b\.?v|llc|inc|import|export|and|&|the)\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim().split(" ").slice(0, 3).join(" "); }
-function pfRegelSleutel(r) { return r.code ? "c:" + String(r.code).toLowerCase().replace(/\s+/g, "") : "o:" + String(r.omschrijving || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 60); }
+/* Met de kleur erbij als die er is: MEXDA zet dezelfde saunacode WS-1101A in
+   red cedar en in aspen op één proforma, en dat zijn twee artikelen. */
+function pfRegelSleutel(r) {
+  const basis = r.code ? "c:" + String(r.code).toLowerCase().replace(/\s+/g, "") : "o:" + String(r.omschrijving || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 60);
+  const kl = String(r.kleur || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 40);
+  return kl ? basis + "|" + kl : basis;
+}
+// Eerst met de kleur, dan zonder (koppelingen van vóór 21 okt 2026).
+function pfKoppelZoek(k, r) { return k[pfRegelSleutel(r)] || k[pfRegelSleutel({ code: r.code, omschrijving: r.omschrijving })] || null; }
 function pfAfdelingRaad(d) {
   const t = (d.leverancier + " " + d.regels.map(r => r.omschrijving).join(" ")).toLowerCase();
   if (/sauna/.test(t) && !/\bspa\b|swim/.test(t)) return "Sauna's";
@@ -12065,7 +12152,7 @@ function pfAfdelingRaad(d) {
 function pfKoppelToepassen(rec, koppel) {
   const k = koppel[pfLevSleutel(rec.leverancier)] || {};
   for (const r of rec.regels) {
-    const g = k[pfRegelSleutel(r)];
+    const g = pfKoppelZoek(k, r);
     if (g && !r.artikelHand) { r.artikel = { code: g.code, naam: g.naam }; r.koppelDoor = g.door; }
   }
   rec.gekoppeld = rec.regels.filter(r => r.artikel).length;
@@ -12075,7 +12162,8 @@ function pfKop(rec) {
   return { id: rec.id, ts: rec.ts, door: rec.door, bestandsnaam: rec.bestandsnaam, soort: rec.soort, afdeling: rec.afdeling, status: rec.status,
            leverancier: rec.leverancier, documentnummer: rec.documentnummer, datum: rec.datum, valuta: rec.valuta, levertijd: rec.levertijd,
            containers: rec.containers, totaal: rec.controle && rec.controle.bedrag ? rec.controle.bedrag.document : rec.regels.reduce((n, r) => n + (r.bedrag || 0), 0),
-           aantal: rec.regels.reduce((n, r) => n + (r.aantal || 0), 0), regels: rec.regels.length, gekoppeld: rec.gekoppeld || 0, klopt: !!(rec.controle && rec.controle.bedrag && rec.controle.bedrag.klopt) };
+           aantal: rec.regels.reduce((n, r) => n + (r.aantal || 0), 0), regels: rec.regels.length, gekoppeld: rec.gekoppeld || 0, klopt: !!(rec.controle && rec.controle.bedrag && rec.controle.bedrag.klopt),
+           inkooporder: rec.inkooporder || null, bron: rec.bron || null };
 }
 async function proformaHandle(request, env, url, wie) {
   const kv = env.FONTEYN_DATA, p = url.pathname;
@@ -12097,19 +12185,54 @@ async function proformaHandle(request, env, url, wie) {
     const b = await request.json().catch(() => ({}));
     const d = b.gelezen || {};
     if (!Array.isArray(d.regels)) return reply(400, { ok: false, error: "eerst lezen" });
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    let archief = null;
+    /* Hetzelfde document nog een keer (zelfde leverancier, nummer en soort):
+       bijwerken in plaats van dubbel. Inkoop naar Logic4 slaat elke gelezen
+       proforma hier ook op, en een proforma wordt soms twee keer ingelezen. */
+    const l0 = await lijst();
+    const zelfdeLev = x => x.soort === d.soort && pfLevSleutel(x.leverancier) === pfLevSleutel(d.leverancier);
+    const dubbel = (l0.items || []).find(x => zelfdeLev(x) && (d.documentnummer ? x.documentnummer === d.documentnummer
+      : (!x.documentnummer && b.bestandsnaam && x.bestandsnaam === String(b.bestandsnaam).slice(0, 160)))) || null;
+    const id = dubbel ? dubbel.id : Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const oudRec = dubbel ? await kv.get("pf:" + id, { type: "json" }) : null;
+    let archief = oudRec && oudRec.archief || null;
     if (b.bestand) {
       const bytes = Uint8Array.from(atob(String(b.bestand).replace(/^data:[^,]*,/, "")), c => c.charCodeAt(0));
       if (bytes.length > 15 * 1024 * 1024) return reply(413, { ok: false, error: "bestand groter dan 15 MB" });
       archief = "proforma/" + id; await bestandZet(env, archief, bytes.buffer);
     }
-    const rec = pfKoppelToepassen({ id, ts: new Date().toISOString(), door: wie, bestandsnaam: String(b.bestandsnaam || "").slice(0, 160), mime: String(b.mime || ""), archief,
-      soort: d.soort, afdeling: PF_AFDELINGEN.includes(b.afdeling) ? b.afdeling : pfAfdelingRaad(d), status: d.soort === "commercial invoice" ? "onderweg" : "in bestelling",
+    const rec = pfKoppelToepassen({ id, ts: oudRec ? oudRec.ts : new Date().toISOString(), door: oudRec ? oudRec.door : wie, bijgewerkt: oudRec ? new Date().toISOString() : null,
+      bestandsnaam: String(b.bestandsnaam || "").slice(0, 160), mime: String(b.mime || ""), archief, bron: b.bron || (oudRec && oudRec.bron) || "proformas",
+      soort: d.soort, afdeling: PF_AFDELINGEN.includes(b.afdeling) ? b.afdeling : (oudRec ? oudRec.afdeling : pfAfdelingRaad(d)),
+      status: oudRec ? oudRec.status : (d.soort === "commercial invoice" ? "onderweg" : "in bestelling"),
+      inkooporder: b.inkooporder ? String(b.inkooporder).slice(0, 20) : (oudRec && oudRec.inkooporder) || null,
       leverancier: d.leverancier, documentnummer: d.documentnummer, datum: d.datum, valuta: d.valuta, leveringsvoorwaarde: d.leveringsvoorwaarde,
       betaling: d.betaling, levertijd: d.levertijd, laadhaven: d.laadhaven, containers: d.containers || [], controle: d.controle || null,
-      regels: d.regels.map(r => ({ code: r.code || "", omschrijving: r.omschrijving || "", aantal: r.aantal, prijs: r.prijs, bedrag: r.bedrag })) },
+      regels: d.regels.map(r => ({ code: r.code || "", omschrijving: r.omschrijving || "", kleur: r.kleur || "", aantal: r.aantal, prijs: r.prijs, bedrag: r.bedrag })) },
       (await kv.get("pf-koppel", { type: "json" })) || {});
+    /* Vanuit Inkoop naar Logic4: de artikelen waarmee de inkooporder is
+       gemaakt, staan meteen gekoppeld (spa's vindt het Dashboard op model en
+       kleur, die komen dus nooit in de koppelingen). */
+    if (Array.isArray(b.artikelen)) {
+      const per = {};
+      for (const a of b.artikelen) if (a && a.artikelcode) per[pfRegelSleutel({ code: a.code || "", omschrijving: a.omschrijving || "", kleur: a.kleur || "" })] = { code: String(a.artikelcode), naam: String(a.naam || "").slice(0, 160) };
+      for (const r of rec.regels) { const a = pfKoppelZoek(per, r); if (a && !r.artikel) r.artikel = a; }
+      rec.gekoppeld = rec.regels.filter(r => r.artikel).length;
+    }
+    /* Voorstel: een regel met een fabriekscode die Logic4 zelf al kent (bij het
+       artikel staat de code van de leverancier), krijgt dat artikel als voorstel.
+       Alleen bij precies één treffer; de gebruiker zet het met één klik vast. */
+    try {
+      const token = await l4Token(env);
+      const codes = [...new Set(rec.regels.filter(r => !r.artikel && r.code && r.code.length >= 3).map(r => r.code))].slice(0, 25);
+      const gevonden = {};
+      for (const c of codes) {
+        const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ FastSearchText: c, TakeRecords: 5 }) });
+        const j = await r.json().catch(() => null);
+        const l = (Array.isArray(j) ? j : ((j && (j.Records || j.Products)) || [])).filter(x => Number(x.StatusId) !== CAT_VERVALLEN);
+        if (l.length === 1) gevonden[c] = { code: String(l[0].ProductCode || ""), naam: String(l[0].ProductName1 || "") };
+      }
+      for (const r of rec.regels) if (!r.artikel && gevonden[r.code]) r.voorstel = gevonden[r.code];
+    } catch (e) {}
     await kv.put("pf:" + id, JSON.stringify(rec));
     const l = await lijst(); l.items = [pfKop(rec), ...(l.items || []).filter(x => x.id !== id)]; await kv.put("pf-lijst", JSON.stringify(l));
     try { await actSchrijf(env, "dashboard", rec.ts.slice(0, 7), { ts: rec.ts, user: wie, tile: "proformas", action: "opgeslagen", detail: (rec.soort || "") + " " + (rec.leverancier || "") + " " + (rec.documentnummer || ""), wijziging: true }); } catch (e) {}
@@ -12153,6 +12276,16 @@ async function proformaHandle(request, env, url, wie) {
     }
     await kv.put("pf-lijst", JSON.stringify(l));
     return reply(200, { ok: true, item: pfKoppelToepassen(rec, koppel) });
+  }
+  if (p === "/proforma/koppel-los" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    if (!b.leverancier || !(b.code || b.omschrijving) || !(b.artikel && b.artikel.code)) return reply(400, { ok: false, error: "leverancier, code en artikel zijn nodig" });
+    const koppel = (await kv.get("pf-koppel", { type: "json" })) || {};
+    const ls = pfLevSleutel(b.leverancier), rs = pfRegelSleutel({ code: b.code || "", omschrijving: b.omschrijving || "", kleur: b.kleur || "" });
+    koppel[ls] = koppel[ls] || {};
+    koppel[ls][rs] = { code: String(b.artikel.code), naam: String(b.artikel.naam || "").slice(0, 160), door: wie, ts: new Date().toISOString() };
+    await kv.put("pf-koppel", JSON.stringify(koppel));
+    return reply(200, { ok: true });
   }
   if (p === "/proforma/zoek" && request.method === "GET") {
     const q = String(url.searchParams.get("q") || "").trim();

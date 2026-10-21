@@ -609,7 +609,18 @@
     }
     /* Duidelijk maken dat hier bewust geen voorraad achter zit. Zonder dit
        lijkt het op een spa-container waarvan het inlezen is mislukt. */
-    if (s.alleenDocumenten) {
+    if (s.alleenDocumenten && s.afdeling) {
+      links.appendChild(el("div", "so-meta klein",
+        s.afdeling + (s.stuks ? ", " + s.stuks + " stuks" : "") +
+        ((s.containerNrs || []).length > 1 ? ", containers " + s.containerNrs.join(", ") : "") +
+        ". Te volgen hier; de inhoud staat buiten de spa-voorraad."));
+      if ((s.inhoud || []).length) {
+        var inh = el("details", "so-meta klein");
+        inh.appendChild(el("summary", "", "Wat erin zit"));
+        s.inhoud.forEach(function (x) { inh.appendChild(el("div", "", x.aantal + "x " + x.omschrijving)); });
+        links.appendChild(inh);
+      }
+    } else if (s.alleenDocumenten) {
       links.appendChild(el("div", "so-meta klein",
         "Alleen de papieren. Deze invoice bevat 0 spa's - tuinmeubelen en sauna's " +
         "staan hier bewust buiten de voorraad."));
