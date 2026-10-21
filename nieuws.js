@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-21", bestand: "bakwagen.html", soort: "beter",
+      titel: "Ritten zelf aanpassen en omruilen",
+      wat:   "Bij Ritten klaarzetten pas je een rit nu zelf aan: een stop toevoegen met het ordernummer, een stop eruit halen of verschuiven, de chauffeursinfo aanpassen en per order een artikel weghalen (handig bij een nalevering). Alles is terug te zetten. Bij het afmelden staat er een derde keuze, Omruiling: dan tekent de klant twee keer, voor wat hij krijgt en voor wat mee terug gaat."
+    },
+    {
       datum: "2026-10-21", bestand: "voorraad.html", soort: "beter",
       titel: "Invoice 3389: Still, New Lagoon en IntelliSaver",
       wat:   "PP04 (Still) en SKT888Z (New Lagoon) worden nu herkend. Een nieuw nummer in een bekende reeks, zoals SKT339G19, staat bij de nog te herkennen codes in plaats van als een ander model. Bij een zending zie je per model hoeveel er met IntelliSaver komen. Gdansk Express staat weer bij onderweg, met ETA 24 oktober."

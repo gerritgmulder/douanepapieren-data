@@ -17188,6 +17188,11 @@ async function bwDb(env) {
     ]);
     /* Wie er op de flexwagen reed (Gerrit, 17 okt 2026); kolom erbij in een bestaande tabel. */
     try { await db.prepare("ALTER TABLE bakwagen_akkoord ADD COLUMN bestuurder TEXT").run(); } catch (e) { /* bestaat al */ }
+    /* Manon (21 okt 2026): stops weg en erbij, chauffeursinfo aanpassen,
+       artikelen weg per order, en bij een omruiling twee handtekeningen. De
+       rit in Logic4 blijft zoals hij is; dit ligt er als laag overheen. */
+    await db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_aanpas (rit TEXT PRIMARY KEY, json TEXT, door TEXT, ts INTEGER)").run();
+    try { await db.prepare("ALTER TABLE bakwagen_af ADD COLUMN hand2 TEXT").run(); } catch (e) { /* bestaat al */ }
     _bwTabellen = true;
   }
   return db;
@@ -17228,14 +17233,51 @@ async function bwLogic4(env) {
     const j = await r.json(); return Array.isArray(j) ? j : (j && j.Records) || [];
   };
 }
+/* De aanpassingen van de planning per rit (bakwagen_aanpas). */
+async function bwAanpasLees(db, ritIds) {
+  const uit = {};
+  if (!ritIds.length) return uit;
+  const rs = await db.prepare("SELECT rit, json FROM bakwagen_aanpas WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
+  for (const x of rs.results || []) { try { uit[x.rit] = JSON.parse(x.json) || {}; } catch (e) {} }
+  return uit;
+}
+function bwAanpasIets(ap) { return !!ap && !!((ap.weg || []).length || (ap.erbij || []).length || (ap.volgorde || []).length || Object.keys(ap.info || {}).length || Object.keys(ap.artikelWeg || {}).length); }
+function bwAanpasLeeg() { return { weg: [], erbij: [], volgorde: [], info: {}, artikelWeg: {} }; }
+// Een artikel herkennen: code en naam, met een min ervoor als het retour komt.
+function bwArtikelSleutel(a) { return (Number(a.aantal) < 0 ? "-" : "") + String(a.code || "") + "|" + String(a.naam || "").slice(0, 80); }
+/* Artikelen weghalen. Een set gaat met zijn onderdelen (de regels met deel
+   die er direct onder staan). */
+function bwArtikelenFilter(artikelen, weg) {
+  const w = new Set(weg || []), blijf = [], eruit = [];
+  let setWeg = false;
+  for (const a of artikelen || []) {
+    const deel = !!a.deel || /^\*\s*/.test(a.naam || "");
+    if (!deel) setWeg = w.has(bwArtikelSleutel(a));
+    const ditWeg = w.has(bwArtikelSleutel(a)) || (deel && setWeg);
+    (ditWeg ? eruit : blijf).push(Object.assign({ sleutel: bwArtikelSleutel(a) }, a, ditWeg ? { zelf: w.has(bwArtikelSleutel(a)) } : {}));
+  }
+  return { blijf, eruit };
+}
 /* De stops van een paar ritten, met de orders erbij (uit D1 of vers uit Logic4). */
 async function bwStops(env, db, l4, ritten) {
+  const aanpas = await bwAanpasLees(db, ritten.map(r => r.id));
   for (const r of ritten) {
-    const regels = (await l4("/v3/Round/GetRoundOrders", { RoundId: Number(r.id), TakeRecords: 100 })).filter(x => x.OrderId);
+    let regels = (await l4("/v3/Round/GetRoundOrders", { RoundId: Number(r.id), TakeRecords: 100 })).filter(x => x.OrderId);
     regels.sort((a, b) => (Number(a.Sorting) || 0) - (Number(b.Sorting) || 0) || a.Id - b.Id);
+    const ap = Object.assign(bwAanpasLeeg(), aanpas[r.id] || {});
+    r.aanpas = ap;
+    const weg = new Set(ap.weg.map(String));
+    r.wegStops = regels.filter(x => weg.has(String(x.OrderId))).map(x => String(x.OrderId));
+    regels = regels.filter(x => !weg.has(String(x.OrderId)));
+    const al = new Set(regels.map(x => String(x.OrderId)));
+    for (const o of ap.erbij.map(String)) if (!al.has(o) && !weg.has(o)) { regels.push({ OrderId: o, Id: "erbij-" + o, Remarks: "", erbij: true }); al.add(o); }
+    if (ap.volgorde.length) {
+      const plek = {}; ap.volgorde.forEach((o, i) => { plek[String(o)] = i; });
+      regels = regels.map((x, i) => ({ x, i })).sort((a, b) => ((plek[String(a.x.OrderId)] ?? 1e6 + a.i) - (plek[String(b.x.OrderId)] ?? 1e6 + b.i))).map(y => y.x);
+    }
     r.regels = regels;
   }
-  const ids = [...new Set(ritten.flatMap(r => r.regels.map(x => String(x.OrderId))))];
+  const ids = [...new Set(ritten.flatMap(r => r.regels.map(x => String(x.OrderId)).concat(r.wegStops || [])))];
   const bewaard = {};
   for (let i = 0; i < ids.length; i += 90) {
     const stuk = ids.slice(i, i + 90);
@@ -17270,8 +17312,8 @@ async function bwStops(env, db, l4, ritten) {
   const af = {};
   const ritIds = ritten.map(r => r.id);
   if (ritIds.length) {
-    const rs = await db.prepare("SELECT rit, orderid, soort, naam, opmerking, chauffeur, door, ts, length(hand) AS hl FROM bakwagen_af WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
-    for (const x of rs.results || []) af[x.rit + ":" + x.orderid] = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, door: x.door, ts: x.ts, getekend: Number(x.hl) > 0 };
+    const rs = await db.prepare("SELECT rit, orderid, soort, naam, opmerking, chauffeur, door, ts, length(hand) AS hl, length(hand2) AS hl2 FROM bakwagen_af WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
+    for (const x of rs.results || []) af[x.rit + ":" + x.orderid] = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, door: x.door, ts: x.ts, getekend: Number(x.hl) > 0, getekend2: Number(x.hl2) > 0 };
   }
   const fotos = {};
   if (ritIds.length) {
@@ -17279,9 +17321,19 @@ async function bwStops(env, db, l4, ritten) {
     for (const x of rs.results || []) (fotos[x.rit + ":" + x.orderid] = fotos[x.rit + ":" + x.orderid] || []).push({ id: x.id, ts: x.ts, door: x.door, chauffeur: x.chauffeur });
   }
   for (const r of ritten) {
-    r.stops = r.regels.map(x => Object.assign({ regel: String(x.Id), opmerkingRit: String(x.Remarks || "").trim(), af: af[r.id + ":" + x.OrderId] || null, fotos: fotos[r.id + ":" + x.OrderId] || [] },
-      (bewaard[String(x.OrderId)] || {}).o || { order: String(x.OrderId), laden: true }));
-    delete r.regels;
+    const ap = r.aanpas || bwAanpasLeeg();
+    r.stops = r.regels.map(x => {
+      const s = Object.assign({ regel: String(x.Id), opmerkingRit: String(x.Remarks || "").trim(), af: af[r.id + ":" + x.OrderId] || null, fotos: fotos[r.id + ":" + x.OrderId] || [] },
+        (bewaard[String(x.OrderId)] || {}).o || { order: String(x.OrderId), laden: true });
+      if (x.erbij) s.toegevoegd = true;
+      // Chauffeursinfo die de planning zelf heeft aangepast, wint van Logic4.
+      const inf = ap.info[s.order];
+      if (inf) { s.infoLogic4 = [s.opmerkingRit, s.notities].filter(Boolean).join("\n\n"); s.infoAangepast = inf; }
+      if (Array.isArray(s.artikelen)) { const f = bwArtikelenFilter(s.artikelen, ap.artikelWeg[s.order]); s.artikelen = f.blijf; s.artikelenWeg = f.eruit; }
+      return s;
+    });
+    r.wegStops = (r.wegStops || []).map(o => ({ order: o, klant: ((bewaard[o] || {}).o || {}).klant || "", plaats: ((bewaard[o] || {}).o || {}).plaats || "" }));
+    delete r.regels; delete r.aanpas;
   }
   return bezig;
 }
@@ -17295,9 +17347,17 @@ async function bakwagenOverzicht(env) {
   const ak = {};
   const rs = await db.prepare("SELECT rit, chauffeur, bestuurder, door, ts FROM bakwagen_akkoord WHERE datum >= ?1").bind(vandaag).all();
   for (const x of rs.results || []) ak[x.rit] = { chauffeur: x.chauffeur, bestuurder: x.bestuurder || "", door: x.door, ts: x.ts };
+  const aanpas = await bwAanpasLees(db, rondes.map(r => String(r.Id)));
+  const aantalVan = (r) => {
+    const ap = aanpas[String(r.Id)]; const ids = new Set((r.OrderIds || []).map(String));
+    if (!ap) return ids.size;
+    for (const o of ap.weg || []) ids.delete(String(o));
+    for (const o of ap.erbij || []) ids.add(String(o));
+    return ids.size;
+  };
   const ritten = rondes.map(r => ({ id: String(r.Id), naam: String(r.Description || "").trim(), datum: String(r.DateTimePlanned).slice(0, 10),
     soort: Number(r.TypeId) === 2 ? "retour" : "levering", chauffeur: (ak[String(r.Id)] || {}).chauffeur || bwChauffeur(r.Description),
-    aantal: (r.OrderIds || []).length, akkoord: ak[String(r.Id)] || null }))
+    aantal: aantalVan(r), aangepast: bwAanpasIets(aanpas[String(r.Id)]), akkoord: ak[String(r.Id)] || null }))
     .sort((a, b) => a.datum.localeCompare(b.datum) || a.naam.localeCompare(b.naam));
   return { ok: true, vandaag, chauffeurs: BW_CHAUFFEURS.map(c => c.naam), ritten };
 }
@@ -17325,6 +17385,49 @@ async function bakwagenAkkoord(env, wie, b) {
   await db.prepare("INSERT OR REPLACE INTO bakwagen_akkoord (rit, chauffeur, datum, naam, soort, memo, door, ts, bestuurder) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
     .bind(id, chauffeur, r.datum, r.naam, r.soort, r.memo || "", wie, Date.now(), bestuurder).run();
   return { ok: true, akkoord: { chauffeur, bestuurder, door: wie, ts: Date.now() } };
+}
+/* De planning past een rit aan (Manon, 21 okt 2026). Alles hier ligt over
+   de rit uit Logic4 heen; in Logic4 zelf verandert er niets.
+   weg / terug        een stop eruit, of weer erin
+   erbij              een order als stop erbij (achteraan)
+   volgorde           de volgorde van de stops (lijst met ordernummers)
+   info               de chauffeursinfo van een stop zelf schrijven (leeg = weer die uit Logic4)
+   artikelWeg / -Terug een artikel van een stop eruit, of weer erin */
+async function bakwagenAanpas(env, wie, b) {
+  const rit = String(b.rit || "").replace(/\D/g, ""), order = String(b.order || "").replace(/\D/g, "");
+  if (!rit) return { ok: false, error: "rit is nodig" };
+  const db = await bwDb(env);
+  const r = await db.prepare("SELECT id FROM bakwagen_rit WHERE id = ?1").bind(rit).first();
+  if (!r) return { ok: false, error: "Druk eerst op Ritten ophalen." };
+  const ap = Object.assign(bwAanpasLeeg(), (await bwAanpasLees(db, [rit]))[rit] || {});
+  const zonder = (l, x) => l.filter(y => String(y) !== String(x));
+  const a = String(b.actie || "");
+  if (a !== "volgorde" && !order) return { ok: false, error: "order is nodig" };
+  if (a === "weg") { if (ap.erbij.map(String).includes(order)) ap.erbij = zonder(ap.erbij, order); else if (!ap.weg.map(String).includes(order)) ap.weg.push(order); }
+  else if (a === "terug") ap.weg = zonder(ap.weg, order);
+  else if (a === "erbij") {
+    // Bestaat de order? Eerst wat we al kennen, anders Logic4.
+    const bekend = await db.prepare("SELECT id FROM bakwagen_order WHERE id = ?1").bind(order).first();
+    if (!bekend) {
+      const l4 = await bwLogic4(env);
+      const o = (await l4("/v3/Orders/GetOrders", { Id: Number(order), TakeRecords: 1 }).catch(() => null) || [])[0];
+      if (!o) return { ok: false, error: "Order " + order + " is in Logic4 als open order nog onvindbaar. Controleer het nummer." };
+      await db.prepare("INSERT OR REPLACE INTO bakwagen_order (id, json, ts) VALUES (?1, ?2, ?3)").bind(order, JSON.stringify(bwOrderKort(o, null)), Date.now()).run();
+    }
+    ap.weg = zonder(ap.weg, order);
+    if (!ap.erbij.map(String).includes(order)) ap.erbij.push(order);
+  }
+  else if (a === "volgorde") ap.volgorde = (Array.isArray(b.orders) ? b.orders : []).map(x => String(x).replace(/\D/g, "")).filter(Boolean).slice(0, 150);
+  else if (a === "info") { const t = String(b.tekst || "").trim().slice(0, 2000); if (t) ap.info[order] = t; else delete ap.info[order]; }
+  else if (a === "artikelWeg" || a === "artikelTerug") {
+    const k = String(b.sleutel || "").slice(0, 200); if (!k) return { ok: false, error: "welk artikel?" };
+    const l = (ap.artikelWeg[order] || []).filter(x => x !== k);
+    if (a === "artikelWeg") l.push(k);
+    if (l.length) ap.artikelWeg[order] = l; else delete ap.artikelWeg[order];
+  }
+  else return { ok: false, error: "onbekende aanpassing" };
+  await db.prepare("INSERT OR REPLACE INTO bakwagen_aanpas (rit, json, door, ts) VALUES (?1, ?2, ?3, ?4)").bind(rit, JSON.stringify(ap), wie, Date.now()).run();
+  return { ok: true };
 }
 /* 3. De chauffeur: zijn goedgekeurde ritten van vandaag (de planning kan
    ook "Alle" of een andere dag bekijken). */
@@ -17367,19 +17470,22 @@ async function bakwagenAfmelden(env, wie, planner, b) {
   if (!rit || !order) return { ok: false, error: "rit en order zijn nodig" };
   const db = await bwDb(env);
   if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
-  const soort = b.soort === "retour" ? "retour" : "levering";
-  const hand = String(b.hand || "");
-  if (hand && (!hand.startsWith("data:image/png;base64,") || hand.length > 400000)) return { ok: false, error: "handtekening te groot" };
+  /* Omruiling: er gaat iets heen en er komt iets terug, dus twee
+     handtekeningen (Manon, 21 okt 2026). hand = ontvangst, hand2 = retour. */
+  const soort = b.soort === "retour" ? "retour" : b.soort === "omruiling" ? "omruiling" : "levering";
+  const hand = String(b.hand || ""), hand2 = soort === "omruiling" ? String(b.hand2 || "") : "";
+  for (const h of [hand, hand2]) if (h && (!h.startsWith("data:image/png;base64,") || h.length > 400000)) return { ok: false, error: "handtekening te groot" };
+  if (soort === "omruiling" && (!hand || !hand2)) return { ok: false, error: "Bij een omruiling horen twee handtekeningen." };
   const naam = String(b.naam || "").slice(0, 120), opmerking = String(b.opmerking || "").slice(0, 2000);
   const chauffeur = await bwWieReed(db, wie, rit, b.chauffeur), ts = Date.now();
-  await db.prepare("INSERT OR REPLACE INTO bakwagen_af (rit, orderid, soort, naam, opmerking, chauffeur, door, ts, hand) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
-    .bind(rit, order, soort, naam, opmerking, chauffeur, wie, ts, hand).run();
+  await db.prepare("INSERT OR REPLACE INTO bakwagen_af (rit, orderid, soort, naam, opmerking, chauffeur, door, ts, hand, hand2) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)")
+    .bind(rit, order, soort, naam, opmerking, chauffeur, wie, ts, hand, hand2).run();
   if (opmerking.trim()) {
     const d = await berichtenLees(env);
     const klant = String(b.klant || "").slice(0, 80);
     if (berichtErbij(d, { id: "bakwagen-opm:" + rit + ":" + order + ":" + ts, aan: BW_MANON, soort: "bakwagen-opm", ref: { rit, order },
         titel: "Opmerking van " + (chauffeur || "de chauffeur") + " bij order " + order + (klant ? " (" + klant + ")" : ""),
-        tekst: (soort === "retour" ? "Bij het retour ophalen: " : "Bij de levering: ") + opmerking.trim() })) {
+        tekst: (soort === "retour" ? "Bij het retour ophalen: " : soort === "omruiling" ? "Bij de omruiling: " : "Bij de levering: ") + opmerking.trim() })) {
       berichtenOpruimen(d);
       await env.FONTEYN_DATA.put(BERICHTEN_KEY, JSON.stringify(d));
     }
@@ -17421,7 +17527,7 @@ async function bakwagenZoek(env, q) {
   const db = await bwDb(env);
   q = String(q || "").trim().toLowerCase().slice(0, 60);
   const woorden = q.split(/\s+/).filter(Boolean);
-  const af = (await db.prepare("SELECT a.rit, a.orderid, a.soort, a.naam, a.opmerking, a.chauffeur, a.ts, length(a.hand) AS hl, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_af a LEFT JOIN bakwagen_rit r ON r.id = a.rit LEFT JOIN bakwagen_order o ON o.id = a.orderid ORDER BY a.ts DESC LIMIT 2000").all()).results || [];
+  const af = (await db.prepare("SELECT a.rit, a.orderid, a.soort, a.naam, a.opmerking, a.chauffeur, a.ts, length(a.hand) AS hl, length(a.hand2) AS hl2, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_af a LEFT JOIN bakwagen_rit r ON r.id = a.rit LEFT JOIN bakwagen_order o ON o.id = a.orderid ORDER BY a.ts DESC LIMIT 2000").all()).results || [];
   const ft = (await db.prepare("SELECT f.id, f.rit, f.orderid, f.chauffeur, f.ts, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_foto f LEFT JOIN bakwagen_rit r ON r.id = f.rit LEFT JOIN bakwagen_order o ON o.id = f.orderid ORDER BY f.ts DESC LIMIT 3000").all()).results || [];
   const per = new Map();
   const stop = (x) => {
@@ -17432,7 +17538,7 @@ async function bakwagenZoek(env, q) {
     }
     return per.get(k);
   };
-  for (const x of af) stop(x).af = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, ts: x.ts, getekend: Number(x.hl) > 0 };
+  for (const x of af) stop(x).af = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, ts: x.ts, getekend: Number(x.hl) > 0, getekend2: Number(x.hl2) > 0 };
   for (const x of ft) stop(x).fotos.push({ id: x.id, ts: x.ts, chauffeur: x.chauffeur });
   let lijst = [...per.values()];
   if (woorden.length) lijst = lijst.filter(s => { const t = [s.order, s.klant, s.plaats, s.ritnaam, s.datum, s.datum.split("-").reverse().join("-"), s.af && s.af.chauffeur, s.af && s.af.naam, s.af && s.af.opmerking, ...s.fotos.map(f => f.chauffeur)].join(" ").toLowerCase(); return woorden.every(w => t.includes(w)); });
@@ -17443,8 +17549,8 @@ async function bakwagenHandtekening(env, wie, planner, rit, order) {
   const db = await bwDb(env);
   rit = String(rit || ""); order = String(order || "");
   if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
-  const x = await db.prepare("SELECT hand FROM bakwagen_af WHERE rit = ?1 AND orderid = ?2").bind(rit, order).first();
-  return { ok: true, hand: x ? x.hand : "" };
+  const x = await db.prepare("SELECT hand, hand2 FROM bakwagen_af WHERE rit = ?1 AND orderid = ?2").bind(rit, order).first();
+  return { ok: true, hand: x ? x.hand : "", hand2: x ? (x.hand2 || "") : "" };
 }
 
 /* ═══ ORDER PICKEN ════════════════════════════════════════════════════════
@@ -20286,6 +20392,8 @@ const FP_WORKER = {
           return planner ? reply(200, await bakwagenRit(env, url.searchParams.get("id"))) : alleenPlanner();
         if (url.pathname === "/bakwagen/akkoord" && request.method === "POST")
           return planner ? reply(200, await bakwagenAkkoord(env, wie, await request.json().catch(() => ({})))) : alleenPlanner();
+        if (url.pathname === "/bakwagen/aanpas" && request.method === "POST")
+          return planner ? reply(200, await bakwagenAanpas(env, wie, await request.json().catch(() => ({})))) : alleenPlanner();
         if (url.pathname === "/bakwagen/mijn" && request.method === "GET") {
           // Een chauffeur ziet alleen zijn eigen ritten; de planning mag iedereen bekijken.
           const ik = bwChauffeurVanInlog(wie);

@@ -151,6 +151,20 @@ main{margin:14px auto;padding:0 14px 60px}
 .treffer small{color:var(--grijs)}
 .treffer .opm{margin-top:6px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 9px;font-size:14px}
 .treffer .handimg{display:block;max-width:360px;width:100%;margin-top:8px;border:1px solid var(--rand);border-radius:8px;background:#fff}
+.bewerkknop{background:#fff;border:1px solid var(--rand);border-radius:8px;padding:4px 9px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink);line-height:1.2}
+.bewerkknop.rood{color:var(--rood);border-color:#fca5a5}
+.stopknoppen{display:flex;gap:4px;flex:0 0 auto}
+.paklijst li .weg{margin-left:auto;flex:0 0 auto;border:1px solid #fca5a5;color:var(--rood);background:#fff;border-radius:7px;width:28px;height:28px;font-size:15px;line-height:1;cursor:pointer}
+.weglijst{margin-top:6px;font-size:13px;color:var(--grijs)}
+.weglijst div{display:flex;gap:8px;align-items:center;padding:3px 0}
+.weglijst s{flex:1;min-width:0}
+.pil.aangepast{background:#ede9fe;color:#6d28d9}
+.pil.omruil{background:#fef3c7;color:#92400e}
+.ritextra{margin-top:10px;padding:10px 12px;border:1px dashed #cbd5e1;border-radius:12px;background:#fff}
+.ritextra h4{margin:0 0 6px;font-size:13.5px;color:var(--groen)}
+.ritextra .rij{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ritextra input{flex:1 1 160px;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:9px}
+.infobewerk textarea{width:100%;min-height:80px;border:1px solid #cbd5e1;border-radius:9px;padding:8px 10px;font:inherit;font-size:14.5px}
 @media (max-width:600px){ main{padding:0 8px 60px} .stops{grid-template-columns:1fr} }
 </style>
 </head>
@@ -258,7 +272,7 @@ function tekenPlanning(){
 }
 function ritRij(r, wagen){
   var pil = r.akkoord ? '<span class="pil goed">✓ Klaar voor '+esc(chauffeurNaam(r.akkoord.chauffeur))+(r.akkoord.bestuurder ? ' · '+esc(r.akkoord.bestuurder) : '')+'</span>' : '<span class="pil wacht">Te controleren</span>';
-  return '<div class="ritrij'+(openRit===r.id?' open':'')+'"><div class="r1" data-rit="'+esc(r.id)+'"><b>'+esc(wagen)+'</b><small>'+esc(r.naam)+' · '+(r.soort==="retour"?"retour ophalen":"levering")+' · '+r.aantal+' order'+(r.aantal===1?'':'s')+'</small>'+pil+'</div>' +
+  return '<div class="ritrij'+(openRit===r.id?' open':'')+'"><div class="r1" data-rit="'+esc(r.id)+'"><b>'+esc(wagen)+'</b><small>'+esc(r.naam)+' · '+(r.soort==="retour"?"retour ophalen":"levering")+' · '+r.aantal+' order'+(r.aantal===1?'':'s')+'</small>'+(r.aangepast ? '<span class="pil aangepast">aangepast</span>' : '')+pil+'</div>' +
     (openRit === r.id ? '<div class="ritdetail" id="detail">'+detailHtml(r)+'</div>' : '') + '</div>';
 }
 async function ophalen(){
@@ -280,7 +294,12 @@ function detailHtml(r){
   if (!d) return '<p class="leeg">De stops worden opgehaald…</p>';
   if (d.fout) return '<div class="fout">'+esc(d.fout)+'</div>';
   var h = (d.memo ? '<div class="ritmemo" style="border-radius:10px;border-top:1px solid #fde68a;margin-bottom:8px">'+esc(d.memo)+'</div>' : '') +
-    '<div class="stops" style="padding-top:0">' + d.stops.map(function(s, i){ return stopHtml(d, s, i, { alleenKijken: true, altijdOpen: true }); }).join("") + '</div>';
+    '<div class="stops" style="padding-top:0">' + d.stops.map(function(s, i){ return stopHtml(d, s, i, { alleenKijken: true, altijdOpen: true, bewerk: true }); }).join("") + '</div>' +
+    /* De rit aanpassen zonder Logic4 (Manon, 21 okt 2026): een stop erbij of
+       eruit. De rit in Logic4 blijft zoals hij is. */
+    '<div class="ritextra"><h4>Stop toevoegen</h4><div class="rij"><input type="text" inputmode="numeric" id="erbijOrder" placeholder="Ordernummer uit Logic4"><button type="button" class="bewerkknop" style="padding:9px 14px" id="erbijKnop">Toevoegen</button></div>' +
+    '<div class="melding" id="aanpasMelding"></div>' +
+    ((d.wegStops || []).length ? '<div class="weglijst" style="margin-top:10px"><b>Uit deze rit gehaald:</b>' + d.wegStops.map(function(w){ return '<div><s>'+esc((w.klant ? w.klant + " · " : "") + "order " + w.order + (w.plaats ? " · " + w.plaats : ""))+'</s><button type="button" class="bewerkknop" data-stopterug="'+esc(w.order)+'">Terugzetten</button></div>'; }).join("") + '</div>' : '') + '</div>';
   var keuze = (r.akkoord && r.akkoord.chauffeur) || r.chauffeur || "";
   h += '<div class="akkoordbalk"><span style="font-weight:700;color:var(--groen)">Chauffeur</span><select id="akChauffeur"><option value="">kies…</option>' +
     CHAUFFEURS.map(function(n){ return '<option value="'+n+'"'+(n===keuze?' selected':'')+'>'+esc(chauffeurNaam(n))+'</option>'; }).join("") + '</select>' +
@@ -291,7 +310,51 @@ function detailHtml(r){
     '<span class="melding" id="akMelding"></span></div>';
   return h;
 }
+var infoBewerk = {};
+async function aanpas(b){
+  var m = $("aanpasMelding");
+  try {
+    var j = await lees("/bakwagen/aanpas", { method: "POST", body: JSON.stringify(Object.assign({ rit: openRit }, b)) });
+    if (!j.ok) throw new Error(j.error || "onbekend");
+    try{ if (window.fpLog) window.fpLog("bakwagen-aangepast", "rit " + openRit + ": " + b.actie + (b.order ? " order " + b.order : "")); }catch(e){}
+    dagData = null; var r = overzicht && overzicht.ritten.find(function(x){ return x.id === openRit; }); if (r) r.aangepast = true;
+    if (r && b.actie === "weg") r.aantal = Math.max(0, r.aantal - 1); if (r && (b.actie === "terug" || b.actie === "erbij")) r.aantal++;
+    await laadRit(openRit, 0);
+    return true;
+  } catch(e) { if (m) { m.className = "melding slecht"; m.textContent = "Aanpassen vraagt nog een poging: " + e.message; } return false; }
+}
+function koppelBewerk(d){
+  var rit = ritDetail[openRit]; if (!rit || !rit.stops) return;
+  var orders = rit.stops.map(function(s){ return s.order; });
+  d.querySelectorAll("[data-stopweg]").forEach(function(b){ b.addEventListener("click", async function(){
+    var s = rit.stops.find(function(x){ return x.order === b.dataset.stopweg; });
+    if (!(await fpBevestig("Stop "+(s && s.klant ? s.klant+" (order "+s.order+")" : "order "+b.dataset.stopweg)+" uit deze rit halen? Je kunt hem daarna weer terugzetten.", { knop: "Uit de rit halen" }))) return;
+    aanpas({ actie: "weg", order: b.dataset.stopweg });
+  }); });
+  d.querySelectorAll("[data-stopterug]").forEach(function(b){ b.addEventListener("click", function(){ aanpas({ actie: "terug", order: b.dataset.stopterug }); }); });
+  d.querySelectorAll("[data-op],[data-neer]").forEach(function(b){ b.addEventListener("click", function(){
+    var o = b.dataset.op || b.dataset.neer, i = orders.indexOf(o), j = b.dataset.op ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= orders.length) return;
+    var l = orders.slice(); l[i] = l[j]; l[j] = o; aanpas({ actie: "volgorde", orders: l });
+  }); });
+  var ek = $("erbijKnop"), eo = $("erbijOrder");
+  if (ek) { var voegToe = async function(){ var o = (eo.value || "").replace(/\D/g, ""); if (!o) { eo.focus(); return; } ek.disabled = true; ek.textContent = "Bezig…"; if (await aanpas({ actie: "erbij", order: o })) eo.value = ""; ek.disabled = false; ek.textContent = "Toevoegen"; };
+    ek.addEventListener("click", voegToe); eo.addEventListener("keydown", function(e){ if (e.key === "Enter") voegToe(); }); }
+  d.querySelectorAll("[data-infoopen]").forEach(function(b){ b.addEventListener("click", function(){ infoBewerk[b.dataset.infoopen] = true; tekenPlanning(); var t = d.ownerDocument.querySelector('[data-infotekst="'+b.dataset.infoopen.split(":")[1]+'"]'); if (t) t.focus(); }); });
+  d.querySelectorAll("[data-infostop]").forEach(function(b){ b.addEventListener("click", function(){ delete infoBewerk[b.dataset.infostop]; tekenPlanning(); }); });
+  d.querySelectorAll("[data-infobewaar]").forEach(function(b){ b.addEventListener("click", async function(){
+    var o = b.dataset.infobewaar, t = d.querySelector('[data-infotekst="'+o+'"]'); b.disabled = true;
+    if (await aanpas({ actie: "info", order: o, tekst: t ? t.value : "" })) delete infoBewerk[openRit+":"+o];
+    tekenPlanning();
+  }); });
+  d.querySelectorAll("[data-inforeset]").forEach(function(b){ b.addEventListener("click", async function(){
+    var o = b.dataset.inforeset; if (await aanpas({ actie: "info", order: o, tekst: "" })) delete infoBewerk[openRit+":"+o]; tekenPlanning();
+  }); });
+  d.querySelectorAll("[data-artweg]").forEach(function(b){ b.addEventListener("click", function(){ aanpas({ actie: "artikelWeg", order: b.dataset.artweg, sleutel: b.dataset.sleutel }); }); });
+  d.querySelectorAll("[data-artterug]").forEach(function(b){ b.addEventListener("click", function(){ aanpas({ actie: "artikelTerug", order: b.dataset.artterug, sleutel: b.dataset.sleutel }); }); });
+}
 function koppelDetail(d){
+  koppelBewerk(d);
   var r = overzicht.ritten.find(function(x){ return x.id === openRit; }); if (!r) return;
   var ja = $("akJa"), nee = $("akNee"), m = $("akMelding");
   var keus = $("akChauffeur"), naamVeld = $("akBestuurder");
@@ -318,7 +381,10 @@ var datum = vandaag, dagData = null;
 var kies = planner ? (leesLokaal("fp.bw.chauffeur") || "Alle") : ikChauffeur;
 var open = {}, concept = {}, handCache = {};
 function sleutel(rit, order){ return rit+":"+order; }
-function heeftConcept(){ return Object.keys(concept).some(function(k){ var c = concept[k]; return c && (c.hand || (c.naam||"").trim() || (c.opmerking||"").trim()); }); }
+function heeftConcept(){ return Object.keys(concept).some(function(k){ var c = concept[k]; return c && (c.hand || c.hand2 || (c.naam||"").trim() || (c.opmerking||"").trim()); }); }
+/* Gaat er iets heen én komt er iets terug, dan staat de stop meteen op
+   omruiling. Anders volgt hij de rit (levering of retour). */
+function standaardSoort(r, s){ var a = s.artikelen || []; if (a.some(function(x){ return x.aantal < 0; }) && a.some(function(x){ return x.aantal > 0; })) return "omruiling"; return r.soort; }
 function tekenDagKeus(){
   if (!planner) { $("dagen").innerHTML = ""; $("chauffeurs").innerHTML = ""; return; }
   var knoppen = [[plusDagen(vandaag,-1),"Gisteren"],[vandaag,"Vandaag"],[plusDagen(vandaag,1),"Morgen"]];
@@ -366,44 +432,72 @@ function tekenDag(){
    omruiling of retour mee terug komt (een regel met een min-aantal in de
    order). Onderdelen van een set staan in Logic4 met een * ervoor; die
    staan hier ingesprongen onder de set. */
-function paklijstHtml(r, s, alleenKijken){
-  if (!s.artikelen || !s.artikelen.length) return '';
+function paklijstHtml(r, s, alleenKijken, bewerk){
+  var weg = s.artikelenWeg || [];
+  if ((!s.artikelen || !s.artikelen.length) && !(bewerk && weg.length)) return '';
   var regel = function(a, i){
-    var pk = "fp.bw.pak:"+r.id+":"+s.order+":"+i, gepakt = !alleenKijken && leesLokaal(pk) === "1";
+    var pk = "fp.bw.pak:"+r.id+":"+s.order+":"+(a.sleutel || i), gepakt = !alleenKijken && leesLokaal(pk) === "1";
     var deel = a.deel || /^\*\s*/.test(a.naam), naam = a.naam.replace(/^\*\s*/, "");
     return '<li class="'+(deel?'deel ':'')+(gepakt?'gepakt':'')+'">' + (alleenKijken ? '' : '<input type="checkbox" data-pak="'+esc(pk)+'"'+(gepakt?' checked':'')+'>') +
-      '<span>'+(deel?'':'<b>'+Math.abs(a.aantal)+'x</b> ')+esc(naam)+(a.code ? '<small>'+esc(a.code)+'</small>' : '')+'</span></li>'; };
+      '<span>'+(deel?'':'<b>'+Math.abs(a.aantal)+'x</b> ')+esc(naam)+(a.code ? '<small>'+esc(a.code)+'</small>' : '')+'</span>' +
+      /* Een artikel van deze stop halen, bijvoorbeeld bij een nalevering waar de
+         rest al geleverd is. Bij een set gaan de onderdelen mee. */
+      (bewerk && a.sleutel ? '<button type="button" class="weg" title="Van deze stop halen" data-artweg="'+esc(s.order)+'" data-sleutel="'+esc(a.sleutel)+'">✕</button>' : '') + '</li>'; };
   var mee = [], terug = [];
-  s.artikelen.forEach(function(a, i){ (a.aantal < 0 ? terug : mee).push(regel(a, i)); });
+  (s.artikelen || []).forEach(function(a, i){ (a.aantal < 0 ? terug : mee).push(regel(a, i)); });
+  var wegHtml = bewerk && weg.length ? '<div class="weglijst"><b>Van deze stop gehaald:</b>' + weg.filter(function(a){ return a.zelf; }).map(function(a){
+      return '<div><s>'+(a.deel||/^\*\s*/.test(a.naam)?'':Math.abs(a.aantal)+'x ')+esc(a.naam.replace(/^\*\s*/, ""))+'</s><button type="button" class="bewerkknop" data-artterug="'+esc(s.order)+'" data-sleutel="'+esc(a.sleutel)+'">Terugzetten</button></div>'; }).join("") + '</div>' : '';
   return (mee.length ? '<div class="veld"><div class="k">Paklijst: mee naar de klant</div><ul class="paklijst">' + mee.join("") + '</ul></div>' : '') +
-    (terug.length ? '<div class="veld"><div class="k" style="color:#1d4ed8">Retour: mee terug van de klant</div><ul class="paklijst">' + terug.join("") + '</ul></div>' : '');
+    (terug.length ? '<div class="veld"><div class="k" style="color:#1d4ed8">Retour: mee terug van de klant</div><ul class="paklijst">' + terug.join("") + '</ul></div>' : '') +
+    (wegHtml ? '<div class="veld">' + wegHtml + '</div>' : '');
 }
 function stopHtml(r, s, i, opt){
   var eerste = r.stops.find(function(x){ return !x.af; });
   var k = sleutel(r.id, s.order), isOpen = opt.altijdOpen || (open[k] !== undefined ? open[k] : (eerste === s));
-  var soortStop = s.af ? s.af.soort : ((concept[k] && concept[k].soort) || r.soort);
-  var pil = s.af ? '<span class="pil goed">✓ '+(s.af.soort === "retour" ? "Retour opgehaald" : "Geleverd")+'</span>' : (opt.alleenKijken ? '' : (soortStop === "retour" ? '<span class="pil retour">Retour</span>' : '<span class="pil">Open</span>'));
+  var soortStop = s.af ? s.af.soort : ((concept[k] && concept[k].soort) || standaardSoort(r, s));
+  var pil = s.af ? '<span class="pil goed">✓ '+(s.af.soort === "omruiling" ? "Omgeruild" : soortLabel(s.af.soort))+'</span>' : (opt.alleenKijken ? (s.toegevoegd ? '<span class="pil aangepast">Toegevoegd</span>' : '') : (soortStop === "retour" ? '<span class="pil retour">Retour</span>' : soortStop === "omruiling" ? '<span class="pil omruil">Omruiling</span>' : '<span class="pil">Open</span>'));
+  var knoppen = opt.bewerk ? '<div class="stopknoppen">' +
+      (i > 0 ? '<button type="button" class="bewerkknop" title="Eerder in de rit" data-op="'+esc(s.order)+'">▲</button>' : '') +
+      (i < r.stops.length - 1 ? '<button type="button" class="bewerkknop" title="Later in de rit" data-neer="'+esc(s.order)+'">▼</button>' : '') +
+      '<button type="button" class="bewerkknop rood" title="Stop uit deze rit halen" data-stopweg="'+esc(s.order)+'">✕</button></div>' : '';
   var h = '<div class="stop'+(s.af?' af':'')+'" data-stop="'+esc(k)+'"><div class="stopkop"'+(opt.altijdOpen?'':' data-klap="'+esc(k)+'"')+'><div class="nr">'+(i+1)+'</div>' +
-    '<div class="wie"><b>'+esc(s.klant || ("Order "+s.order))+'</b><small>'+esc([s.plaats, "order "+s.order].filter(Boolean).join(" · "))+'</small></div>'+pil+'</div>';
+    '<div class="wie"><b>'+esc(s.klant || ("Order "+s.order))+'</b><small>'+esc([s.plaats, "order "+s.order].filter(Boolean).join(" · "))+'</small></div>'+pil+knoppen+'</div>';
   if (!isOpen) return h + '</div>';
   h += '<div class="velden">';
   if (s.gefactureerd) h += veld("Ordernummer", esc(s.order)) + '<div class="veld"><div class="w zacht">Deze order is al gefactureerd; de gegevens staan in Logic4 bij de factuur.</div></div>';
   else if (s.laden) h += veld("Ordernummer", esc(s.order)) + '<div class="veld"><div class="w zacht">De gegevens van deze order worden opgehaald…</div></div>';
   else {
     var adres = [s.adres, [s.postcode, s.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-    var info = [s.opmerkingRit, s.notities].filter(Boolean).join("\n\n");
+    var info = s.infoAangepast || [s.opmerkingRit, s.notities].filter(Boolean).join("\n\n");
     h += veld("Ordernummer", esc(s.order)) +
       veld("Klantnaam", esc(s.klant || "-") + (s.bedrijf && s.bedrijf !== s.klant ? '<br><small>'+esc(s.bedrijf)+'</small>' : '')) +
       veld("Telefoonnummer klant", s.telefoon ? esc(s.telefoon)+(opt.alleenKijken ? '' : '<br><a class="knop" href="tel:'+esc(s.telefoon.replace(/[^\d+]/g,""))+'">📞 Bellen</a>') : '<span class="zacht">Er staat nog geen nummer bij deze order in Logic4.</span>') +
       (adres ? veld("Adres", esc(adres)+(opt.alleenKijken ? '' : '<br><a class="knop" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(adres+(s.land && s.land !== "NL" ? ", "+s.land : ""))+'">🧭 Route</a>')) : '') +
-      '<div class="veld"><div class="k">Chauffeurs info</div>'+(info ? '<div class="w info">'+esc(info)+'</div>' : '<div class="w zacht">Geen bijzonderheden.</div>')+'</div>' +
-      paklijstHtml(r, s, opt.alleenKijken) +
+      (opt.bewerk && infoBewerk[k]
+        ? '<div class="veld infobewerk"><div class="k">Chauffeurs info</div><textarea data-infotekst="'+esc(s.order)+'">'+esc(info)+'</textarea>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="bewerkknop" data-infobewaar="'+esc(s.order)+'">Bewaren</button>' +
+          '<button type="button" class="bewerkknop" data-infostop="'+esc(k)+'">Annuleren</button>' +
+          (s.infoAangepast ? '<button type="button" class="bewerkknop" data-inforeset="'+esc(s.order)+'">Weer de tekst uit Logic4</button>' : '') + '</div></div>'
+        : '<div class="veld"><div class="k">Chauffeurs info'+(s.infoAangepast ? ' <span class="pil aangepast" style="text-transform:none;letter-spacing:0">aangepast</span>' : '')+'</div>'+(info ? '<div class="w info">'+esc(info)+'</div>' : '<div class="w zacht">Geen bijzonderheden.</div>') +
+          (opt.bewerk ? '<button type="button" class="bewerkknop" style="margin-top:6px" data-infoopen="'+esc(k)+'">Aanpassen</button>' : '') + '</div>') +
+      paklijstHtml(r, s, opt.alleenKijken, opt.bewerk) +
       fotosHtml(r, s, !opt.alleenKijken);
   }
   if (!opt.alleenKijken) h += afmeldHtml(r, s, k);
-  else if (s.af) h += '<div class="afmeld"><div class="klaar"><b>✓ '+(s.af.soort === "retour" ? "Retour opgehaald" : "Geleverd")+'</b> om '+tijd(s.af.ts)+(s.af.chauffeur ? ' door '+esc(chauffeurNaam(s.af.chauffeur)) : '')+(s.af.opmerking ? '<br><b style="color:#92400e">Opmerking:</b> '+esc(s.af.opmerking) : '')+'</div></div>';
+  else if (s.af) h += '<div class="afmeld"><div class="klaar"><b>✓ '+soortLabel(s.af.soort)+'</b> om '+tijd(s.af.ts)+(s.af.chauffeur ? ' door '+esc(chauffeurNaam(s.af.chauffeur)) : '')+(s.af.opmerking ? '<br><b style="color:#92400e">Opmerking:</b> '+esc(s.af.opmerking) : '')+'</div></div>';
   return h + '</div></div>';
 }
+/* Geleverd, retour of omruiling: bij een omruiling gaat er iets heen en komt er
+   iets terug, en tekent de klant twee keer (Manon, 21 okt 2026). */
+function soortLabel(soort){ return soort === "retour" ? "Retour opgehaald" : soort === "omruiling" ? "Omgeruild: geleverd en retour opgehaald" : "Geleverd"; }
+function handImgs(k, a){
+  var h1 = handCache[k], h2 = handCache[k+":2"];
+  if (!a.getekend) return '';
+  if (h1 === undefined) return '<br><button type="button" class="klein" data-toonhand="'+esc(k)+'">Handtekening'+(a.getekend2?'en':'')+' bekijken</button>';
+  return (a.soort === "omruiling" ? '<div style="margin-top:8px;font-size:12.5px;color:var(--grijs)">Voor ontvangst</div>' : '') + (h1 ? '<img alt="Handtekening" src="'+h1+'">' : '') +
+    (a.getekend2 && h2 ? '<div style="margin-top:8px;font-size:12.5px;color:var(--grijs)">Voor retour meegegeven</div><img alt="Handtekening retour" src="'+h2+'">' : '');
+}
+async function haalHand(k){ var d = k.split(":"); var j = await lees("/bakwagen/handtekening?rit="+encodeURIComponent(d[0])+"&order="+encodeURIComponent(d[1])); handCache[k] = j.hand || ""; handCache[k+":2"] = j.hand2 || ""; }
 function veld(k, w){ return '<div class="veld"><div class="k">'+k+'</div><div class="w">'+w+'</div></div>'; }
 
 /* ═══ Foto's als bewijs (Gerrit, 16 okt 2026) ═══════════════════════════
@@ -485,16 +579,16 @@ function tekenTreffers(){
   $("zoekUit").innerHTML = '<p class="leeg" style="padding:0 2px 8px">'+d.totaal+' stop'+(d.totaal===1?'':'s')+(d.totaal>d.stops.length?' (de nieuwste '+d.stops.length+')':'')+'</p>' + d.stops.map(function(x){
     var k = sleutel(x.rit, x.order), a = x.af;
     return '<div class="treffer"><div class="t1"><b>'+esc(x.klant || ("Order "+x.order))+'</b><small>order '+esc(x.order)+(x.plaats?' · '+esc(x.plaats):'')+'</small>' +
-      (a ? '<span class="pil goed">✓ '+(a.soort==="retour"?"Retour opgehaald":"Geleverd")+'</span>' : '<span class="pil">foto\'s</span>') + '</div>' +
+      (a ? '<span class="pil goed">✓ '+(a.soort==="omruiling"?"Omgeruild":soortLabel(a.soort))+'</span>' : '<span class="pil">foto\'s</span>') + '</div>' +
       '<small>'+esc([x.datum ? dagTekst(x.datum) : "", x.ritnaam, a ? tijd(a.ts)+(a.chauffeur?" door "+chauffeurNaam(a.chauffeur):"") : ""].filter(Boolean).join(" · "))+'</small>' +
       (a && a.naam ? '<div style="margin-top:4px;font-size:14px">Getekend door: '+esc(a.naam)+'</div>' : '') +
       (a && a.opmerking ? '<div class="opm"><b>Opmerking:</b> '+esc(a.opmerking)+'</div>' : '') +
-      (a && a.getekend ? (handCache[k] ? '<img class="handimg" alt="Handtekening" src="'+handCache[k]+'">' : '<button type="button" class="klein" data-zoekhand="'+esc(k)+'">Handtekening bekijken</button>') : '') +
+      (a && a.getekend ? (handCache[k] !== undefined ? (a.soort === "omruiling" ? '<div style="margin-top:6px;font-size:12.5px;color:var(--grijs)">Voor ontvangst</div>' : '') + (handCache[k] ? '<img class="handimg" alt="Handtekening" src="'+handCache[k]+'">' : '') + (handCache[k+":2"] ? '<div style="margin-top:6px;font-size:12.5px;color:var(--grijs)">Voor retour meegegeven</div><img class="handimg" alt="Handtekening retour" src="'+handCache[k+":2"]+'">' : '') : '<button type="button" class="klein" data-zoekhand="'+esc(k)+'">Handtekening'+(a.getekend2?'en':'')+' bekijken</button>') : '') +
       (x.fotos.length ? '<div class="fotos" style="margin-top:8px">'+x.fotos.map(function(f){ return '<img data-foto="'+esc(f.id)+'" alt="foto">'; }).join("")+'</div>' : '') + '</div>';
   }).join("");
   $("zoekUit").querySelectorAll("[data-zoekhand]").forEach(function(b){ b.addEventListener("click", async function(){
     var k = b.dataset.zoekhand, d2 = k.split(":"); b.disabled = true; b.textContent = "Even ophalen…";
-    try { var j = await lees("/bakwagen/handtekening?rit="+encodeURIComponent(d2[0])+"&order="+encodeURIComponent(d2[1])); handCache[k] = j.hand || ""; tekenTreffers(); }
+    try { await haalHand(k); tekenTreffers(); }
     catch(e){ b.disabled = false; b.textContent = "Handtekening bekijken"; }
   }); });
   laadFotos($("zoekUit"));
@@ -502,18 +596,20 @@ function tekenTreffers(){
 function afmeldHtml(r, s, k){
   if (s.af && !(concept[k] && concept[k].opnieuw)) {
     var a = s.af;
-    return '<div class="afmeld"><div class="klaar"><b>✓ '+(a.soort === "retour" ? "Retour opgehaald" : "Geleverd")+'</b> om '+tijd(a.ts)+(a.chauffeur ? ' door '+esc(chauffeurNaam(a.chauffeur)) : '')+
+    return '<div class="afmeld"><div class="klaar"><b>✓ '+soortLabel(a.soort)+'</b> om '+tijd(a.ts)+(a.chauffeur ? ' door '+esc(chauffeurNaam(a.chauffeur)) : '')+
       (a.naam ? '<br>Getekend door: '+esc(a.naam) : '')+
       (a.opmerking ? '<br><br><b style="color:#92400e">Opmerking:</b> '+esc(a.opmerking) : '')+
-      (a.getekend ? (handCache[k] ? '<img alt="Handtekening" src="'+handCache[k]+'">' : '<br><button type="button" class="klein" data-toonhand="'+esc(k)+'">Handtekening bekijken</button>') : '')+
+      handImgs(k, a)+
       '</div><button type="button" class="klein" data-opnieuw="'+esc(k)+'">Opnieuw afmelden</button></div>';
   }
-  var c = concept[k] || {}, soort = c.soort || r.soort;
+  var c = concept[k] || {}, soort = c.soort || standaardSoort(r, s);
+  var vak = function(veldnaam){ return '<div class="hand" data-handveld="'+veldnaam+'"><canvas></canvas><button type="button" class="wis">Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>'; };
   return '<div class="afmeld"><h4>Afmelden bij de klant</h4>' +
-    '<div class="segment"><button type="button" data-soort="levering"'+(soort==="levering"?' class="aan"':'')+'>Geleverd</button><button type="button" data-soort="retour"'+(soort==="retour"?' class="aan"':'')+'>Retour opgehaald</button></div>' +
+    '<div class="segment"><button type="button" data-soort="levering"'+(soort==="levering"?' class="aan"':'')+'>Geleverd</button><button type="button" data-soort="retour"'+(soort==="retour"?' class="aan"':'')+'>Retour opgehaald</button><button type="button" data-soort="omruiling"'+(soort==="omruiling"?' class="aan"':'')+'>Omruiling</button></div>' +
     '<label>Naam van de klant</label><input type="text" data-veld="naam" value="'+esc(c.naam || "")+'" placeholder="Wie tekent er?">' +
-    '<label>'+(soort === "retour" ? "Handtekening voor retour meegegeven" : "Handtekening voor ontvangst")+'</label>' +
-    '<div class="hand"><canvas></canvas><button type="button" class="wis">Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>' +
+    (soort === "omruiling"
+      ? '<label>1. Handtekening voor ontvangst (wat de klant krijgt)</label>' + vak("hand") + '<label>2. Handtekening voor retour meegegeven (wat mee terug gaat)</label>' + vak("hand2")
+      : '<label>'+(soort === "retour" ? "Handtekening voor retour meegegeven" : "Handtekening voor ontvangst")+'</label>' + vak("hand")) +
     '<label>Opmerking van de chauffeur</label><textarea data-veld="opmerking" placeholder="Is er iets mis? Bijvoorbeeld: er ontbreekt een kussen op een stoel.">'+esc(c.opmerking || "")+'</textarea>' +
     '<button type="button" class="groot" data-afmelden="'+esc(k)+'">Afmelden</button><div class="melding" data-melding="'+esc(k)+'"></div></div>';
 }
@@ -544,45 +640,47 @@ function koppelDag(){
     var c = concept[k] = concept[k] || {};
     vak.querySelectorAll("[data-soort]").forEach(function(b){ b.addEventListener("click", function(){ c.soort = b.dataset.soort; tekenDag(); }); });
     vak.querySelectorAll("[data-veld]").forEach(function(v){ v.addEventListener("input", function(){ c[v.dataset.veld] = v.value; }); });
-    var h = vak.querySelector(".hand"); if (h) koppelHandtekening(h, c);
+    vak.querySelectorAll(".hand").forEach(function(h){ koppelHandtekening(h, c, h.dataset.handveld || "hand"); });
     var af = vak.querySelector("[data-afmelden]"); if (af) af.addEventListener("click", function(){ afmelden(k, af); });
     var op = vak.querySelector("[data-opnieuw]"); if (op) op.addEventListener("click", function(){ concept[k] = { opnieuw: true, soort: x.s.af.soort, naam: x.s.af.naam || "", opmerking: x.s.af.opmerking || "" }; open[k] = true; tekenDag(); });
     var th = vak.querySelector("[data-toonhand]"); if (th) th.addEventListener("click", async function(){
       th.disabled = true; th.textContent = "Even ophalen…";
-      try { var d = k.split(":"); var j = await lees("/bakwagen/handtekening?rit="+encodeURIComponent(d[0])+"&order="+encodeURIComponent(d[1])); handCache[k] = j.hand || ""; tekenDag(); }
+      try { await haalHand(k); tekenDag(); }
       catch(e){ th.disabled = false; th.textContent = "Handtekening bekijken"; }
     });
   });
 }
 /* Tekenen met vinger of pen, bewaard als kleine PNG (zelfde manier als de
    opleverbon in Mijn route). */
-function koppelHandtekening(h, c){
+function koppelHandtekening(h, c, veldnaam){
+  veldnaam = veldnaam || "hand";
   var cv = h.querySelector("canvas"), ctx = cv.getContext("2d");
   var breed = h.clientWidth || 320, hoog = 170, dpr = Math.min(window.devicePixelRatio||1, 2);
   cv.width = Math.round(breed*dpr); cv.height = Math.round(hoog*dpr); ctx.scale(dpr,dpr);
   ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
   var hint = h.querySelector(".hint");
-  if (c.hand){ var img = new Image(); img.onload = function(){ ctx.drawImage(img, 0, 0, breed, hoog); }; img.src = c.hand; if (hint) hint.style.display = "none"; }
+  if (c[veldnaam]){ var img = new Image(); img.onload = function(){ ctx.drawImage(img, 0, 0, breed, hoog); }; img.src = c[veldnaam]; if (hint) hint.style.display = "none"; }
   var bezig = false, was = false;
   function pos(e){ var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
   cv.addEventListener("pointerdown", function(e){ e.preventDefault(); bezig = true; was = true; cv.setPointerCapture(e.pointerId); var p = pos(e); ctx.beginPath(); ctx.moveTo(p[0],p[1]); if (hint) hint.style.display = "none"; });
   cv.addEventListener("pointermove", function(e){ if (!bezig) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p[0],p[1]); ctx.stroke(); });
-  function klaar(){ if (!bezig) return; bezig = false; if (was){ var k = document.createElement("canvas"); k.width = 600; k.height = 200; k.getContext("2d").drawImage(cv, 0, 0, 600, 200); c.hand = k.toDataURL("image/png"); } }
+  function klaar(){ if (!bezig) return; bezig = false; if (was){ var k = document.createElement("canvas"); k.width = 600; k.height = 200; k.getContext("2d").drawImage(cv, 0, 0, 600, 200); c[veldnaam] = k.toDataURL("image/png"); } }
   cv.addEventListener("pointerup", klaar); cv.addEventListener("pointercancel", klaar); cv.addEventListener("pointerleave", klaar);
-  h.querySelector(".wis").addEventListener("click", function(){ ctx.clearRect(0,0,breed,hoog); c.hand = ""; was = false; if (hint) hint.style.display = ""; });
+  h.querySelector(".wis").addEventListener("click", function(){ ctx.clearRect(0,0,breed,hoog); c[veldnaam] = ""; was = false; if (hint) hint.style.display = ""; });
 }
 async function afmelden(k, knop){
   var x = zoekStop(k); if (!x) return;
   var c = concept[k] || {}, m = document.querySelector('[data-melding="'+k+'"]');
-  if (!c.hand) { if (m) { m.className = "melding slecht"; m.textContent = "Laat de klant eerst tekenen in het vak hierboven."; } return; }
+  var soort = c.soort || standaardSoort(x.r, x.s);
+  if (!c.hand) { if (m) { m.className = "melding slecht"; m.textContent = soort === "omruiling" ? "Laat de klant eerst tekenen voor ontvangst (vak 1)." : "Laat de klant eerst tekenen in het vak hierboven."; } return; }
+  if (soort === "omruiling" && !c.hand2) { if (m) { m.className = "melding slecht"; m.textContent = "Laat de klant ook tekenen voor wat mee terug gaat (vak 2)."; } return; }
   if (x.r.chauffeur === "Flex" && !x.r.bestuurder) { if (m) { m.className = "melding slecht"; m.textContent = "Vul eerst bovenaan bij de rit in wie er op de flexwagen rijdt."; } return; }
   knop.disabled = true; knop.textContent = "Bezig met afmelden…";
-  var soort = c.soort || x.r.soort;
   try {
-    var j = await lees("/bakwagen/afmelden", { method: "POST", body: JSON.stringify({ rit: x.r.id, order: x.s.order, soort: soort, naam: c.naam || "", opmerking: c.opmerking || "", hand: c.hand, chauffeur: x.r.chauffeur || ikChauffeur, klant: x.s.klant || "" }) });
+    var j = await lees("/bakwagen/afmelden", { method: "POST", body: JSON.stringify({ rit: x.r.id, order: x.s.order, soort: soort, naam: c.naam || "", opmerking: c.opmerking || "", hand: c.hand, hand2: soort === "omruiling" ? c.hand2 : "", chauffeur: x.r.chauffeur || ikChauffeur, klant: x.s.klant || "" }) });
     if (!j.ok) throw new Error(j.error || "onbekend");
-    x.s.af = { soort: soort, naam: c.naam || "", opmerking: c.opmerking || "", chauffeur: j.chauffeur || x.r.chauffeur, door: ik, ts: j.ts, getekend: true };
-    handCache[k] = c.hand; delete concept[k]; open[k] = false;
+    x.s.af = { soort: soort, naam: c.naam || "", opmerking: c.opmerking || "", chauffeur: j.chauffeur || x.r.chauffeur, door: ik, ts: j.ts, getekend: true, getekend2: soort === "omruiling" };
+    handCache[k] = c.hand; handCache[k+":2"] = soort === "omruiling" ? c.hand2 : ""; delete concept[k]; open[k] = false;
     try{ if (window.fpLog) window.fpLog("bakwagen-afgemeld", "rit " + x.r.id + " order " + x.s.order + " " + soort + (x.s.af.opmerking ? " (met opmerking)" : "")); }catch(e){}
     tekenDag();
   } catch(e) {
