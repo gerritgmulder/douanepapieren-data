@@ -2356,9 +2356,17 @@ function renderOvShips(){
       "<td>"+n+" spa's</td></tr>";
     if(open){
       const mc=s.modelColors||{};
+      /* Hoeveel daarvan met IntelliSaver (warmtepomp). Dat staat op de
+         invoice achter de code ("SKT329EA-1 / INTELLISAVER") en is in Logic4
+         een eigen artikel. Chantal (video, 21 okt 2026, invoice 3389): "hij
+         registreert drie keer Mystic Mountain, maar schrijft nergens dat het
+         twee keer met IntelliSaver is." */
+      const intelli={};
+      (s.specials||[]).forEach(x=>{ if(x&&x.model&&/intelli\s*saver|integrated\s*heat\s*pump/i.test((x.tekst||"")+" "+(x.notities||""))) intelli[x.model]=(intelli[x.model]||0)+(Number(x.qty)||1); });
       const items=Object.entries(s.models||{}).sort((a,b)=>b[1]-a[1]).map(([m,aantal])=>{
-        const cols=mc[m]?Object.entries(mc[m]).sort((a,b)=>b[1]-a[1])
-          .map(([k,n2])=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:1px 3px 0 0'>"+esc(k)+" <b>"+n2+"</b></span>").join(""):"";
+        const cols=(mc[m]?Object.entries(mc[m]).sort((a,b)=>b[1]-a[1])
+          .map(([k,n2])=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:1px 3px 0 0'>"+esc(k)+" <b>"+n2+"</b></span>").join(""):"")+
+          (intelli[m]?"<span class='pill' style='background:#dcfce7;color:#15803d;margin:1px 3px 0 0'>&#9889; waarvan IntelliSaver <b>"+intelli[m]+"</b></span>":"");
         return "<li style='margin-bottom:4px'>"+esc(m)+" - <b>"+aantal+"×</b>"+(cols?"<br>"+cols:"")+"</li>";
       }).join("")||"<li style='color:var(--muted)'>(0 spa's herkend)</li>";
       const heeftKleur=Object.keys(mc).length>0;
@@ -4868,6 +4876,8 @@ async function saveSchepen(){
       const v=perSleutel[schipSleutel(s)]; if(!v) continue;
       if(v.etaHandTs&&(!s.etaHandTs||v.etaHandTs>s.etaHandTs)){ s.eta=v.eta; s.etaHand=v.etaHand; s.etaHandTs=v.etaHandTs; }
       if(v.binnenGemeld&&!s.binnenGemeld) s.binnenGemeld=v.binnenGemeld;
+      // Elders teruggedraaid: dat wint van het oude vinkje in dit scherm.
+      if(v.binnenTerug&&s.binnenGemeld&&String(s.binnenGemeld.op||"")<=String(v.binnenTerug.op||"")){ s.binnenGemeld=null; s.binnenTerug=v.binnenTerug; }
     }
   }catch(e){ /* dan zoals voorheen */ }
   shipsData.updated=new Date().toISOString();

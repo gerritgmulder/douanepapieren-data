@@ -19472,6 +19472,10 @@ const FP_WORKER = {
       const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
       const schip = (data.ships || []).find(x => String(x.ref) === ref);
       if (!schip) return reply(404, { ok: false, error: "schip niet gevonden" });
+      /* Terugdraaien wordt onthouden (binnenTerug), zodat een scherm dat nog
+         openstaat met het oude vinkje het niet terugschrijft. Gdansk Express,
+         21 okt 2026: op 7 okt binnen gemeld, maar de ETA is 24 okt. */
+      if (!b.binnen && schip.binnenGemeld) schip.binnenTerug = { op: new Date().toISOString(), door: String(b.door || "").slice(0, 80), was: schip.binnenGemeld };
       schip.binnenGemeld = b.binnen
         ? { op: new Date().toISOString(), door: String(b.door || "").slice(0, 80) }
         : null;
@@ -20909,6 +20913,24 @@ const FP_WORKER = {
           const vorige = await env.FONTEYN_DATA.get(bucket, { type: "text" });
           if (vorige && vorige.length > 200) await env.FONTEYN_DATA.put(bucket + "-vorige", vorige);
         } catch (e) { /* backup mag het opslaan nooit tegenhouden */ }
+      }
+      /* Schepenlijst: een teruggedraaide "binnen"-melding blijft teruggedraaid.
+         Elk scherm schrijft de hele lijst terug; een scherm dat nog de oude
+         stand had, zou het vinkje anders weer aanzetten. */
+      if (bucket === "voorraad-schepen") {
+        try {
+          const nieuw = JSON.parse(body), oud = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || {};
+          const terug = {};
+          for (const s of (oud.ships || [])) if (s && s.binnenTerug) terug[String(s.ref)] = s.binnenTerug;
+          let raak = false;
+          for (const s of (nieuw.ships || [])) {
+            const t = s && terug[String(s.ref)];
+            if (!t) continue;
+            if (s.binnenGemeld && String(s.binnenGemeld.op || "") <= String(t.op || "")) { s.binnenGemeld = null; raak = true; }
+            if (!s.binnenTerug) { s.binnenTerug = t; raak = true; }
+          }
+          if (raak) { await env.FONTEYN_DATA.put(bucket, JSON.stringify(nieuw)); return reply(200, { ok: true }); }
+        } catch (e) { /* dan gewoon zoals het binnenkwam */ }
       }
       await env.FONTEYN_DATA.put(bucket, body);
       /* Het bovenaanzicht dat het partnerportaal apart bewaart hoort bij deze

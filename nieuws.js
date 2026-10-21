@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-21", bestand: "voorraad.html", soort: "beter",
+      titel: "Invoice 3389: Still, New Lagoon en IntelliSaver",
+      wat:   "PP04 (Still) en SKT888Z (New Lagoon) worden nu herkend. Een nieuw nummer in een bekende reeks, zoals SKT339G19, staat bij de nog te herkennen codes in plaats van als een ander model. Bij een zending zie je per model hoeveel er met IntelliSaver komen. Gdansk Express staat weer bij onderweg, met ETA 24 oktober."
+    },
+    {
       datum: "2026-10-21", bestand: "proformas.html", soort: "nieuw",
       titel: "Proforma's",
       wat:   "Upload proforma's van sauna's, tuinmeubelen en andere producten, van elke leverancier, als pdf of Excel. Je ziet per afdeling wat er in bestelling, in productie en onderweg is. Bovenaan vink je zelf aan welke afdelingen je wilt zien. Koppel een regel één keer aan het artikel in Logic4, daarna staat het er bij die leverancier vanzelf."

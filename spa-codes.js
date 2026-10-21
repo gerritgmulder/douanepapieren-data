@@ -134,6 +134,11 @@ const SPA_CODES = [
   ["PP01","Reflect"],
   ["PP02","Retreat"],
   ["PP03","Resettle"],
+  // Chantal (video, 21 okt 2026), invoice 3389: PP04 is de Still Spa
+  // (transparent acrylic) en SKT888Z de New Lagoon met het ruitpatroon.
+  // Beide stonden al in Logic4, alleen hier nog niet.
+  ["PP04","Still"],
+  ["SKT888Z","New Lagoon"],
   /* ── Andere fabrieken dan Jazzi (Chantal, 4 aug 2026) ──────────────────
      Chantal heeft de codelijsten van vier fabrieken opgevraagd nadat een
      commercial invoice van Kasdaly niet ingelezen kon worden. Prijzen en
@@ -229,6 +234,8 @@ const SPA_CODES_LANG = SPA_CODES.slice().sort((a,b)=>normCode(b[0]).length-normC
 // LET OP: "(onbekend SKT-model)" is een vaste herkenningswaarde die op meerdere
 // plekken vergeleken wordt; die tekst niet wijzigen.
 const SPA_PREFIXEN = ["SKT","PP"];
+// Codes waar in de lijst genummerde broertjes van bestaan (SKT339G -> SKT339G1).
+const SPA_REEKSEN = new Set(SPA_CODES.map(x => normCode(x[0])).filter(k => SPA_CODES.some(y => { const j = normCode(y[0]); return j !== k && j.indexOf(k) === 0 && /\d/.test(j.charAt(k.length)); })));
 
 /* ══ Waar de kleur het model bepaalt ══════════════════════════════════════
    SKT888-G2 is officieel een Mallorca Superior. Staat er "black" bij de kleur,
@@ -267,7 +274,13 @@ function spaModel(code){
   // ET, S- of WS-codes gebruiken, kan er niet meer op een prefix worden
   // voorgeselecteerd: dan zou "S-1501" nooit gevonden worden.
   for (let i=0;i<SPA_CODES_LANG.length;i++){
-    if (n.indexOf(normCode(SPA_CODES_LANG[i][0])) === 0) return SPA_CODES_LANG[i][1];
+    const k = normCode(SPA_CODES_LANG[i][0]);
+    /* Eindigt de code in de lijst op een cijfer, dan mag er geen cijfer
+       achteraan komen: SKT339G19 (een nieuw model) las anders als SKT339G1,
+       de Spirit Deep (Chantal, 21 okt 2026, invoice 3389). */
+    /* Zelfde voor een reeks: SKT339G1 t/m G17 bestaan, dus SKT339G19 is een
+       nieuw nummer in die reeks en geen SKT339G (Spirit). */
+    if (n.indexOf(k) === 0 && !(/\d/.test(n.charAt(k.length)) && (/\d$/.test(k) || SPA_REEKSEN.has(k)))) return SPA_CODES_LANG[i][1];
   }
   // Staat hij er niet in maar begint hij wél als een bekende fabriekscode, dan
   // is het een spa waarvan wij het model nog niet weten. Dat is iets anders dan
