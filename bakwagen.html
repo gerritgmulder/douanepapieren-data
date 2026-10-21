@@ -165,6 +165,17 @@ main{margin:14px auto;padding:0 14px 60px}
 .ritextra .rij{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .ritextra input{flex:1 1 160px;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:9px}
 .infobewerk textarea{width:100%;min-height:80px;border:1px solid #cbd5e1;border-radius:9px;padding:8px 10px;font:inherit;font-size:14.5px}
+.ritbalk{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 2px}
+.ritbalk a.knop,.ritbalk .rijtijd{display:inline-flex;align-items:center;gap:6px;background:#fff;border:2px solid var(--groen);color:var(--groen);border-radius:10px;padding:7px 13px;font-weight:700;text-decoration:none;font-size:14px}
+.ritbalk .rijtijd{border:1px solid var(--rand);color:var(--ink);font-weight:600}
+.ritbalk .rijtijd:empty{display:none}
+.ritkop .rijtijd{font-size:12.5px;opacity:.95;white-space:nowrap}
+.betaal{display:inline-block;font-size:13.5px;font-weight:700;padding:5px 10px;border-radius:9px}
+.betaal.groen{background:#dcfce7;color:#15803d}.betaal.oranje{background:#ffedd5;color:#c2410c}.betaal.rood{background:#fee2e2;color:var(--rood)}
+.stip{flex:0 0 12px;width:12px;height:12px;border-radius:50%;display:inline-block}
+.stip.groen{background:#16a34a}.stip.oranje{background:#f59e0b}.stip.rood{background:#dc2626}
+.bonmail{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.bonmail input{flex:1 1 200px;min-width:0;font:inherit;font-size:14.5px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:9px}
 @media (max-width:600px){ main{padding:0 8px 60px} .stops{grid-template-columns:1fr} }
 </style>
 </head>
@@ -268,7 +279,8 @@ function tekenPlanning(){
   $("planning").innerHTML = h;
   $("ophaal").addEventListener("click", ophalen);
   $("planning").querySelectorAll("[data-rit]").forEach(function(el){ el.addEventListener("click", function(){ openRit = openRit === el.dataset.rit ? null : el.dataset.rit; tekenPlanning(); if (openRit && !ritDetail[openRit]) laadRit(openRit, 0); }); });
-  var d = $("detail"); if (d) { koppelDetail(d); laadFotos(d); }
+  var d = $("detail"); if (d) { koppelDetail(d); laadFotos(d); if (ritDetail[openRit] && ritDetail[openRit].stops) { rijtijdVullen([ritDetail[openRit]], 0);
+    koppelBonMail(d, tekenPlanning, function(k){ var st = ritDetail[openRit].stops.find(function(x){ return sleutel(openRit, x.order) === k; }); return st && st.af; }); } }
 }
 function ritRij(r, wagen){
   var pil = r.akkoord ? '<span class="pil goed">✓ Klaar voor '+esc(chauffeurNaam(r.akkoord.chauffeur))+(r.akkoord.bestuurder ? ' · '+esc(r.akkoord.bestuurder) : '')+'</span>' : '<span class="pil wacht">Te controleren</span>';
@@ -293,7 +305,7 @@ function detailHtml(r){
   var d = ritDetail[r.id];
   if (!d) return '<p class="leeg">De stops worden opgehaald…</p>';
   if (d.fout) return '<div class="fout">'+esc(d.fout)+'</div>';
-  var h = (d.memo ? '<div class="ritmemo" style="border-radius:10px;border-top:1px solid #fde68a;margin-bottom:8px">'+esc(d.memo)+'</div>' : '') +
+  var h = (d.memo ? '<div class="ritmemo" style="border-radius:10px;border-top:1px solid #fde68a;margin-bottom:8px">'+esc(d.memo)+'</div>' : '') + ritBalk(d, false) +
     '<div class="stops" style="padding-top:0">' + d.stops.map(function(s, i){ return stopHtml(d, s, i, { alleenKijken: true, altijdOpen: true, bewerk: true }); }).join("") + '</div>' +
     /* De rit aanpassen zonder Logic4 (Manon, 21 okt 2026): een stop erbij of
        eruit. De rit in Logic4 blijft zoals hij is. */
@@ -420,6 +432,7 @@ function tekenDag(){
     var klaar = r.stops.filter(function(s){ return s.af; }).length;
     h += '<section class="rit"><div class="ritkop"><b>'+esc(r.naam)+(planner && kies==="Alle" ? ' · '+esc(chauffeurNaam(r.chauffeur)) : '')+(r.bestuurder ? ' · '+esc(r.bestuurder) : '')+'</b><span>'+(r.soort === "retour" ? "Retour ophalen" : "Levering")+' · '+klaar+' van '+r.stops.length+' afgemeld</span></div>' +
       (r.memo ? '<div class="ritmemo">'+esc(r.memo)+'</div>' : '') +
+      ritBalk(r, true) +
       (r.chauffeur === "Flex" ? '<div class="ritmemo" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fff"><b>Chauffeur flexwagen:</b>' +
         '<input type="text" data-bestuurder="'+esc(r.id)+'" value="'+esc(r.bestuurder || "")+'" placeholder="Wie rijdt er vandaag?" style="flex:1 1 180px;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:9px">' +
         '<button type="button" class="klein" style="margin:0" data-bestuurderbewaar="'+esc(r.id)+'">Bewaren</button></div>' : '') +
@@ -427,6 +440,7 @@ function tekenDag(){
   });
   $("lijst").innerHTML = h;
   koppelDag();
+  rijtijdVullen(dagData.ritten, 0);
 }
 /* De paklijst: wat er mee naar de klant gaat, en apart wat er bij een
    omruiling of retour mee terug komt (een regel met een min-aantal in de
@@ -436,9 +450,9 @@ function paklijstHtml(r, s, alleenKijken, bewerk){
   var weg = s.artikelenWeg || [];
   if ((!s.artikelen || !s.artikelen.length) && !(bewerk && weg.length)) return '';
   var regel = function(a, i){
-    var pk = "fp.bw.pak:"+r.id+":"+s.order+":"+(a.sleutel || i), gepakt = !alleenKijken && leesLokaal(pk) === "1";
+    var pk = "fp.bw.pak:"+r.id+":"+s.order+":"+(a.sleutel || i), gepakt = (s.gepakt || []).indexOf(a.sleutel) >= 0 || (!alleenKijken && leesLokaal(pk) === "1");
     var deel = a.deel || /^\*\s*/.test(a.naam), naam = a.naam.replace(/^\*\s*/, "");
-    return '<li class="'+(deel?'deel ':'')+(gepakt?'gepakt':'')+'">' + (alleenKijken ? '' : '<input type="checkbox" data-pak="'+esc(pk)+'"'+(gepakt?' checked':'')+'>') +
+    return '<li class="'+(deel?'deel ':'')+(gepakt?'gepakt':'')+'">' + (alleenKijken ? (gepakt ? '<span style="color:#15803d;font-weight:700" title="Ingeladen">✓</span>' : '') : '<input type="checkbox" data-pak="'+esc(pk)+'" data-pakrit="'+esc(r.id)+'" data-pakorder="'+esc(s.order)+'" data-paksleutel="'+esc(a.sleutel || "")+'"'+(gepakt?' checked':'')+'>') +
       '<span>'+(deel?'':'<b>'+Math.abs(a.aantal)+'x</b> ')+esc(naam)+(a.code ? '<small>'+esc(a.code)+'</small>' : '')+'</span>' +
       /* Een artikel van deze stop halen, bijvoorbeeld bij een nalevering waar de
          rest al geleverd is. Bij een set gaan de onderdelen mee. */
@@ -461,7 +475,7 @@ function stopHtml(r, s, i, opt){
       (i < r.stops.length - 1 ? '<button type="button" class="bewerkknop" title="Later in de rit" data-neer="'+esc(s.order)+'">▼</button>' : '') +
       '<button type="button" class="bewerkknop rood" title="Stop uit deze rit halen" data-stopweg="'+esc(s.order)+'">✕</button></div>' : '';
   var h = '<div class="stop'+(s.af?' af':'')+'" data-stop="'+esc(k)+'"><div class="stopkop"'+(opt.altijdOpen?'':' data-klap="'+esc(k)+'"')+'><div class="nr">'+(i+1)+'</div>' +
-    '<div class="wie"><b>'+esc(s.klant || ("Order "+s.order))+'</b><small>'+esc([s.plaats, "order "+s.order].filter(Boolean).join(" · "))+'</small></div>'+pil+knoppen+'</div>';
+    '<div class="wie"><b>'+esc(s.klant || ("Order "+s.order))+'</b><small>'+esc([s.plaats, "order "+s.order].filter(Boolean).join(" · "))+'</small></div>'+(betaalStand(s) ? '<span class="stip '+betaalStand(s).kleur+'" title="'+esc(betaalStand(s).tekst)+'"></span>' : '')+pil+knoppen+'</div>';
   if (!isOpen) return h + '</div>';
   h += '<div class="velden">';
   if (s.gefactureerd) h += veld("Ordernummer", esc(s.order)) + '<div class="veld"><div class="w zacht">Deze order is al gefactureerd; de gegevens staan in Logic4 bij de factuur.</div></div>';
@@ -471,6 +485,7 @@ function stopHtml(r, s, i, opt){
     var info = s.infoAangepast || [s.opmerkingRit, s.notities].filter(Boolean).join("\n\n");
     h += veld("Ordernummer", esc(s.order)) +
       veld("Klantnaam", esc(s.klant || "-") + (s.bedrijf && s.bedrijf !== s.klant ? '<br><small>'+esc(s.bedrijf)+'</small>' : '')) +
+      (betaalStand(s) ? veld("Betaling", '<span class="betaal '+betaalStand(s).kleur+'">'+esc(betaalStand(s).tekst)+'</span>') : '') +
       veld("Telefoonnummer klant", s.telefoon ? esc(s.telefoon)+(opt.alleenKijken ? '' : '<br><a class="knop" href="tel:'+esc(s.telefoon.replace(/[^\d+]/g,""))+'">📞 Bellen</a>') : '<span class="zacht">Er staat nog geen nummer bij deze order in Logic4.</span>') +
       (adres ? veld("Adres", esc(adres)+(opt.alleenKijken ? '' : '<br><a class="knop" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(adres+(s.land && s.land !== "NL" ? ", "+s.land : ""))+'">🧭 Route</a>')) : '') +
       (opt.bewerk && infoBewerk[k]
@@ -484,7 +499,7 @@ function stopHtml(r, s, i, opt){
       fotosHtml(r, s, !opt.alleenKijken);
   }
   if (!opt.alleenKijken) h += afmeldHtml(r, s, k);
-  else if (s.af) h += '<div class="afmeld"><div class="klaar"><b>✓ '+soortLabel(s.af.soort)+'</b> om '+tijd(s.af.ts)+(s.af.chauffeur ? ' door '+esc(chauffeurNaam(s.af.chauffeur)) : '')+(s.af.opmerking ? '<br><b style="color:#92400e">Opmerking:</b> '+esc(s.af.opmerking) : '')+'</div></div>';
+  else if (s.af) h += '<div class="afmeld"><div class="klaar"><b>✓ '+soortLabel(s.af.soort)+'</b> om '+tijd(s.af.ts)+(s.af.chauffeur ? ' door '+esc(chauffeurNaam(s.af.chauffeur)) : '')+(s.af.opmerking ? '<br><b style="color:#92400e">Opmerking:</b> '+esc(s.af.opmerking) : '')+'</div>'+bonMailHtml(k, s.af, s.mail)+'</div>';
   return h + '</div></div>';
 }
 /* Geleverd, retour of omruiling: bij een omruiling gaat er iets heen en komt er
@@ -498,6 +513,70 @@ function handImgs(k, a){
     (a.getekend2 && h2 ? '<div style="margin-top:8px;font-size:12.5px;color:var(--grijs)">Voor retour meegegeven</div><img alt="Handtekening retour" src="'+h2+'">' : '');
 }
 async function haalHand(k){ var d = k.split(":"); var j = await lees("/bakwagen/handtekening?rit="+encodeURIComponent(d[0])+"&order="+encodeURIComponent(d[1])); handCache[k] = j.hand || ""; handCache[k+":2"] = j.hand2 || ""; }
+/* ═══ Uit Planning overgenomen (Gerrit, 21 okt 2026) ═══════════════════
+   De hele route in Google Maps, rijtijd en kilometers per rit, de
+   betaalstand per stop en de bevestiging mailen naar de klant. */
+var THUIS = "Fonteyn, Uddel";
+function adresVan(s){ var a = [s.adres, [s.postcode, s.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", "); return a ? a + (s.land && s.land !== "NL" ? ", " + s.land : "") : ""; }
+function routeUrl(stops){
+  var adr = stops.map(adresVan).filter(Boolean);
+  return adr.length ? "https://www.google.com/maps/dir/" + [THUIS].concat(adr).concat([THUIS]).map(encodeURIComponent).join("/") : "";
+}
+function ritBalk(r, alleenOpen){
+  var stops = alleenOpen ? r.stops.filter(function(s){ return !s.af; }) : r.stops;
+  var u = routeUrl(stops);
+  return '<div class="ritbalk">' + (u ? '<a class="knop" target="_blank" rel="noopener" href="'+esc(u)+'" data-routeknop="'+esc(r.id)+'">🧭 '+(alleenOpen && stops.length < r.stops.length ? 'Route langs de resterende '+stops.length+' stop'+(stops.length===1?'':'s') : 'Hele route in Google Maps')+'</a>' : '') +
+    '<span class="rijtijd" data-rt="'+esc(r.id)+'" title="Rijtijd vanuit Uddel langs alle stops en terug, zonder de tijd bij de klant"></span></div>';
+}
+var rijCache = {};
+function rijTekst(x){ if (!x || x.min == null) return ""; var u = Math.floor(x.min/60), m = x.min%60; return "🚗 "+(u ? u+"u"+String(m).padStart(2,"0") : m+" min")+" · "+x.km+" km"; }
+async function rijtijdVullen(ritten, poging){
+  var vraag = [], sleutelVan = {};
+  ritten.forEach(function(r){ var adr = (r.stops||[]).map(adresVan).filter(Boolean).slice(0, 14); if (!adr.length) return; var k = adr.join(" > "); sleutelVan[r.id] = k; if (!rijCache[k]) vraag.push({ k: String(r.id), adressen: adr }); });
+  var zet = function(){ document.querySelectorAll("[data-rt]").forEach(function(el){ var t = rijTekst(rijCache[sleutelVan[el.dataset.rt]]); if (el.textContent !== t) el.textContent = t; }); };
+  zet();
+  if (!vraag.length) return;
+  try {
+    var j = await lees("/planning/rijtijd", { method: "POST", body: JSON.stringify({ routes: vraag }) });
+    var bezig = false;
+    vraag.forEach(function(v){ var x = j && j.routes && j.routes[v.k]; if (x && x.min != null) rijCache[sleutelVan[v.k]] = x; else if (x && x.bezig) bezig = true; });
+    zet();
+    if (bezig && poging < 6) setTimeout(function(){ rijtijdVullen(ritten, poging + 1); }, 4000);
+  } catch(e) {}
+}
+function euro(n){ return "€ " + (Number(n)||0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function betaalStand(s){
+  var b = s.betaal; if (!b || s.gefactureerd) return null;
+  if (b.isBetaald || b.betaald >= b.totaal - 0.005) return { kleur: "groen", kort: "Betaald", tekst: "Betaald" + (b.totaal ? " (" + euro(b.totaal) + ")" : "") };
+  if (b.betaald > 0) return { kleur: "oranje", kort: "Aanbetaald", tekst: "Aanbetaald: " + euro(b.betaald) + " van " + euro(b.totaal) + ", nog " + euro(b.totaal - b.betaald) };
+  return { kleur: "rood", kort: "Nog te betalen", tekst: "Nog te betalen: " + euro(b.totaal) };
+}
+/* De bevestiging mailen: staat klaar, gaat aan na akkoord van Gerrit op het voorbeeld. */
+var BON_MAIL_AAN = false;
+var bonMailOpen = {};
+function bonMailHtml(k, a, mail){
+  if (!planner || !BON_MAIL_AAN || !a || !a.getekend) return '';
+  var gm = a.gemaild;
+  if (!bonMailOpen[k]) return '<div class="bonmail">' + (gm ? '<span style="font-size:13px;color:#15803d">✓ Bevestiging gemaild naar '+esc(gm.naar)+' om '+tijd(gm.ts)+'</span>' : '') +
+    '<button type="button" class="klein" style="margin:0" data-bonopen="'+esc(k)+'">'+(gm ? 'Nog een keer mailen' : '✉️ Bevestiging mailen naar de klant')+'</button></div>';
+  return '<div class="bonmail"><input type="email" data-bonnaar="'+esc(k)+'" value="'+esc(mail || "")+'" placeholder="Mailadres van de klant"><button type="button" class="klein" style="margin:0" data-bonstuur="'+esc(k)+'">Versturen</button><button type="button" class="klein" style="margin:0" data-bonsluit="'+esc(k)+'">Annuleren</button><span class="melding" data-bonmelding="'+esc(k)+'"></span></div>';
+}
+function koppelBonMail(waar, opnieuw, vind){
+  waar.querySelectorAll("[data-bonopen]").forEach(function(b){ b.addEventListener("click", function(){ bonMailOpen[b.dataset.bonopen] = true; opnieuw(); }); });
+  waar.querySelectorAll("[data-bonsluit]").forEach(function(b){ b.addEventListener("click", function(){ delete bonMailOpen[b.dataset.bonsluit]; opnieuw(); }); });
+  waar.querySelectorAll("[data-bonstuur]").forEach(function(b){ b.addEventListener("click", async function(){
+    var k = b.dataset.bonstuur, d = k.split(":"), veldje = waar.querySelector('[data-bonnaar="'+k+'"]'), m = waar.querySelector('[data-bonmelding="'+k+'"]');
+    var naar = (veldje.value || "").trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) { m.className = "melding slecht"; m.textContent = "Vul een geldig mailadres in."; return; }
+    if (!(await fpBevestig("De bevestiging met de handtekening van de klant naar "+naar+" mailen?", { knop: "Versturen" }))) return;
+    b.disabled = true; b.textContent = "Bezig…";
+    try { var j = await lees("/bakwagen/bonmail", { method: "POST", body: JSON.stringify({ rit: d[0], order: d[1], naar: naar }) }); if (!j.ok) throw new Error(j.error || "onbekend");
+      var a = vind(k); if (a) a.gemaild = j.gemaild; delete bonMailOpen[k];
+      try{ if (window.fpLog) window.fpLog("bakwagen-bon-gemaild", "order " + d[1] + " naar " + naar); }catch(e){}
+      opnieuw(); }
+    catch(e){ b.disabled = false; b.textContent = "Versturen"; m.className = "melding slecht"; m.textContent = "Versturen vraagt nog een poging: " + e.message; }
+  }); });
+}
 function veld(k, w){ return '<div class="veld"><div class="k">'+k+'</div><div class="w">'+w+'</div></div>'; }
 
 /* ═══ Foto's als bewijs (Gerrit, 16 okt 2026) ═══════════════════════════
@@ -584,7 +663,7 @@ function tekenTreffers(){
       (a && a.naam ? '<div style="margin-top:4px;font-size:14px">Getekend door: '+esc(a.naam)+'</div>' : '') +
       (a && a.opmerking ? '<div class="opm"><b>Opmerking:</b> '+esc(a.opmerking)+'</div>' : '') +
       (a && a.getekend ? (handCache[k] !== undefined ? (a.soort === "omruiling" ? '<div style="margin-top:6px;font-size:12.5px;color:var(--grijs)">Voor ontvangst</div>' : '') + (handCache[k] ? '<img class="handimg" alt="Handtekening" src="'+handCache[k]+'">' : '') + (handCache[k+":2"] ? '<div style="margin-top:6px;font-size:12.5px;color:var(--grijs)">Voor retour meegegeven</div><img class="handimg" alt="Handtekening retour" src="'+handCache[k+":2"]+'">' : '') : '<button type="button" class="klein" data-zoekhand="'+esc(k)+'">Handtekening'+(a.getekend2?'en':'')+' bekijken</button>') : '') +
-      (x.fotos.length ? '<div class="fotos" style="margin-top:8px">'+x.fotos.map(function(f){ return '<img data-foto="'+esc(f.id)+'" alt="foto">'; }).join("")+'</div>' : '') + '</div>';
+      (x.fotos.length ? '<div class="fotos" style="margin-top:8px">'+x.fotos.map(function(f){ return '<img data-foto="'+esc(f.id)+'" alt="foto">'; }).join("")+'</div>' : '') + bonMailHtml(k, a, x.mail) + '</div>';
   }).join("");
   $("zoekUit").querySelectorAll("[data-zoekhand]").forEach(function(b){ b.addEventListener("click", async function(){
     var k = b.dataset.zoekhand, d2 = k.split(":"); b.disabled = true; b.textContent = "Even ophalen…";
@@ -592,6 +671,7 @@ function tekenTreffers(){
     catch(e){ b.disabled = false; b.textContent = "Handtekening bekijken"; }
   }); });
   laadFotos($("zoekUit"));
+  koppelBonMail($("zoekUit"), tekenTreffers, function(k){ var t = zoekData.stops.find(function(x){ return sleutel(x.rit, x.order) === k; }); return t && t.af; });
 }
 function afmeldHtml(r, s, k){
   if (s.af && !(concept[k] && concept[k].opnieuw)) {
@@ -600,7 +680,7 @@ function afmeldHtml(r, s, k){
       (a.naam ? '<br>Getekend door: '+esc(a.naam) : '')+
       (a.opmerking ? '<br><br><b style="color:#92400e">Opmerking:</b> '+esc(a.opmerking) : '')+
       handImgs(k, a)+
-      '</div><button type="button" class="klein" data-opnieuw="'+esc(k)+'">Opnieuw afmelden</button></div>';
+      '</div><button type="button" class="klein" data-opnieuw="'+esc(k)+'">Opnieuw afmelden</button>'+bonMailHtml(k, a, s.mail)+'</div>';
   }
   var c = concept[k] || {}, soort = c.soort || standaardSoort(r, s);
   var vak = function(veldnaam){ return '<div class="hand" data-handveld="'+veldnaam+'"><canvas></canvas><button type="button" class="wis">Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>'; };
@@ -634,7 +714,16 @@ function koppelDag(){
     try { var j = await lees("/bakwagen/bestuurder", { method: "POST", body: JSON.stringify({ rit: id, naam: naam }) }); if (!j.ok) throw new Error(j.error); r.bestuurder = j.bestuurder; tekenDag(); }
     catch(e){ b.disabled = false; b.textContent = "Bewaren"; }
   }); });
-  $("lijst").querySelectorAll("[data-pak]").forEach(function(v){ v.addEventListener("change", function(){ bewaarLokaal(v.dataset.pak, v.checked ? "1" : ""); v.closest("li").classList.toggle("gepakt", v.checked); }); });
+  /* Een vinkje gaat naar de server, zodat de planning en een collega het ook
+     zien. Lukt dat even niet (geen bereik), dan blijft het op de telefoon
+     staan. */
+  $("lijst").querySelectorAll("[data-pak]").forEach(function(v){ v.addEventListener("change", function(){
+    bewaarLokaal(v.dataset.pak, v.checked ? "1" : ""); v.closest("li").classList.toggle("gepakt", v.checked);
+    var x = zoekStop(sleutel(v.dataset.pakrit, v.dataset.pakorder)), sl = v.dataset.paksleutel;
+    if (x && sl) { x.s.gepakt = (x.s.gepakt || []).filter(function(y){ return y !== sl; }); if (v.checked) x.s.gepakt.push(sl); }
+    if (sl) lees("/bakwagen/pak", { method: "POST", body: JSON.stringify({ rit: v.dataset.pakrit, order: v.dataset.pakorder, sleutel: sl, aan: v.checked }) }).catch(function(){});
+  }); });
+  koppelBonMail($("lijst"), tekenDag, function(k){ var x = zoekStop(k); return x && x.s.af; });
   $("lijst").querySelectorAll(".stop").forEach(function(vak){
     var k = vak.dataset.stop, x = zoekStop(k); if (!x) return;
     var c = concept[k] = concept[k] || {};

@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-21", bestand: "bakwagen.html", soort: "beter",
+      titel: "Route, rijtijd, betaling en gedeelde paklijst",
+      wat:   "Bij elke rit staat een knop om de hele route in Google Maps te openen, met de rijtijd en de kilometers erbij. Bij elke stop zie je of de order betaald is (groen), aanbetaald (oranje) of nog betaald moet worden (rood). De vinkjes in de paklijst zijn nu voor iedereen gelijk: wat de chauffeur inlaadt, ziet de planning ook."
+    },
+    {
+      datum: "2026-10-21", bestand: "bakwagen.html", soort: "beter",
       titel: "Ritten zelf aanpassen en omruilen",
       wat:   "Bij Ritten klaarzetten pas je een rit nu zelf aan: een stop toevoegen met het ordernummer, een stop eruit halen of verschuiven, de chauffeursinfo aanpassen en per order een artikel weghalen (handig bij een nalevering). Alles is terug te zetten. Bij het afmelden staat er een derde keuze, Omruiling: dan tekent de klant twee keer, voor wat hij krijgt en voor wat mee terug gaat."
     },

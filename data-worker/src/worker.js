@@ -17173,6 +17173,8 @@ async function logic4Lees(env, request, body) {
    een kussen") komt als bericht bij Manon. Er gaat niets terug naar Logic4. */
 const BW_CHAUFFEURS = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex/i }];
 const BW_RIT = /eigen ?r?oute|bakwagen/i;
+// Waar een antwoord van de klant op de bevestiging terechtkomt.
+const BW_BON_ANTWOORD = "planning@fonteyn.nl";
 // Een opmerking van een chauffeur gaat naar Manon én Nomi (Gerrit, 16 okt 2026).
 const BW_MANON = ["manon@fonteyn.nl", "fonteyn.manon", "manon", "nomi@fonteyn.nl", "fonteyn.nomi", "nomi"];
 let _bwTabellen = false;
@@ -17193,6 +17195,11 @@ async function bwDb(env) {
        rit in Logic4 blijft zoals hij is; dit ligt er als laag overheen. */
     await db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_aanpas (rit TEXT PRIMARY KEY, json TEXT, door TEXT, ts INTEGER)").run();
     try { await db.prepare("ALTER TABLE bakwagen_af ADD COLUMN hand2 TEXT").run(); } catch (e) { /* bestaat al */ }
+    // Wie de bevestiging naar de klant mailde (Gerrit, 21 okt 2026).
+    try { await db.prepare("ALTER TABLE bakwagen_af ADD COLUMN gemaild TEXT").run(); } catch (e) { /* bestaat al */ }
+    /* De vinkjes van de paklijst, voor iedereen gelijk: de chauffeur vinkt op
+       zijn telefoon, de planning ziet het (Gerrit, 21 okt 2026). */
+    await db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_pak (rit TEXT, orderid TEXT, sleutel TEXT, door TEXT, ts INTEGER, PRIMARY KEY (rit, orderid, sleutel))").run();
     _bwTabellen = true;
   }
   return db;
@@ -17223,7 +17230,9 @@ function bwOrderKort(o, klant) {
     klant: String(a.ContactName || a.CompanyName || f.ContactName || b.ContactName || "").replace(/\bNone\b/g, "").replace(/\s+/g, " ").trim(), bedrijf: (a.CompanyName || "").trim(),
     telefoon, mail: a.Email || f.Email || "",
     adres: [a.Address1, a.Address2].filter(Boolean).join(" ").trim(), postcode: a.Zipcode || "", plaats: a.City || "", land: a.CountryCode || "",
-    notities: String(o.Notes || "").trim(), omschrijving: String(o.Description || "").trim(), artikelen };
+    notities: String(o.Notes || "").trim(), omschrijving: String(o.Description || "").trim(), artikelen,
+    /* Betaald of nog te betalen, zoals bij Planning (Totals van de order). */
+    betaal: o.Totals ? { totaal: Number(o.Totals.AmountIncl) || 0, betaald: Number(o.Totals.Calc_TotalPayed) || 0, isBetaald: !!o.Totals.IsPaid } : null };
 }
 async function bwLogic4(env) {
   const tok = await l4Token(env);
@@ -17312,8 +17321,14 @@ async function bwStops(env, db, l4, ritten) {
   const af = {};
   const ritIds = ritten.map(r => r.id);
   if (ritIds.length) {
-    const rs = await db.prepare("SELECT rit, orderid, soort, naam, opmerking, chauffeur, door, ts, length(hand) AS hl, length(hand2) AS hl2 FROM bakwagen_af WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
-    for (const x of rs.results || []) af[x.rit + ":" + x.orderid] = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, door: x.door, ts: x.ts, getekend: Number(x.hl) > 0, getekend2: Number(x.hl2) > 0 };
+    const rs = await db.prepare("SELECT rit, orderid, soort, naam, opmerking, chauffeur, door, ts, length(hand) AS hl, length(hand2) AS hl2, gemaild FROM bakwagen_af WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
+    for (const x of rs.results || []) { let gm = null; try { gm = x.gemaild ? JSON.parse(x.gemaild) : null; } catch (e) {}
+      af[x.rit + ":" + x.orderid] = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, door: x.door, ts: x.ts, getekend: Number(x.hl) > 0, getekend2: Number(x.hl2) > 0, gemaild: gm }; }
+  }
+  const pak = {};
+  if (ritIds.length) {
+    const rs = await db.prepare("SELECT rit, orderid, sleutel FROM bakwagen_pak WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...ritIds).all();
+    for (const x of rs.results || []) (pak[x.rit + ":" + x.orderid] = pak[x.rit + ":" + x.orderid] || []).push(x.sleutel);
   }
   const fotos = {};
   if (ritIds.length) {
@@ -17323,7 +17338,7 @@ async function bwStops(env, db, l4, ritten) {
   for (const r of ritten) {
     const ap = r.aanpas || bwAanpasLeeg();
     r.stops = r.regels.map(x => {
-      const s = Object.assign({ regel: String(x.Id), opmerkingRit: String(x.Remarks || "").trim(), af: af[r.id + ":" + x.OrderId] || null, fotos: fotos[r.id + ":" + x.OrderId] || [] },
+      const s = Object.assign({ regel: String(x.Id), opmerkingRit: String(x.Remarks || "").trim(), af: af[r.id + ":" + x.OrderId] || null, fotos: fotos[r.id + ":" + x.OrderId] || [], gepakt: pak[r.id + ":" + x.OrderId] || [] },
         (bewaard[String(x.OrderId)] || {}).o || { order: String(x.OrderId), laden: true });
       if (x.erbij) s.toegevoegd = true;
       // Chauffeursinfo die de planning zelf heeft aangepast, wint van Logic4.
@@ -17527,23 +17542,112 @@ async function bakwagenZoek(env, q) {
   const db = await bwDb(env);
   q = String(q || "").trim().toLowerCase().slice(0, 60);
   const woorden = q.split(/\s+/).filter(Boolean);
-  const af = (await db.prepare("SELECT a.rit, a.orderid, a.soort, a.naam, a.opmerking, a.chauffeur, a.ts, length(a.hand) AS hl, length(a.hand2) AS hl2, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_af a LEFT JOIN bakwagen_rit r ON r.id = a.rit LEFT JOIN bakwagen_order o ON o.id = a.orderid ORDER BY a.ts DESC LIMIT 2000").all()).results || [];
+  const af = (await db.prepare("SELECT a.rit, a.orderid, a.soort, a.naam, a.opmerking, a.chauffeur, a.ts, length(a.hand) AS hl, length(a.hand2) AS hl2, a.gemaild, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_af a LEFT JOIN bakwagen_rit r ON r.id = a.rit LEFT JOIN bakwagen_order o ON o.id = a.orderid ORDER BY a.ts DESC LIMIT 2000").all()).results || [];
   const ft = (await db.prepare("SELECT f.id, f.rit, f.orderid, f.chauffeur, f.ts, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_foto f LEFT JOIN bakwagen_rit r ON r.id = f.rit LEFT JOIN bakwagen_order o ON o.id = f.orderid ORDER BY f.ts DESC LIMIT 3000").all()).results || [];
   const per = new Map();
   const stop = (x) => {
     const k = x.rit + ":" + x.orderid;
     if (!per.has(k)) {
       let o = {}; try { o = x.json ? JSON.parse(x.json) : {}; } catch (e) {}
-      per.set(k, { rit: x.rit, order: x.orderid, ritnaam: x.ritnaam || "", datum: x.datum || "", klant: o.klant || "", plaats: o.plaats || "", af: null, fotos: [] });
+      per.set(k, { rit: x.rit, order: x.orderid, ritnaam: x.ritnaam || "", datum: x.datum || "", klant: o.klant || "", plaats: o.plaats || "", mail: o.mail || "", af: null, fotos: [] });
     }
     return per.get(k);
   };
-  for (const x of af) stop(x).af = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, ts: x.ts, getekend: Number(x.hl) > 0, getekend2: Number(x.hl2) > 0 };
+  for (const x of af) { let gm = null; try { gm = x.gemaild ? JSON.parse(x.gemaild) : null; } catch (e) {}
+    stop(x).af = { soort: x.soort, naam: x.naam, opmerking: x.opmerking, chauffeur: x.chauffeur, ts: x.ts, getekend: Number(x.hl) > 0, getekend2: Number(x.hl2) > 0, gemaild: gm }; }
   for (const x of ft) stop(x).fotos.push({ id: x.id, ts: x.ts, chauffeur: x.chauffeur });
   let lijst = [...per.values()];
   if (woorden.length) lijst = lijst.filter(s => { const t = [s.order, s.klant, s.plaats, s.ritnaam, s.datum, s.datum.split("-").reverse().join("-"), s.af && s.af.chauffeur, s.af && s.af.naam, s.af && s.af.opmerking, ...s.fotos.map(f => f.chauffeur)].join(" ").toLowerCase(); return woorden.every(w => t.includes(w)); });
   lijst.sort((a, b) => Math.max(b.af ? b.af.ts : 0, ...b.fotos.map(f => f.ts)) - Math.max(a.af ? a.af.ts : 0, ...a.fotos.map(f => f.ts)));
   return { ok: true, totaal: lijst.length, stops: lijst.slice(0, 60) };
+}
+/* Een vinkje in de paklijst, voor iedereen gelijk. */
+async function bakwagenPak(env, wie, planner, b) {
+  const rit = String(b.rit || "").replace(/\D/g, ""), order = String(b.order || "").replace(/\D/g, ""), sleutel = String(b.sleutel || "").slice(0, 200);
+  if (!rit || !order || !sleutel) return { ok: false, error: "rit, order en artikel zijn nodig" };
+  const db = await bwDb(env);
+  if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
+  if (b.aan) await db.prepare("INSERT OR REPLACE INTO bakwagen_pak (rit, orderid, sleutel, door, ts) VALUES (?1, ?2, ?3, ?4, ?5)").bind(rit, order, sleutel, wie, Date.now()).run();
+  else await db.prepare("DELETE FROM bakwagen_pak WHERE rit = ?1 AND orderid = ?2 AND sleutel = ?3").bind(rit, order, sleutel).run();
+  return { ok: true };
+}
+/* De getekende bevestiging naar de klant (Gerrit, 21 okt 2026), zoals de
+   opleverbon van de monteurs. Alleen de planning verstuurt hem, met de hand.
+   De opmerking van de chauffeur is intern en gaat niet mee. */
+async function bwBonGegevens(env, rit, order) {
+  const db = await bwDb(env);
+  const a = await db.prepare("SELECT a.*, r.naam AS ritnaam, r.datum FROM bakwagen_af a LEFT JOIN bakwagen_rit r ON r.id = a.rit WHERE a.rit = ?1 AND a.orderid = ?2").bind(rit, order).first();
+  if (!a) return null;
+  const o = await db.prepare("SELECT json FROM bakwagen_order WHERE id = ?1").bind(order).first();
+  let ord = {}; try { ord = o && o.json ? JSON.parse(o.json) : {}; } catch (e) {}
+  const ap = (await bwAanpasLees(db, [rit]))[rit] || {};
+  const art = bwArtikelenFilter(ord.artikelen || [], (ap.artikelWeg || {})[order]).blijf;
+  return { a, ord, art };
+}
+function bwBonHtml(g, metLogo) {
+  const e = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const { a, ord, art } = g;
+  const soort = a.soort === "omruiling" ? "omruiling" : a.soort === "retour" ? "retour" : "levering";
+  const datum = new Date(Number(a.ts) || Date.now());
+  const dag = datum.toLocaleDateString("nl-NL", { timeZone: "Europe/Amsterdam", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const tijd = datum.toLocaleTimeString("nl-NL", { timeZone: "Europe/Amsterdam", hour: "2-digit", minute: "2-digit" });
+  const td = "style='padding:5px 8px;border-bottom:1px solid #eee;font-size:13px'";
+  // Lange omschrijvingen (een montageregel met de hele uitleg) netjes inkorten.
+  const kort = (t) => { t = String(t || "").replace(/^\*\s*/, "").trim(); if (t.length <= 80) return t; const c = t.slice(0, 80); return c.slice(0, Math.max(40, c.lastIndexOf(" "))).replace(/[\s,.;:]+$/, "") + "…"; };
+  const lijst = (rijen) => "<table style='border-collapse:collapse;width:100%'>" + rijen.map(x => {
+    const deel = x.deel || /^\*\s*/.test(x.naam || "");
+    return "<tr><td " + td + " width='44'>" + (deel ? "" : "<b>" + Math.abs(Number(x.aantal) || 1) + "x</b>") + "</td><td " + td + ">" + (deel ? "<span style='color:#6b7280;padding-left:12px'>" : "") + e(kort(x.naam)) + (deel ? "</span>" : "") + "</td></tr>"; }).join("") + "</table>";
+  const mee = art.filter(x => Number(x.aantal) > 0), terug = art.filter(x => Number(x.aantal) < 0);
+  const kop = soort === "omruiling" ? "Bevestiging van uw omruiling" : soort === "retour" ? "Bevestiging van uw retour" : "Bevestiging van uw levering";
+  const zin = soort === "omruiling" ? "Wij hebben uw bestelling bij u afgeleverd en de artikelen voor de omruiling meegenomen. Hieronder ziet u wat er geleverd en wat er meegenomen is."
+    : soort === "retour" ? "Wij hebben de artikelen voor uw retour bij u opgehaald. Hieronder ziet u wat er meegenomen is."
+    : "Wij hebben uw bestelling bij u afgeleverd. Hieronder ziet u wat er geleverd is.";
+  const hand = (cid, label) => "<td style='padding:4px 18px 4px 0;vertical-align:top'><div style='color:#6b7280;font-size:12px'>" + e(label) + "</div><img src='cid:" + cid + "' alt='handtekening' width='240' style='display:block;border:1px solid #e5e7eb;border-radius:6px;max-width:240px'></td>";
+  return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:640px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden'>" +
+    "<div style='background:#144734;padding:18px 22px'>" + (metLogo ? "<img src='cid:fonteyn-logo' alt='Fonteyn' height='56' style='display:block;height:56px'>" : "<span style='color:#fff;font-size:20px;font-weight:bold'>Fonteyn</span>") + "</div>" +
+    "<div style='padding:20px 22px'>" +
+    "<h2 style='color:#144734;margin:0 0 4px;font-size:19px'>" + kop + "</h2>" +
+    "<p style='margin:0 0 16px;color:#6b7280;font-size:13px'>" + e(dag) + " om " + e(tijd) + (a.orderid ? " &middot; order " + e(a.orderid) : "") + "</p>" +
+    "<p style='font-size:14px;line-height:1.5'>Beste " + e(ord.klant || "klant") + ",<br><br>" + zin + "</p>" +
+    ((ord.adres || ord.plaats) ? "<p style='font-size:13px;color:#374151;margin:0 0 6px'><b>Adres:</b> " + e([ord.adres, [ord.postcode, ord.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", ")) + "</p>" : "") +
+    (mee.length && soort !== "retour" ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Geleverd</h3>" + lijst(mee) : "") +
+    (terug.length && soort !== "levering" ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Meegenomen</h3>" + lijst(terug) : "") +
+    (soort === "retour" && !terug.length && mee.length ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Meegenomen</h3>" + lijst(mee) : "") +
+    "<h3 style='color:#144734;margin:20px 0 6px;font-size:15px'>Voor akkoord getekend" + (a.naam ? " door " + e(a.naam) : "") + "</h3>" +
+    "<table style='border-collapse:collapse'><tr>" +
+      (soort === "omruiling" ? hand("hand-1", "Voor ontvangst") + (a.hand2 ? hand("hand-2", "Voor retour meegegeven") : "") : hand("hand-1", soort === "retour" ? "Voor retour meegegeven" : "Voor ontvangst")) +
+    "</tr></table>" +
+    "<p style='font-size:14px;line-height:1.5;margin-top:20px'>Bewaar deze mail bij uw aankoopgegevens. Heeft u een vraag? Beantwoord dan gewoon deze mail.</p>" +
+    "<p style='font-size:14px'>Met vriendelijke groet,<br>Fonteyn Bezorgservice</p></div></div>";
+}
+async function bakwagenBonMail(env, wie, b, voorbeeld) {
+  const rit = String(b.rit || "").replace(/\D/g, ""), order = String(b.order || "").replace(/\D/g, "");
+  const g = await bwBonGegevens(env, rit, order);
+  if (!g) return { ok: false, error: "Deze stop is nog niet afgemeld." };
+  if (voorbeeld) return { ok: true, html: bwBonHtml(g, false), naar: g.ord.mail || "" };
+  const naar = String(b.naar || g.ord.mail || "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) return { ok: false, error: "Vul een geldig mailadres van de klant in." };
+  if (!env.RESEND_API_KEY || !env.MAIL_FROM) return { ok: false, error: "mail is niet ingericht in de worker" };
+  const adres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
+  const bijlagen = [];
+  try {
+    const lr = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png");
+    if (lr.ok) { const u8 = new Uint8Array(await lr.arrayBuffer()); let bin = ""; for (let i = 0; i < u8.length; i += 8192) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 8192));
+      bijlagen.push({ filename: "fonteyn-logo.png", content: btoa(bin), content_id: "fonteyn-logo", content_type: "image/png" }); }
+  } catch (e) {}
+  if (g.a.hand) bijlagen.push({ filename: "handtekening.png", content: String(g.a.hand).split(",")[1], content_id: "hand-1", content_type: "image/png" });
+  if (g.a.hand2) bijlagen.push({ filename: "handtekening-retour.png", content: String(g.a.hand2).split(",")[1], content_id: "hand-2", content_type: "image/png" });
+  const soortTekst = g.a.soort === "omruiling" ? "omruiling" : g.a.soort === "retour" ? "retour" : "levering";
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: "Fonteyn Bezorgservice <" + adres + ">", to: [naar], reply_to: [BW_BON_ANTWOORD],
+      subject: "Bevestiging van uw " + soortTekst + " - order " + order, html: bwBonHtml(g, bijlagen.some(x => x.content_id === "fonteyn-logo")), attachments: bijlagen }) });
+  const tekst = await r.text();
+  if (!r.ok) return { ok: false, error: "Resend weigerde: HTTP " + r.status + " " + tekst.slice(0, 200) };
+  const gm = { naar, ts: Date.now(), door: wie };
+  const db = await bwDb(env);
+  await db.prepare("UPDATE bakwagen_af SET gemaild = ?1 WHERE rit = ?2 AND orderid = ?3").bind(JSON.stringify(gm), rit, order).run();
+  return { ok: true, gemaild: gm };
 }
 async function bakwagenHandtekening(env, wie, planner, rit, order) {
   const db = await bwDb(env);
@@ -18749,7 +18853,9 @@ const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                              inlog zonder Logic4) melden hun eigen stops af en zetten er foto's bij. De worker laat dat alleen
                              toe voor een rit die voor die chauffeur klaarstaat (bwMagBijRit), en er
                              schrijft niets terug wat gefilterd is: het is een eigen nieuwe regel. */
-                          "/bakwagen/afmelden", "/bakwagen/foto", "/bakwagen/bestuurder"];
+                          "/bakwagen/afmelden", "/bakwagen/foto", "/bakwagen/bestuurder", "/bakwagen/pak",
+                          // Rijtijd van de eigen rit: rekent alleen, schrijft niets terug.
+                          "/planning/rijtijd"];
 const EXTERN_EXACT = ["/internal/teamkey"];
 const EXTERN_VAKKEN = [
   "takenlijst", "taken", "taken-ritme", "dashboard-gezien", "dashboard-indeling", "voorraad-indeling",
@@ -20392,6 +20498,12 @@ const FP_WORKER = {
           return planner ? reply(200, await bakwagenRit(env, url.searchParams.get("id"))) : alleenPlanner();
         if (url.pathname === "/bakwagen/akkoord" && request.method === "POST")
           return planner ? reply(200, await bakwagenAkkoord(env, wie, await request.json().catch(() => ({})))) : alleenPlanner();
+        if (url.pathname === "/bakwagen/pak" && request.method === "POST")
+          return reply(200, await bakwagenPak(env, wie, planner, await request.json().catch(() => ({}))));
+        if (url.pathname === "/bakwagen/bonmail" && request.method === "POST")
+          return planner ? reply(200, await bakwagenBonMail(env, wie, await request.json().catch(() => ({})), false)) : alleenPlanner();
+        if (url.pathname === "/bakwagen/bonmail/voorbeeld" && request.method === "GET")
+          return planner ? reply(200, await bakwagenBonMail(env, wie, { rit: url.searchParams.get("rit"), order: url.searchParams.get("order") }, true)) : alleenPlanner();
         if (url.pathname === "/bakwagen/aanpas" && request.method === "POST")
           return planner ? reply(200, await bakwagenAanpas(env, wie, await request.json().catch(() => ({})))) : alleenPlanner();
         if (url.pathname === "/bakwagen/mijn" && request.method === "GET") {
