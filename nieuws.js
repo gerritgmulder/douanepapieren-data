@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "personeel.html", soort: "nieuw",
+      titel: "Personeel: alles uit het Excel Roemenen en Kroaten",
+      wat:   "Het schema staat nu per kamer met de woensdagen naast elkaar; een shift begint op woensdag en duurt twee weken, en met één vinkje herhaal je hem om de 4 weken. Bij Medewerkers staan alle mensen met hun gegevens, en bij Uren de gewerkte uren per week. Verder Kamers vandaag, Vluchten per woensdag en Delano. Gestippelde shifts zijn bij het inlezen niet zeker gekoppeld: klik erop en kies de juiste persoon."
+    },
+    {
       datum: "2026-10-23", bestand: "mijnroute.html", soort: "beter",
       titel: "Mijn route: adres en product in beeld",
       wat:   "Bij elke stop zie je meteen de klantnaam, het telefoonnummer, het adres en wat de klant krijgt. Tik op de stop voor de tijd, het ordernummer en de opleverbon. Paklijst en ordermemo staan niet meer in Mijn route."
