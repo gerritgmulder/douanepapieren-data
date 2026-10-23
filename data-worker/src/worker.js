@@ -7374,13 +7374,18 @@ async function dpRefreshShipEtas(env) {
     return true;
   });
   if (!kandidaten.length) return { ok: true, schepen: 0 };
-  const res = await merzarioTrack(env, kandidaten.map(s => String(s.trackRef).trim()), { force: false });
+  /* Elke ochtend (05 uur UTC, 6 of 7 uur in Nederland) vers bij de vervoerder,
+     buiten de bewaarde antwoorden om (Manon, 23 okt 2026: "elke ochtend een
+     keer checken en updaten"). De rest van de dag mag het antwoord 4 uur oud zijn. */
+  const ochtend = new Date().getUTCHours() === 5;
+  const res = await merzarioTrack(env, kandidaten.map(s => String(s.trackRef).trim()), { force: ochtend });
   delete res.__error;
   let nieuw = 0, gewijzigd = 0, afwijkend = 0;
   for (const s of kandidaten) {
     const rec = res[String(s.trackRef).trim()];
     if (!rec) continue;
     s.track = rec;
+    s.etaNagekeken = new Date().toISOString();
     if (!rec.eta) continue;
     if (s.etaHand) { if (s.eta !== rec.eta) afwijkend++; continue; }
     /* Een ETA van ruim twee maanden terug bij een container die nog onderweg
@@ -8113,6 +8118,15 @@ const KETEN_REGELS = {
   "service-bon":       { keten: "Service",  eigenaar: "kevin",   dagen: 1,  tegel: "planning.html", stap: "Servicebon laten invullen" },
   "service-mail":      { keten: "Service",  eigenaar: "kevin",   dagen: 3,  tegel: "planning.html", stap: "Servicebon nakijken en mailen" },
 };
+/* Werkdagen (ma t/m vr) bij een datum optellen. Feestdagen tellen mee als
+   werkdag; dat scheelt hooguit een dag. */
+function plusWerkdagen(iso, n) {
+  const d = new Date(String(iso || "").slice(0, 10) + "T12:00:00Z");
+  if (isNaN(d)) return String(iso || "").slice(0, 10);
+  let over = n;
+  while (over > 0) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6) over--; }
+  return d.toISOString().slice(0, 10);
+}
 function ketenDagen(vanISO, totISO) {
   const a = Date.parse(String(vanISO || "").slice(0, 10) + "T12:00:00Z"), b = Date.parse(String(totISO || "").slice(0, 10) + "T12:00:00Z");
   if (!a || !b) return 0;
@@ -8143,9 +8157,12 @@ async function ketenControle(env) {
     for (const sh of (schepen.ships || [])) {
       if (sh.alleenDocumenten || sh.dealerContainer || !sh.eta) continue;
       if (sh.binnenGemeld) continue;
-      if (sh.eta >= vandaag) continue;
-      meld("inkoop-eta", sh.ref || sh.file, { sinds: sh.eta, zaak: String(sh.ref || sh.file || ""),
-        tekst: "ETA " + String(sh.eta).split("-").reverse().join("-") + " is verstreken en de zending is niet binnen gemeld. Zolang dat niet gebeurt staan " + (sh.total || 0) + " spa's nergens als voorraad.",
+      /* Na de ETA: 3 werkdagen lossen en 3 werkdagen tot in Uddel (Gerrit,
+         23 okt 2026). Pas daarna hoort de container binnen gemeld te zijn. */
+      const inUddel = plusWerkdagen(sh.eta, 6);
+      if (inUddel >= vandaag) continue;
+      meld("inkoop-eta", sh.ref || sh.file, { sinds: inUddel, zaak: String(sh.ref || sh.file || ""),
+        tekst: "ETA " + String(sh.eta).split("-").reverse().join("-") + "; met lossen en vervoer was de zending rond " + inUddel.split("-").reverse().join("-") + " in Uddel. Hij is nog niet binnen gemeld. Zolang dat niet gebeurt staan " + (sh.total || 0) + " spa's nergens als voorraad.",
         aantal: sh.total || null });
     }
     const iko = await lees("voorraad-inkooporders");

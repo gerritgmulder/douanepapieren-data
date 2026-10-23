@@ -164,6 +164,21 @@
   .cont .knoppen { display:flex; gap:8px; flex:0 0 auto; }
   .cont .merkje { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px;
                   background:#dcfce7; color:#166534; }
+  /* Batches: de containers van één fabrieksorder bij elkaar (Manon, 23 okt 2026). */
+  .batch { border:1px solid var(--border); border-radius:11px; margin-bottom:12px; background:#fff; overflow:hidden; }
+  .batch.binnen { border-color:#bbf7d0; }
+  .batchkop { display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 15px; cursor:pointer; background:#fafaf7; }
+  .batch.open .batchkop { border-bottom:1px solid var(--border); }
+  .batchkop .titel { flex:1 1 280px; min-width:0; }
+  .batchkop .titel b { font-size:16px; color:#144734; }
+  .batchkop .titel .sub2 { font-size:12px; color:var(--muted); margin-top:3px; }
+  .batchkop .eta { font-size:12.5px; }
+  .batchkop .eta b { display:block; font-size:14.5px; }
+  .batchkop .pijl { font-size:16px; color:#144734; width:16px; }
+  .batchbody .cont { padding:9px 13px; }
+  .batchbody { padding:10px 12px 2px; }
+  .batchbody .cont { margin-bottom:8px; }
+  .contzoek { width:100%; max-width:420px; padding:9px 11px; border:1px solid var(--border); border-radius:8px; font:inherit; font-size:13.5px; margin-bottom:12px; }
 
   .bulk-actions {
     display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
@@ -672,6 +687,10 @@ function escapeHtml(v) {
 }
 const teamKey = () => localStorage.getItem("fp.teamkey") || "";
 let containers = [];
+let schepenEta = {};          // invoice/referentie -> { eta, etaNagekeken, vessel }
+let batchOpen = {};
+try { batchOpen = JSON.parse(localStorage.getItem("fp.labels.batchOpen") || "{}") || {}; } catch (e) {}
+let contZoek = "";
 document.addEventListener("DOMContentLoaded", function () {
   const knop = $("contUpload"), veld = $("contFile");
   if (!knop || !veld) return;
@@ -689,10 +708,33 @@ async function laadContainers() {
     const r = await fetch(WORKER_BASE + "/data/binnenkomend", { headers: { "X-Fonteyn-Auth": teamKey() } });
     if (r.ok) { const j = await r.json(); containers = (j && j.lijst) || []; }
   } catch (e) { console.warn("[containers] laden faalde:", e); }
+  /* De ETA per batch komt uit de schepen van Voorraadbeheer; die wordt op de
+     server elk uur bij de vervoerder nagekeken, elke ochtend vers. */
+  try {
+    const r2 = await fetch(WORKER_BASE + "/data/voorraad-schepen", { headers: { "X-Fonteyn-Auth": teamKey() } });
+    if (r2.ok) { const j2 = await r2.json(); schepenEta = {};
+      for (const sh of (j2.ships || [])) { const e = { eta: sh.eta || null, nagekeken: sh.etaNagekeken || null, hand: !!sh.etaHand, vessel: sh.vessel || "" };
+        if (sh.ref) schepenEta[String(sh.ref).trim()] = e; if (sh.trackRef) schepenEta[String(sh.trackRef).trim()] = schepenEta[String(sh.trackRef).trim()] || e; } }
+  } catch (e) { console.warn("[containers] ETA's laden faalde:", e); }
   // Ook bij een lege of mislukte ophaal het paneel tonen: anders is de knop om
   // zelf een container toe te voegen niet te vinden.
   toonContainers();
 }
+
+/* De korte fabrieksordercode uit de invoice: "RZ2009DF3352-4&3362-1 to
+   Rotterdam" wordt "3352-4&3362-1". Daaraan herkent Manon een batch. */
+function batchCode(c) {
+  const t = String(c.invoice || "").trim();
+  const m = t.match(/^(?:RZ\d*DF)?\s*([0-9][0-9A-Za-z&+\-\/ ]*?)(?:\s+to\s+.*)?$/i);
+  return (m && m[1].trim()) || t || "Zonder ordernummer";
+}
+function werkdagenErbij(iso, n) {
+  const d = new Date(String(iso).slice(0, 10) + "T12:00:00"); if (isNaN(d)) return null;
+  while (n > 0) { d.setDate(d.getDate() + 1); const w = d.getDay(); if (w !== 0 && w !== 6) n--; }
+  return d;
+}
+function datumKort(d) { return d ? d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" }) : ""; }
+function etaVan(c) { return schepenEta[String(c.invoice || "").trim()] || schepenEta[batchCode(c)] || null; }
 
 function toonContainers() {
   const box = $("contLijst");
@@ -706,7 +748,74 @@ function toonContainers() {
   if (!containers.length) { box.innerHTML = "<div class='sub'>Voeg een container toe met de knop hierboven, of lees bij Voorraadbeheer een commercial invoice in.</div>"; return; }
   box.innerHTML = "";
 
-  for (const c of containers) {
+  /* Per batch (Manon, 23 okt 2026): een batch van tien containers hoort bij
+     één fabrieksorder, zoals 3352-4&3362-1. Eerst de batch die het eerst
+     aankomt; open en dicht klappen, en zoeken op ordernummer of container. */
+  const zoekVeld = document.createElement("input");
+  zoekVeld.type = "search"; zoekVeld.className = "contzoek"; zoekVeld.value = contZoek;
+  zoekVeld.placeholder = "Zoek op fabrieksorder (bv. 3352) of containernummer";
+  zoekVeld.addEventListener("input", () => { contZoek = zoekVeld.value; const pos = zoekVeld.selectionStart; toonContainers(); const z = box.querySelector(".contzoek"); if (z) { z.focus(); try { z.setSelectionRange(pos, pos); } catch (e) {} } });
+  box.appendChild(zoekVeld);
+
+  const groepen = new Map();
+  for (const c of containers) { const k = batchCode(c); if (!groepen.has(k)) groepen.set(k, []); groepen.get(k).push(c); }
+  const q = contZoek.trim().toLowerCase();
+  const batches = [...groepen.entries()].map(([code, lijst]) => ({ code, lijst, eta: (etaVan(lijst[0]) || {}).eta || "" }))
+    .filter(b => !q || b.code.toLowerCase().includes(q) || b.lijst.some(c => String(c.nummer || "").toLowerCase().includes(q)))
+    .sort((a, b) => (a.lijst.every(c => c.binnen) - b.lijst.every(c => c.binnen)) || String(a.eta || "9999").localeCompare(String(b.eta || "9999")) || a.code.localeCompare(b.code));
+  if (!batches.length) { const leeg = document.createElement("div"); leeg.className = "sub"; leeg.textContent = "0 batches voor \"" + contZoek + "\"."; box.appendChild(leeg); return; }
+
+  for (const b of batches) {
+    const eerste = b.lijst[0], et = etaVan(eerste) || {};
+    const allesBinnen = b.lijst.every(c => c.binnen), nBinnen = b.lijst.filter(c => c.binnen).length;
+    const labels = b.lijst.reduce((n, c) => n + (c.colli || []).reduce((m, x) => m + (x.colli || 0), 0), 0);
+    const open = q ? true : !!batchOpen[b.code];
+    const wrap = document.createElement("div");
+    wrap.className = "batch" + (open ? " open" : "") + (allesBinnen ? " binnen" : "");
+    const kop = document.createElement("div");
+    kop.className = "batchkop";
+    const uddel = et.eta ? werkdagenErbij(et.eta, 6) : null;
+    kop.innerHTML = "<span class='pijl'>" + (open ? "▾" : "▸") + "</span>" +
+      "<div class='titel'><b>" + escapeHtml(b.code) + "</b>" + (allesBinnen ? " <span class='merkje' style='font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#166534'>binnen</span>" : "") +
+      "<div class='sub2'>" + b.lijst.length + " container" + (b.lijst.length === 1 ? "" : "s") + (nBinnen && !allesBinnen ? " (" + nBinnen + " binnen)" : "") +
+      " &middot; " + labels + " labels" + ((et.vessel || eerste.vaart) ? " &middot; " + escapeHtml(et.vessel || eerste.vaart) : "") + "</div></div>" +
+      "<div class='eta'>" + (et.eta ? "ETA <b>" + escapeHtml(new Date(et.eta + "T12:00:00").toLocaleDateString("nl-NL", { day: "numeric", month: "short" })) + "</b>" +
+        "<span style='color:var(--muted)'>in Uddel rond " + escapeHtml(datumKort(uddel)) + "</span>" : "<span style='color:var(--muted)'>ETA volgt</span>") +
+        (et.nagekeken ? "<div style='font-size:11px;color:var(--muted)' title='Bij de vervoerder nagekeken'>nagekeken " + escapeHtml(new Date(et.nagekeken).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) + (et.hand ? " (zelf ingevuld)" : "") + "</div>" : "") + "</div>";
+    const knoppen = document.createElement("div");
+    knoppen.className = "knoppen"; knoppen.style.display = "flex"; knoppen.style.gap = "8px";
+    const alleLabels = document.createElement("button");
+    alleLabels.type = "button";
+    alleLabels.textContent = "Labels voor " + (b.lijst.length === 1 ? "deze container" : "alle " + b.lijst.length) + " klaarzetten →";
+    alleLabels.addEventListener("click", (e) => { e.stopPropagation(); containersNaarLabels(b.lijst, b.code); });
+    knoppen.appendChild(alleLabels);
+    const alleBinnen = document.createElement("button");
+    alleBinnen.type = "button"; alleBinnen.className = "secondary";
+    alleBinnen.textContent = allesBinnen ? "Toch nog onderweg" : "Hele batch binnen";
+    alleBinnen.addEventListener("click", async (e) => {
+      e.stopPropagation(); alleBinnen.disabled = true;
+      for (const c of b.lijst) if (!!c.binnen === allesBinnen) await zetContainer(c, { binnen: !allesBinnen }, true);
+      toonContainers();
+    });
+    knoppen.appendChild(alleBinnen);
+    kop.appendChild(knoppen);
+    kop.addEventListener("click", () => { batchOpen[b.code] = !open; try { localStorage.setItem("fp.labels.batchOpen", JSON.stringify(batchOpen)); } catch (e) {} toonContainers(); });
+    wrap.appendChild(kop);
+    if (open) {
+      const lijstBox = document.createElement("div");
+      lijstBox.className = "batchbody";
+      for (const c of b.lijst) {
+        if (q && !b.code.toLowerCase().includes(q) && !String(c.nummer || "").toLowerCase().includes(q)) continue;
+        lijstBox.appendChild(containerRegel(c));
+      }
+      wrap.appendChild(lijstBox);
+    }
+    box.appendChild(wrap);
+  }
+}
+
+/* Eén container als regel, binnen zijn batch. */
+function containerRegel(c) {
     const d = document.createElement("div");
     d.className = "cont" + (c.binnen ? " binnen" : "");
     const naam = c.nummer || ("Container " + c.volgnummer);
@@ -716,10 +825,7 @@ function toonContainers() {
     wie.className = "wie";
     wie.innerHTML = "<b>" + escapeHtml(naam) + "</b>" +
       (c.maat ? " <span style='color:var(--muted);font-size:12px'>" + escapeHtml(c.maat) + "</span>" : "") +
-      (c.binnen ? " <span class='merkje'>binnen</span>" : "") +
-      "<div class='sub2'>" + escapeHtml(c.leverancier || "onbekende leverancier") +
-      (c.invoice ? " &middot; " + escapeHtml(c.invoice) : "") +
-      (c.vaart ? " &middot; " + escapeHtml(c.vaart) : "") + "</div>";
+      (c.binnen ? " <span class='merkje'>binnen</span>" : "");   // leverancier, order en schip staan al bij de batch
     d.appendChild(wie);
 
     const cijfers = document.createElement("div");
@@ -765,8 +871,7 @@ function toonContainers() {
     knoppen.appendChild(weg);
     d.appendChild(knoppen);
 
-    box.appendChild(d);
-  }
+    return d;
 }
 
 /* Zelf een container toevoegen.
@@ -815,7 +920,7 @@ async function containerUploaden(file) {
   } catch (e) { zeg("Inlezen vraagt nog een poging: " + e.message, "#b91c1c"); }
 }
 
-async function zetContainer(c, wat) {
+async function zetContainer(c, wat, stil) {
   try {
     const r = await fetch(WORKER_BASE + "/binnenkomend/zet", {
       method: "POST",
@@ -827,11 +932,19 @@ async function zetContainer(c, wat) {
     else if (j && j.ok && j.container) Object.assign(c, j.container);
     else if (j && !j.ok) alert("Dit vraagt nog een poging: " + (j.error || "reden volgt"));
   } catch (e) { console.warn("[containers] bijwerken faalde:", e); }
-  toonContainers();
+  if (!stil) toonContainers();
 }
 
 /* Eén container omzetten naar labelregels. Per regel van de packing list
    evenveel labels als er colli zijn. */
+/* Een hele batch in één keer: alle colli van alle containers achter elkaar
+   (Manon, 23 okt 2026). */
+function containersNaarLabels(lijst, code) {
+  const samen = { invoice: lijst[0].invoice || code, leverancier: lijst[0].leverancier || "", vaart: lijst[0].vaart || "",
+    nummer: lijst.length === 1 ? (lijst[0].nummer || "") : ("batch " + code + " (" + lijst.length + " containers)"), volgnummer: lijst[0].volgnummer,
+    colli: [].concat.apply([], lijst.map(c => c.colli || [])) };
+  containerNaarLabels(samen);
+}
 function containerNaarLabels(c) {
   state.rows = (c.colli || []).map(x => ({
     supplierCode: x.artikel || "",

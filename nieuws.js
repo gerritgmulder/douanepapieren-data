@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "labels.html", soort: "beter",
+      titel: "Containers per batch",
+      wat:   "Bij Containers onderweg staan de containers nu per fabrieksorder (bijvoorbeeld 3352-4&3362-1), met de ETA en wanneer ze rond in Uddel zijn. Klap een batch open voor de containers, zet met één knop de labels voor de hele batch klaar, of meld de hele batch binnen. Zoeken kan op ordernummer of containernummer."
+    },
+    {
+      datum: "2026-10-23", bestand: "voorraad.html", soort: "beter",
+      titel: "Binnen melden pas na lossen en vervoer",
+      wat:   "Na de ETA rekent het Dashboard 3 werkdagen voor het lossen en 3 werkdagen tot in Uddel. Pas daarna staat een container als nog binnen te melden. De ETA's worden elke ochtend vers bij de vervoerder nagekeken."
+    },
+    {
       datum: "2026-10-23", bestand: "retouren.html", soort: "beter",
       titel: "Retouren per order, op leverdatum en per periode",
       wat:   "Ophalen gaat nu op de indicatie leverdatum, en ordernummer en datums staan naast elkaar. Bij Dag, Week, Maand en Jaar kies je zelf welke (met de pijltjes of de kiezer). Adviseur, reden, retourlocatie en uitleg vul je één keer per order in; een order met drie regels telt als één retour, ook in het nieuwe blok Per adviseur."

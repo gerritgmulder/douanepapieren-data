@@ -232,6 +232,13 @@ function mailKey(){ return localStorage.getItem("fp.mailkey") || ""; }
 function mij(){ return (localStorage.getItem("fp.email")||"").toLowerCase(); }
 function nlDatum(s){ if(!s) return "-"; var d=new Date(s); return isNaN(d)?"-":
   String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear(); }
+/* Na de ETA: 3 werkdagen lossen en 3 werkdagen tot in Uddel (Gerrit, 23 okt 2026). */
+function inUddel(eta){
+  if(!eta) return null;
+  var d=new Date(String(eta).slice(0,10)+"T12:00:00"); if(isNaN(d)) return null;
+  var n=6; while(n>0){ d.setDate(d.getDate()+1); var w=d.getDay(); if(w!==0&&w!==6) n--; }
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 function dagenTot(s){
   if(!s) return null;
   var d=new Date(String(s).slice(0,10)+"T00:00:00").getTime();
@@ -410,7 +417,7 @@ function schepenVoorLijst(){
                containers:Number(s.containers)||0,
                spas:lading.reduce(function(n,x){ return n+x.aantal; },0),
                lading:lading, los:los, binnenGemeld:s.binnenGemeld||null,
-               binnen:!!s.binnenGemeld || (dg!==null && dg<=0), bron:s };
+               binnen:!!s.binnenGemeld || (dagenTot(inUddel(s.eta))!==null && dagenTot(inUddel(s.eta))<0), bron:s };
     })
     .sort(function(a,b){ return String(a.eta||"9999").localeCompare(String(b.eta||"9999")); });
 }
@@ -423,7 +430,9 @@ function schipKaart(s, i){
     ? "binnen gemeld op " + nlDatum(s.binnenGemeld.op) +
       (s.binnenGemeld.door ? " door " + esc(String(s.binnenGemeld.door).split("@")[0]) : "")
     : nlDatum(s.eta) + (s.dagen===null ? " · aankomst onbekend"
-        : (s.dagen<=0 ? " · zou binnen moeten zijn" : " · over " + s.dagen + " dagen"));
+        : (s.dagen>0 ? " · over " + s.dagen + " dagen"
+          : dagenTot(inUddel(s.eta))>=0 ? " · in Rotterdam; in Uddel rond " + nlDatum(inUddel(s.eta))
+          : " · zou binnen moeten zijn"));
   var zoekTekst = [s.vessel, s.ref].filter(Boolean).join(" ").toLowerCase();
   var stukken = s.lading.map(function(x){
     return '<span class="stuk" data-zoek="'+esc((x.model+" "+x.kleur).toLowerCase())+'" data-aantal="'+x.aantal+'">'+

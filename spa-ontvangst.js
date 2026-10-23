@@ -50,6 +50,15 @@
     if (isNaN(d)) return "-";
     return String(d.getDate()).padStart(2, "0") + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + d.getFullYear();
   }
+  /* Na de ETA: 3 werkdagen lossen, 3 werkdagen tot in Uddel (Gerrit, 23 okt
+     2026). Pas daarna is een container "te laat" om binnen te melden. */
+  function plusWerkdagen(iso, n) {
+    if (!iso) return null;
+    var d = new Date(String(iso).slice(0, 10) + "T12:00:00"); if (isNaN(d)) return null;
+    while (n > 0) { d.setDate(d.getDate() + 1); var w = d.getDay(); if (w !== 0 && w !== 6) n--; }
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function inUddel(eta) { return plusWerkdagen(eta, 6); }
   function dagenTot(s) {
     if (!s) return null;
     var d = new Date(String(s).slice(0, 10) + "T00:00:00").getTime();
@@ -455,15 +464,17 @@
 
       var links = el("div", "so-onderweg-wie");
       links.appendChild(el("strong", null, zendingNaam(s)));
-      var dg = dagenTot(s.eta);
-      /* Vandaag, morgen, over zoveel dagen - of de ETA is al geweest. Dat
-         laatste hoort opgemerkt te worden en niet stilletjes te verdwijnen:
-         zolang niemand hem binnen meldt, staat de container hier. */
+      var dg = dagenTot(s.eta), du = dagenTot(inUddel(s.eta));
+      /* Vandaag, morgen, over zoveel dagen; daarna lossen en vervoer (6
+         werkdagen). Pas als ook dat voorbij is, valt het op: zolang niemand hem
+         binnen meldt, staat de container hier. */
       var wanneer = dg === null ? "aankomst onbekend"
         : dg > 1 ? "over " + dg + " dagen"
         : dg === 1 ? "morgen"
         : dg === 0 ? "vandaag verwacht"
-        : "ETA verstreken - nog binnen te melden";
+        : du >= 0 ? "in Rotterdam; in Uddel rond " + nlDatum(inUddel(s.eta))
+        : "nog binnen te melden (in Uddel sinds " + nlDatum(inUddel(s.eta)) + ")";
+      dg = du;   // het oranje "te laat" pas na lossen en vervoer
       var etaRegel = el("span", "so-meta klein",
         nlDatum(s.eta) + "  ·  " + wanneer +
         (s.vessel && s.vessel !== zendingNaam(s) ? "  ·  " + s.vessel : ""));
@@ -579,8 +590,8 @@
   }
 
   function kaart(s) {
-    var dagen = dagenTot(s.eta);
-    var binnen = !!s.binnenGemeld || (dagen !== null && dagen <= 0);
+    var dagen = dagenTot(s.eta), dagenUddel = dagenTot(inUddel(s.eta));
+    var binnen = !!s.binnenGemeld || (dagenUddel !== null && dagenUddel < 0);
     var d = el("div", "so-kaart" + (binnen ? " binnen" : ""));
 
     var rij = el("div", "so-rij");
@@ -595,7 +606,7 @@
       (s.binnenGemeld
         ? "  ·  binnen gemeld op " + nlDatum(s.binnenGemeld.op) +
           (s.binnenGemeld.door ? " door " + String(s.binnenGemeld.door).split("@")[0] : "")
-        : (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : "  ·  over " + dagen + " dagen"))) +
+        : (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : dagen < 0 ? "  ·  in Uddel rond " + nlDatum(inUddel(s.eta)) : "  ·  over " + dagen + " dagen"))) +
       "  ·  " + s.spas + " spa's" + (s.containers ? ("  ·  " + s.containers + " containers") : "")));
     links.appendChild(el("div", "so-meta klein",
       [s.vessel, s.ref !== zendingNaam(s) ? s.ref : ""].filter(Boolean).join("  ·  ")));
