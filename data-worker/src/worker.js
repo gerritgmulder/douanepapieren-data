@@ -17174,7 +17174,7 @@ async function logic4Lees(env, request, body) {
 const BW_CHAUFFEURS = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex/i }];
 const BW_RIT = /eigen ?r?oute|bakwagen/i;
 // Waar een antwoord van de klant op de bevestiging terechtkomt.
-const BW_BON_ANTWOORD = "planning@fonteyn.nl";
+const BW_BON_ANTWOORD = "logistiek@fonteyn.nl";   // Manon, 23 okt 2026
 // Een opmerking van een chauffeur gaat naar Manon én Nomi (Gerrit, 16 okt 2026).
 const BW_MANON = ["manon@fonteyn.nl", "fonteyn.manon", "manon", "nomi@fonteyn.nl", "fonteyn.nomi", "nomi"];
 let _bwTabellen = false;
