@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
+      titel: "Korting en montage staan al afgevinkt",
+      wat:   "Regels die geen product zijn, zoals korting, compensatie, montage, transport en garantie, staan in de paklijst apart onderaan en zijn al afgevinkt. Daar valt niets te pakken."
+    },
+    {
+      datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
       titel: "Live meekijken en bevestiging mailen",
       wat:   "Een afmelding, foto of vinkje van een chauffeur zie je meteen, zonder te verversen. Bovenaan staat wie er meekijkt. Na het afmelden mail je de klant met één klik een bevestiging met de handtekening erin, ook vanuit Zoeken."
     },

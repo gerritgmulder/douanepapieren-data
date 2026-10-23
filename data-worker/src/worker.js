@@ -17221,10 +17221,17 @@ function bwTel(t) { t = String(t || "").trim(); return (t.replace(/\D/g, "").len
 function bwOrderKort(o, klant) {
   const a = o.DeliveryAddress || {}, f = o.InvoiceAddress || {}, b = o.AccountAddress || {};
   const telefoon = bwTel(a.TelephoneNumber) || bwTel(f.TelephoneNumber) || bwTel(b.TelephoneNumber) || bwTel(klant && klant.MobileNumber) || bwTel(klant && klant.TelephoneNumber);
-  const artikelen = (o.OrderRows || []).filter(r => !/^(korting|compensatie|verzendkosten|bezorgkosten|kosten )/i.test(String(r.Description || "").trim()) && !(Number(r.NettPrice) < 0))
-    .map(r => ({ aantal: Number(r.Qty) || 1, naam: String(r.Description || "").replace(/\s+/g, " ").trim().slice(0, 140), code: String(r.ProductCode || "").trim(),
-                 barcode: String(r.ProductBarcode1 || "").trim(), deel: !!r.IsAssemblyChild }))
-    .filter(r => r.naam).slice(0, 30);
+  /* Regels die geen product zijn: korting, compensatie, montage, transport,
+     garantie en kosten. Die staan in de paklijst, maar al afgevinkt, want er
+     valt niets te pakken (Gerrit, 23 okt 2026). Logic4 geeft daar geen eigen
+     kenmerk voor; het zit in de naam, in een artikelcode zonder cijfers
+     ("Korting", "Garantie") of in een negatieve prijs. */
+  const DIENST = /korting|compensatie|\bmontage|\binstallatie\b|\btransport\b|bezorg|verzend|garantie|voorrijkosten|\barbeid\b|\bkosten\b|aanbetaling|\bservice\b/i;
+  const artikelen = (o.OrderRows || [])
+    .map(r => { const naam = String(r.Description || "").replace(/\s+/g, " ").trim().slice(0, 140), code = String(r.ProductCode || "").trim();
+      return { aantal: Number(r.Qty) || 1, naam, code, barcode: String(r.ProductBarcode1 || "").trim(), deel: !!r.IsAssemblyChild,
+               dienst: !/\d/.test(code) || DIENST.test(naam) || Number(r.NettPrice) < 0 }; })
+    .filter(r => r.naam).slice(0, 40);
   return { order: String(o.Id), debiteur: o.DebtorId || null,
     // Logic4 zet "None" neer als er geen voornaam is ingevuld ("None Nusmeijer").
     klant: String(a.ContactName || a.CompanyName || f.ContactName || b.ContactName || "").replace(/\bNone\b/g, "").replace(/\s+/g, " ").trim(), bedrijf: (a.CompanyName || "").trim(),
@@ -17612,7 +17619,7 @@ function bwBonHtml(g, metLogo) {
   const lijst = (rijen) => "<table style='border-collapse:collapse;width:100%'>" + rijen.map(x => {
     const deel = x.deel || /^\*\s*/.test(x.naam || "");
     return "<tr><td " + td + " width='44'>" + (deel ? "" : "<b>" + Math.abs(Number(x.aantal) || 1) + "x</b>") + "</td><td " + td + ">" + (deel ? "<span style='color:#6b7280;padding-left:12px'>" : "") + e(kort(x.naam)) + (deel ? "</span>" : "") + "</td></tr>"; }).join("") + "</table>";
-  const mee = art.filter(x => Number(x.aantal) > 0), terug = art.filter(x => Number(x.aantal) < 0);
+  const mee = art.filter(x => Number(x.aantal) > 0 && !x.dienst), terug = art.filter(x => Number(x.aantal) < 0 && !x.dienst);
   const kop = soort === "omruiling" ? "Bevestiging van uw omruiling" : soort === "retour" ? "Bevestiging van uw retour" : "Bevestiging van uw levering";
   const zin = soort === "omruiling" ? "Wij hebben uw bestelling bij u afgeleverd en de artikelen voor de omruiling meegenomen. Hieronder ziet u wat er geleverd en wat er meegenomen is."
     : soort === "retour" ? "Wij hebben de artikelen voor uw retour bij u opgehaald. Hieronder ziet u wat er meegenomen is."

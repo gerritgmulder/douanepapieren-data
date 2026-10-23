@@ -135,6 +135,8 @@ main{margin:14px auto;padding:0 14px 60px}
 .paklijst input{width:24px;height:24px;flex:0 0 auto;margin:0;accent-color:var(--goed)}
 .paklijst li.deel{padding-left:16px;font-size:13.5px;color:var(--grijs)}
 .paklijst li.gepakt span{color:var(--grijs);text-decoration:line-through}
+.paklijst.dienst li span{text-decoration:none;font-size:13px}
+.paklijst.dienst input{opacity:.6}
 .paklijst small{display:block;color:var(--grijs);font-size:12px}
 .groet{font-size:20px;font-weight:700;color:var(--groen);margin:4px 2px 2px}
 .fotos{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -447,6 +449,11 @@ function tekenDag(){
    omruiling of retour mee terug komt (een regel met een min-aantal in de
    order). Onderdelen van een set staan in Logic4 met een * ervoor; die
    staan hier ingesprongen onder de set. */
+/* Korting, montage, transport, garantie: geen product, dus vanzelf afgevinkt
+   (Gerrit, 23 okt 2026). */
+function dienstRegel(a){
+  return '<li class="gepakt"><input type="checkbox" checked disabled><span>'+(a.deel ? '' : '<b>'+Math.abs(a.aantal)+'x</b> ')+esc(String(a.naam||"").replace(/^\*\s*/, "").slice(0, 90))+'</span></li>';
+}
 function paklijstHtml(r, s, alleenKijken, bewerk){
   var weg = s.artikelenWeg || [];
   if ((!s.artikelen || !s.artikelen.length) && !(bewerk && weg.length)) return '';
@@ -458,12 +465,13 @@ function paklijstHtml(r, s, alleenKijken, bewerk){
       /* Een artikel van deze stop halen, bijvoorbeeld bij een nalevering waar de
          rest al geleverd is. Bij een set gaan de onderdelen mee. */
       (bewerk && a.sleutel ? '<button type="button" class="weg" title="Van deze stop halen" data-artweg="'+esc(s.order)+'" data-sleutel="'+esc(a.sleutel)+'">✕</button>' : '') + '</li>'; };
-  var mee = [], terug = [];
-  (s.artikelen || []).forEach(function(a, i){ (a.aantal < 0 ? terug : mee).push(regel(a, i)); });
+  var mee = [], terug = [], dienst = [];
+  (s.artikelen || []).forEach(function(a, i){ if (a.dienst) dienst.push(dienstRegel(a)); else (a.aantal < 0 ? terug : mee).push(regel(a, i)); });
   var wegHtml = bewerk && weg.length ? '<div class="weglijst"><b>Van deze stop gehaald:</b>' + weg.filter(function(a){ return a.zelf; }).map(function(a){
       return '<div><s>'+(a.deel||/^\*\s*/.test(a.naam)?'':Math.abs(a.aantal)+'x ')+esc(a.naam.replace(/^\*\s*/, ""))+'</s><button type="button" class="bewerkknop" data-artterug="'+esc(s.order)+'" data-sleutel="'+esc(a.sleutel)+'">Terugzetten</button></div>'; }).join("") + '</div>' : '';
   return (mee.length ? '<div class="veld"><div class="k">Paklijst: mee naar de klant</div><ul class="paklijst">' + mee.join("") + '</ul></div>' : '') +
     (terug.length ? '<div class="veld"><div class="k" style="color:#1d4ed8">Retour: mee terug van de klant</div><ul class="paklijst">' + terug.join("") + '</ul></div>' : '') +
+    (dienst.length ? '<div class="veld"><div class="k">Geen product, staat al afgevinkt</div><ul class="paklijst dienst">' + dienst.join("") + '</ul></div>' : '') +
     (wegHtml ? '<div class="veld">' + wegHtml + '</div>' : '');
 }
 function stopHtml(r, s, i, opt){

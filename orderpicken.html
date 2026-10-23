@@ -168,7 +168,8 @@ var scherm = "lijsten", melding = null, laatst = null, plek = "";
 function regelsVan(lijst){
   var uit = [];
   (lijst.orders || []).forEach(function(o){
-    var a = (o.artikelen || []).filter(function(x){ return x.aantal > 0; });
+    // Korting, montage, transport en dergelijke zijn geen producten (dienst).
+    var a = (o.artikelen || []).filter(function(x){ return x.aantal > 0 && !x.dienst; });
     a.forEach(function(x, i){
       var deel = x.deel || /^\*\s*/.test(x.naam), volgende = a[i+1];
       var kop = !deel && volgende && (volgende.deel || /^\*\s*/.test(volgende.naam));
