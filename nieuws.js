@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "mijnroute.html", soort: "beter",
+      titel: "Mijn route: kort overzicht",
+      wat:   "Van elke stop zie je eerst alleen de klantnaam en het telefoonnummer (tik op het nummer om te bellen). Tik op de stop voor de rest: adres, order, paklijst, memo en opleverbon."
+    },
+    {
       datum: "2026-10-23", bestand: "labels.html", soort: "beter",
       titel: "Containers per batch",
       wat:   "Bij Containers onderweg staan de containers nu per fabrieksorder (bijvoorbeeld 3352-4&3362-1), met de ETA en wanneer ze rond in Uddel zijn. Klap een batch open voor de containers, zet met één knop de labels voor de hele batch klaar, of meld de hele batch binnen. Zoeken kan op ordernummer of containernummer."

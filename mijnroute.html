@@ -83,6 +83,14 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .stop .soort{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle}
 .stop .bel{display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0 2px;padding:11px 14px;border-radius:10px;background:var(--groen);color:#fff;font-weight:700;font-size:15px;text-decoration:none}
 .stop .betaal{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:6px;vertical-align:middle}
+/* Ingeklapt: alleen de klantnaam en het telefoonnummer (Gerrit, 23 okt 2026:
+   "ze moeten nu een heel end scrollen"). Tik op de stop voor de rest. */
+.stop .klapkop{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.stop .klapkop .naam{flex:1;min-width:0;overflow-wrap:break-word}
+.stop .klapkop .pijl{flex:0 0 auto;color:var(--groen);font-size:17px;width:16px;text-align:center}
+.stop .klapkop .telkort{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;background:var(--groen);color:#fff;text-decoration:none;font-weight:700;font-size:13.5px;padding:7px 11px;border-radius:9px;white-space:nowrap}
+.stop .details{display:none;margin-top:10px}
+.stop.open .details{display:block}
 .stop .let{background:#fee2e2;border-left:4px solid var(--rood);padding:6px 10px;border-radius:8px;font-size:12.5px;margin-top:8px;font-weight:600}
 .paklijst{margin-top:10px;border:1px solid var(--rand);border-radius:10px;overflow:hidden}
 .paklijst .pk{display:flex;align-items:center;justify-content:space-between;background:#f8faf5;padding:7px 11px;font-size:12px;font-weight:700;color:var(--groen);text-transform:uppercase;letter-spacing:.04em}
@@ -352,7 +360,12 @@ function stopHtml(a){
   var nr = String(a.ordernr||"").trim();
   var o = nr ? orders[nr] : null;
   var b = nr ? betaald[nr] : (a.itsId ? (betaald["its:"+a.itsId]||{}).info : null);
-  var html = '<div class="stop" style="border-left:5px solid '+c.kleur+'">'+
+  var tel = telVan(a, o), open = !!stopOpen[String(a.id)] || !!bonOpen[a.id];
+  var html = '<div class="stop'+(open?' open':'')+'" style="border-left:5px solid '+c.kleur+'">'+
+    '<div class="klapkop" data-klap="'+esc(String(a.id))+'"><span class="pijl">'+(open?'▾':'▸')+'</span>'+
+      '<span class="naam">'+esc(a.klant||c.naam)+'</span>'+
+      (tel ? '<a class="telkort" href="tel:'+esc(tel.replace(/[^\d+]/g,""))+'">&#128222; '+esc(tel)+'</a>' : '')+'</div>'+
+    '<div class="details">'+
     '<div class="kop"><div class="tijd">'+esc(a.tijd||"")+'</div><div style="flex:1;min-width:0">'+
     '<div class="naam">'+esc(a.klant||c.naam)+
       '<span class="soort" style="background:'+c.vlak+';color:'+c.kleur+'">'+esc(c.naam)+'</span>'+
@@ -368,7 +381,6 @@ function stopHtml(a){
     '</div>'+
     (a.wat && !a.itsId ? '<div class="sub">'+esc(a.wat)+'</div>' : '')+
     '</div></div>'+
-    belKnop(telVan(a, o))+
     (a.letop ? '<div class="let">Let op: hier is iets bijzonders nodig (twee man, hijsen, karretje)</div>' : '');
 
   if (nr){
@@ -406,8 +418,11 @@ function stopHtml(a){
   if (o && o.ok && String(o.notities||"").trim())
     html += '<div class="memo"><b>Order memo</b>'+esc(String(o.notities).trim())+'</div>';
   html += bonBlok(a, o);
-  return html + '</div>';
+  return html + '</div></div>';
 }
+/* Welke stops er openstaan; blijft zo bij het verversen. */
+var stopOpen = {};
+try { stopOpen = JSON.parse(sessionStorage.getItem("fp.mr.open") || "{}") || {}; } catch(e) {}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OPLEVERBON
@@ -721,6 +736,15 @@ function teken(){
     cb.addEventListener("change", function(){ vink(cb.dataset.nr, Number(cb.dataset.i), cb.checked); });
   });
   koppelBon(box);
+  box.querySelectorAll("[data-klap]").forEach(function(k){
+    k.addEventListener("click", function(e){
+      if (e.target.closest && e.target.closest("a")) return;   // bellen, niet openklappen
+      var id = k.dataset.klap; stopOpen[id] = !stopOpen[id];
+      if (!stopOpen[id] && bonOpen[id]) delete bonOpen[id];
+      try { sessionStorage.setItem("fp.mr.open", JSON.stringify(stopOpen)); } catch(e2) {}
+      teken();
+    });
+  });
   haalOrders(lijst);
 }
 
