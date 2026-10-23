@@ -99,6 +99,9 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .stop .klapkop .pijl{flex:0 0 auto;color:var(--groen);font-size:17px;width:16px;text-align:center}
 .stop .klapkop .telkort{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;background:var(--groen);color:#fff;text-decoration:none;font-weight:700;font-size:13.5px;padding:7px 11px;border-radius:9px;white-space:nowrap}
 .stop .details{display:none;margin-top:10px}
+.stop .blokje{margin:6px 0 0 26px;font-size:13px;line-height:1.45;color:var(--grijs)}
+.stop .blokje a{color:var(--groen)}
+.stop .blokje .product{color:var(--ink);font-size:13px}
 .stop.open .details{display:block}
 .stop .let{background:#fee2e2;border-left:4px solid var(--rood);padding:6px 10px;border-radius:8px;font-size:12.5px;margin-top:8px;font-weight:600}
 .paklijst{margin-top:10px;border:1px solid var(--rand);border-radius:10px;overflow:hidden}
@@ -383,43 +386,30 @@ function stopHtml(a){
     '<div class="klapkop" data-klap="'+esc(String(a.id))+'"><span class="pijl">'+(open?'▾':'▸')+'</span>'+
       '<span class="naam">'+esc(a.klant||c.naam)+'</span>'+
       (tel ? '<a class="telkort" href="tel:'+esc(tel.replace(/[^\d+]/g,""))+'">&#128222; '+esc(tel)+'</a>' : '')+'</div>'+
+    /* Altijd in beeld: adres en wat de klant krijgt (Gerrit, 23 okt 2026). */
+    ((a.plaats || (a.wat && !a.itsId)) ? '<div class="blokje">'+
+      (a.plaats ? '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a.plaats)+'" target="_blank" rel="noopener">'+esc(a.plaats)+'</a>' : '')+
+      (a.wat && !a.itsId ? '<div class="product">'+esc(a.wat)+'</div>' : '')+'</div>' : '')+
     '<div class="details">'+
     '<div class="kop"><div class="tijd">'+esc(a.tijd||"")+'</div><div style="flex:1;min-width:0">'+
     '<div class="naam">'+esc(a.klant||c.naam)+
       '<span class="soort" style="background:'+c.vlak+';color:'+c.kleur+'">'+esc(c.naam)+'</span>'+
       (b && BETAALD[b.stand] ? '<span class="betaal" style="background:'+BETAALD[b.stand]+'" title="'+esc(b.stand)+'"></span>' : '')+'</div>'+
     '<div class="sub">'+
-      (a.plaats ? '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a.plaats)+'" target="_blank" rel="noopener">'+esc(a.plaats)+'</a>' : '')+
-      (nr ? ' &middot; order '+esc(nr) : '')+(a.itsId ? ' &middot; ITS '+esc(a.itsId) : '')+
+      (nr ? 'order '+esc(nr) : '')+(a.itsId ? (nr ? ' &middot; ' : '')+'ITS '+esc(a.itsId) : '')+
       /* Debiteurnummer van de klant (Kevin, 14 okt 2026): uit de order, of
          bij een servicemelding uit de melding. */
       (function(){ var mi = a.itsId && meldingen ? meldingen.find(function(m){ return String(m.id) === String(a.itsId); }) : null;
         var d = (o && o.ok && o.debiteur) || (mi && mi.debiteur) || "";
         return d ? ' &middot; debiteur '+esc(d) : ""; })()+
     '</div>'+
-    (a.wat && !a.itsId ? '<div class="sub">'+esc(a.wat)+'</div>' : '')+
     '</div></div>'+
     (a.letop ? '<div class="let">Let op: hier is iets bijzonders nodig (twee man, hijsen, karretje)</div>' : '');
 
-  if (nr){
-    if (!o) html += '<p class="wacht">Paklijst wordt opgehaald&hellip;</p>';
-    else if (!o.ok) html += '<p class="fout">Order '+esc(nr)+' vraagt Logic4 nog een keer: '+esc(o.error||"")+'</p>';
-    else {
-      var regels = pakRegels(o);
-      var alGeleverd = (o.regels||[]).filter(function(r){ return r.open != null && r.afgeleverd > 0 && r.open <= 0; }).length;
-      var af = regels.filter(function(x){ return gepakt(nr,x.i); }).length;
-      html += '<div class="paklijst"><div class="pk"><span>Paklijst</span><span class="tel'+(af===regels.length&&regels.length?" klaar":"")+'">'+
-        (af===regels.length&&regels.length ? "Alles gepakt ✓" : af+" van "+regels.length+" gepakt")+'</span></div>'+
-        regels.map(function(x){
-          var r = x.r, i = x.i;
-          return '<label class="regel'+(gepakt(nr,i)?" af":"")+'"><input type="checkbox" data-nr="'+esc(nr)+'" data-i="'+i+'"'+(gepakt(nr,i)?" checked":"")+'>'+
-            '<span class="om">'+esc(r.omschrijving)+(r.code?'<small>'+esc(r.code)+'</small>':'')+'</span>'+
-            '<span class="aantal">'+esc(x.aantal)+'&times;</span></label>';
-        }).join("")+
-        (alGeleverd ? '<div class="regel" style="color:var(--grijs);font-size:12px">'+alGeleverd+' regel'+(alGeleverd===1?"":"s")+' al eerder geleverd, staat er niet meer bij</div>' : '')+
-        (!regels.length && !alGeleverd ? '<div class="regel" style="color:var(--grijs);font-size:12px">Alles staat al klaar</div>' : '')+'</div>';
-    }
-  }
+  /* Paklijst en ordermemo staan niet meer in Mijn route (Gerrit, 23 okt
+     2026). De order wordt nog wel opgehaald: voor het telefoonnummer en de
+     opleverbon. */
+  if (nr && o && !o.ok) html += '<p class="fout">Order '+esc(nr)+' vraagt Logic4 nog een keer: '+esc(o.error||"")+'</p>';
   if (a.itsId){
     var m = (meldingen||[]).find(function(x){ return Number(x.id)===Number(a.itsId); });
     if (!meldingen) html += '<p class="wacht">Melding wordt opgehaald&hellip;</p>';
@@ -432,9 +422,6 @@ function stopHtml(a){
         '</div>';
     }
   }
-  /* Ordermemo uit Logic4 (het veld Notes, op de orderbevestiging "Order memo"). */
-  if (o && o.ok && String(o.notities||"").trim())
-    html += '<div class="memo"><b>Order memo</b>'+esc(String(o.notities).trim())+'</div>';
   html += bonBlok(a, o);
   return html + '</div></div>';
 }
@@ -747,7 +734,7 @@ function teken(){
     alleOrders.forEach(function(nr){ var o = orders[nr]; if (o && o.ok){ pakRegels(o).forEach(function(x){ tot++; if (gepakt(nr,x.i)) af++; }); } });
     return '<section class="route"><h2><span class="nr">Route '+esc(x.r.nr)+'</span>'+
       '<span class="wie">'+esc(rijders(x.r).join(" & ")||"nog niemand")+(x.vanMij||kijkAls==="*"?"":" (van een collega)")+'</span>'+
-      (tot ? '<span class="voortgang">'+af+'/'+tot+' gepakt</span>' : '')+'</h2>'+
+      '</h2>'+
       x.stops.map(stopHtml).join("")+'</section>';
   }).join("");
   box.querySelectorAll("input[type=checkbox][data-nr]").forEach(function(cb){

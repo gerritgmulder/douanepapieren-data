@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-23", bestand: "mijnroute.html", soort: "beter",
+      titel: "Mijn route: adres en product in beeld",
+      wat:   "Bij elke stop zie je meteen de klantnaam, het telefoonnummer, het adres en wat de klant krijgt. Tik op de stop voor de tijd, het ordernummer en de opleverbon. Paklijst en ordermemo staan niet meer in Mijn route."
+    },
+    {
+      datum: "2026-10-23", bestand: "mijnroute.html", soort: "beter",
       titel: "Mijn route: kort overzicht",
       wat:   "Van elke stop zie je eerst alleen de klantnaam en het telefoonnummer (tik op het nummer om te bellen). Tik op de stop voor de rest: adres, order, paklijst, memo en opleverbon."
     },
