@@ -2096,6 +2096,31 @@ async function dpHandleReserve(request, env, sess, url) {
   let deposit = Math.round(teBetalen * 100) / 100;
   const currency = isUS ? "USD" : "EUR";
 
+  /* OPDRACHTBEVESTIGING VOOR HET BETALEN (Gerrit, 23 okt 2026)
+     Een partner (Ondrej, NO TRADING) vroeg om een opdrachtbevestiging om te
+     betalen zoals hij gewend is. Gerrit: prima, maar betalen gaat via Passion
+     Partners. Daarom laat het portaal bij Checkout eerst zien hoe de
+     opdrachtbevestiging eruitziet, en pas daarna komt de knop Betalen.
+     Met voorbeeld:true rekent deze route alles uit zoals bij het echte
+     bestellen (prijzen, btw, aanbetaling, rest), maar maakt hij niets aan:
+     geen aanvraag, geen order in Logic4 en geen betaling. */
+  if (body.voorbeeld === true) {
+    const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    const f = (dealerPre && dealerPre.facturatie) || {};
+    const totaalIncl = r2(totaalExVat * btwF);
+    return reply(200, { ok: true, voorbeeld: true, currency, vatPercent: Number(vatPercent) || 0, payFull, levering,
+      eigenAanbetaling: eigenAanbetaling != null ? eigenAanbetaling : null,
+      regels: regels.map(r => ({ soort: r.soort, naam: r.soort === "spa" ? r.model : r.naam, variantName: r.variantName || null,
+        code: r.code || null, qty: r.qty, unit: r2(r.unit), fp: r2(r.fp || 0), totaal: r2(((Number(r.unit) || 0) + (Number(r.fp) || 0)) * r.qty) })),
+      totaalExVat: r2(totaalExVat), btw: r2(totaalIncl - totaalExVat), totaalInclVat: totaalIncl,
+      teBetalen: deposit, rest: r2(Math.max(0, totaalIncl - deposit)),
+      vracht: body.vracht && typeof body.vracht === "object" ? body.vracht : null,
+      klant: { company: (dealerPre && dealerPre.company) || klant.company || "", email: klant.email,
+        adres: [[f.straat, f.huisnummer, f.toevoeging].filter(Boolean).join(" "), [f.postcode, f.plaats].filter(Boolean).join(" "), f.land].filter(Boolean),
+        btw: f.btw || "", debiteur: debtorId || null },
+      datum: new Date().toISOString().slice(0, 10) });
+  }
+
   const eersteSpa = regels.find(r => r.soort === "spa");
   const samenvatting = regels.map(r => r.qty + "x " + (r.soort === "spa" ? r.model : r.naam)).join(", ").slice(0, 180);
 
@@ -2342,6 +2367,42 @@ async function dpHandleSetPassword(request, env, sess) {
 
 // GET /dealers/api/requests — de eigen reserveringsaanvragen van deze dealer,
 // zodat een verzoek na indienen zichtbaar blijft (status: new/paid/…).
+/* GET /dealers/api/bevestiging?id=<aanvraag> - de opdrachtbevestiging van een
+   bestelling die al geplaatst is, om opnieuw te downloaden onder My spas
+   (Gerrit, 23 okt 2026). Zelfde opbouw als het voorbeeld vóór het betalen,
+   met het ordernummer en wat er al betaald is. Alleen voor wie de bestelling
+   ook in My spas ziet. */
+async function dpHandleBevestiging(env, sess, url) {
+  const id = String(url.searchParams.get("id") || "");
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const r = (Array.isArray(data.requests) ? data.requests : []).find(x => x.id === id);
+  const ik = String(sess.email || "").toLowerCase();
+  if (!r || ![r.email, r.overgezetVan, r.aangemaaktDoor].map(x => String(x || "").toLowerCase()).includes(ik))
+    return reply(404, { ok: false, error: "bestelling onbekend" });
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const items = Array.isArray(r.items) && r.items.length ? r.items : [{ soort: "spa", model: r.model, qty: r.qty, code: r.variant, variantName: r.variantName }];
+  const regels = items.map(x => ({ soort: x.soort || "spa", naam: (x.soort || "spa") === "spa" ? x.model : (x.naam || x.code),
+    variantName: x.variantName || null, code: x.code || null, qty: Number(x.qty) || 1, unit: r2(x.unit), fp: r2(x.fp || 0),
+    totaal: r2(((Number(x.unit) || 0) + (Number(x.fp) || 0)) * (Number(x.qty) || 1)) }));
+  const totaalExVat = r2(regels.reduce((n, x) => n + x.totaal, 0));
+  const vat = Number(r.vatPercent) || 0;
+  const totaalIncl = r2(totaalExVat * (1 + vat / 100));
+  const accounts = await dpGetAccounts(env);
+  const acc = dpFindDealer(accounts, r.email) || {};
+  const f = acc.facturatie || {};
+  const betaald = r.paymentStatus === "paid" || r.status === "paid";
+  return reply(200, { ok: true, definitief: true, currency: r.currency || "EUR", vatPercent: vat, payFull: !!r.payFull, levering: r.levering || "voorraad",
+    eigenAanbetaling: r.eigenAanbetaling != null ? r.eigenAanbetaling : null,
+    regels, totaalExVat, btw: r2(totaalIncl - totaalExVat), totaalInclVat: totaalIncl,
+    teBetalen: r2(r.deposit), rest: r2(Math.max(0, totaalIncl - (Number(r.deposit) || 0))),
+    betaald, restBetaald: !!r.restBetaald, ordernr: r.logic4OrderId || null,
+    vracht: r.vracht || null,
+    klant: { company: acc.company || r.company || "", email: r.email,
+      adres: [[f.straat, f.huisnummer, f.toevoeging].filter(Boolean).join(" "), [f.postcode, f.plaats].filter(Boolean).join(" "), f.land].filter(Boolean),
+      btw: f.btw || "", debiteur: r.debtorId || (acc.debtorIds || [])[0] || null },
+    datum: String(r.ts || new Date().toISOString()).slice(0, 10) });
+}
+
 async function dpHandleMyRequests(env, sess) {
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   const ik = String(sess.email || "").toLowerCase();
@@ -5162,6 +5223,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/photo" && request.method === "GET") return dpHandleSpaPhoto(env, url);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);
+    if (p === "/dealers/api/bevestiging" && request.method === "GET") return dpHandleBevestiging(env, sess, url);
     if (p === "/dealers/api/partners" && request.method === "GET") return dpHandlePartnerLijst(env, sess);
     if (p === "/dealers/api/overzetten" && request.method === "POST") return dpHandleOverzetten(request, env, sess, url);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
