@@ -178,6 +178,9 @@ main{margin:14px auto;padding:0 14px 60px}
 .stip.groen{background:#16a34a}.stip.oranje{background:#f59e0b}.stip.rood{background:#dc2626}
 .bonmail{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .bonmail input{flex:1 1 200px;min-width:0;font:inherit;font-size:14.5px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:9px}
+.voorbeeld .afmeld button,.voorbeeld .afmeld input,.voorbeeld .afmeld textarea,.voorbeeld .hand,.voorbeeld .fotoknop,.voorbeeld .paklijst input,
+.voorbeeld [data-bestuurderbewaar],.voorbeeld [data-bestuurder],.voorbeeld header a,.voorbeeld header button{pointer-events:none}
+.voorbeeld .afmeld .groot{opacity:.55}
 @media (max-width:600px){ main{padding:0 8px 60px} .stops{grid-template-columns:1fr} }
 </style>
 </head>
@@ -225,6 +228,18 @@ function naamVan(mail){ var m = String(mail||"").split("@")[0].replace(/^fonteyn
 var planner = !!(window.fpToegang && fpToegang.mag("bakwagen-planning", ik));
 function chauffeurVanInlog(w){ w = String(w||"").toLowerCase(); if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Dani"; if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy"; if (/^flex([.@_ -]|$)/.test(w)) return "Flex"; return ""; }
 var ikChauffeur = chauffeurVanInlog(ik);
+/* Zo ziet de chauffeur het (Gerrit, 23 okt 2026): de planning opent
+   bakwagen.html?als=Dani (in de tegel Bakwagen: chauffeursweergave) en krijgt
+   precies het scherm van de chauffeur, op de gekozen dag. Afmelden, foto's en
+   vinkjes staan daar uit, zodat er niets per ongeluk gebeurt. */
+var voorbeeld = false, voorbeeldDatum = null;
+(function(){
+  var als = (location.search.match(/[?&]als=([^&]*)/) || [])[1], dg = (location.search.match(/[?&]datum=(\d{4}-\d{2}-\d{2})/) || [])[1];
+  if (planner && als && ["Dani","Jordy","Flex"].indexOf(decodeURIComponent(als)) >= 0) {
+    voorbeeld = true; planner = false; ikChauffeur = decodeURIComponent(als); voorbeeldDatum = dg || null;
+    document.documentElement.classList.add("voorbeeld");
+  }
+})();
 /* Gerrit (17 okt 2026): Dani en Jordy rijden elk een vaste bakwagen; de
    derde wagen is de flexwagen, die Manon inzet waar nodig. */
 var CHAUFFEURS = ["Dani","Jordy","Flex"];
@@ -355,12 +370,21 @@ function koppelBewerk(d){
   var ek = $("erbijKnop"), eo = $("erbijOrder");
   if (ek) { var voegToe = async function(){ var o = (eo.value || "").replace(/\D/g, ""); if (!o) { eo.focus(); return; } ek.disabled = true; ek.textContent = "Bezig…"; if (await aanpas({ actie: "erbij", order: o })) eo.value = ""; ek.disabled = false; ek.textContent = "Toevoegen"; };
     ek.addEventListener("click", voegToe); eo.addEventListener("keydown", function(e){ if (e.key === "Enter") voegToe(); }); }
-  d.querySelectorAll("[data-infoopen]").forEach(function(b){ b.addEventListener("click", function(){ infoBewerk[b.dataset.infoopen] = true; tekenPlanning(); var t = d.ownerDocument.querySelector('[data-infotekst="'+b.dataset.infoopen.split(":")[1]+'"]'); if (t) t.focus(); }); });
-  d.querySelectorAll("[data-infostop]").forEach(function(b){ b.addEventListener("click", function(){ delete infoBewerk[b.dataset.infostop]; tekenPlanning(); }); });
-  d.querySelectorAll("[data-infobewaar]").forEach(function(b){ b.addEventListener("click", async function(){
-    var o = b.dataset.infobewaar, t = d.querySelector('[data-infotekst="'+o+'"]'); b.disabled = true;
-    if (await aanpas({ actie: "info", order: o, tekst: t ? t.value : "" })) delete infoBewerk[openRit+":"+o];
-    tekenPlanning();
+  /* Bewaren bij het verlaten van het veld, of met de knop. Alleen als er
+     echt iets veranderd is. */
+  var infoBewaar = async function(t){
+    var o = t.dataset.infotekst, waarde = t.value;
+    if (waarde.trim() === String(t.dataset.infowas || "").trim()) { delete infoBewerk[openRit+":"+o]; return; }
+    var m = d.querySelector('[data-infomelding="'+o+'"]'); if (m) { m.className = "melding"; m.textContent = "Bewaren…"; }
+    t.dataset.infowas = waarde;
+    if (await aanpas({ actie: "info", order: o, tekst: waarde })) delete infoBewerk[openRit+":"+o];
+  };
+  d.querySelectorAll("[data-infotekst]").forEach(function(t){
+    t.addEventListener("input", function(){ infoBewerk[openRit+":"+t.dataset.infotekst] = true; var m = d.querySelector('[data-infomelding="'+t.dataset.infotekst+'"]'); if (m) { m.className = "melding"; m.textContent = "Nog te bewaren"; } });
+    t.addEventListener("blur", function(){ setTimeout(function(){ infoBewaar(t); }, 150); });
+  });
+  d.querySelectorAll("[data-infobewaar]").forEach(function(b){ b.addEventListener("mousedown", function(e){ e.preventDefault(); }); b.addEventListener("click", function(){
+    var t = d.querySelector('[data-infotekst="'+b.dataset.infobewaar+'"]'); if (t) infoBewaar(t);
   }); });
   d.querySelectorAll("[data-inforeset]").forEach(function(b){ b.addEventListener("click", async function(){
     var o = b.dataset.inforeset; if (await aanpas({ actie: "info", order: o, tekst: "" })) delete infoBewerk[openRit+":"+o]; tekenPlanning();
@@ -392,7 +416,7 @@ function koppelDetail(d){
 }
 
 /* ═══ ONDERWEG: de ritten van een dag (chauffeur: alleen vandaag, alleen de zijne) ═══ */
-var datum = vandaag, dagData = null;
+var datum = voorbeeldDatum || vandaag, dagData = null;
 var kies = planner ? (leesLokaal("fp.bw.chauffeur") || "Alle") : ikChauffeur;
 var open = {}, concept = {}, handCache = {};
 function sleutel(rit, order){ return rit+":"+order; }
@@ -415,7 +439,7 @@ async function laadDag(poging){
   if (!dagData) $("lijst").innerHTML = '<p class="leeg">De ritten worden opgehaald…</p>';
   var voor = datum + "|" + kies;
   try {
-    var j = await lees("/bakwagen/mijn?" + (planner ? "datum="+encodeURIComponent(datum)+"&chauffeur="+encodeURIComponent(kies) : ""));
+    var j = await lees("/bakwagen/mijn?" + (planner || voorbeeld ? "datum="+encodeURIComponent(datum)+"&chauffeur="+encodeURIComponent(kies) : ""));
     if (voor !== datum + "|" + kies) return;
     if (!j.ok) throw new Error(j.error || "onbekend");
     dagData = j; $("fout").innerHTML = "";
@@ -430,7 +454,7 @@ async function laadDag(poging){
 function tekenDag(){
   if (!dagData) return;
   var h = planner ? '<div class="dagtitel">'+esc(dagTekst(datum))+'</div>' : '<div class="groet">'+(ikChauffeur === "Flex" ? 'Flexwagen' : 'Hoi '+esc(ikChauffeur))+'</div><div class="dagtitel" style="margin-top:2px">'+esc(dagTekst(datum))+'</div>';
-  if (!dagData.ritten.length) h += '<p class="leeg">'+(planner ? 'Op deze dag staat er voor '+(kies==="Alle"?"de chauffeurs":esc(kies))+' nog geen goedgekeurde rit klaar. Geef bij Ritten klaarzetten akkoord, dan staat hij hier.' : 'Vandaag staat er voor jou nog geen rit klaar. Zodra Manon of Nomi je rit klaarzet, staat hij hier.')+'</p>';
+  if (!dagData.ritten.length) h += '<p class="leeg">'+(voorbeeld ? 'Op deze dag staat er voor '+esc(chauffeurNaam(ikChauffeur))+' nog geen rit klaar. Zodra je bij Ritten klaarzetten akkoord geeft, ziet hij hem hier.' : planner ? 'Op deze dag staat er voor '+(kies==="Alle"?"de chauffeurs":esc(kies))+' nog geen goedgekeurde rit klaar. Geef bij Ritten klaarzetten akkoord, dan staat hij hier.' : 'Vandaag staat er voor jou nog geen rit klaar. Zodra Manon of Nomi je rit klaarzet, staat hij hier.')+'</p>';
   dagData.ritten.forEach(function(r){
     var klaar = r.stops.filter(function(s){ return s.af; }).length;
     h += '<section class="rit"><div class="ritkop"><b>'+esc(r.naam)+(planner && kies==="Alle" ? ' · '+esc(chauffeurNaam(r.chauffeur)) : '')+(r.bestuurder ? ' · '+esc(r.bestuurder) : '')+'</b><span>'+(r.soort === "retour" ? "Retour ophalen" : "Levering")+' · '+klaar+' van '+r.stops.length+' afgemeld</span></div>' +
@@ -484,7 +508,7 @@ function stopHtml(r, s, i, opt){
       (i < r.stops.length - 1 ? '<button type="button" class="bewerkknop" title="Later in de rit" data-neer="'+esc(s.order)+'">▼</button>' : '') +
       '<button type="button" class="bewerkknop rood" title="Stop uit deze rit halen" data-stopweg="'+esc(s.order)+'">✕</button></div>' : '';
   var h = '<div class="stop'+(s.af?' af':'')+'" data-stop="'+esc(k)+'"><div class="stopkop"'+(opt.altijdOpen?'':' data-klap="'+esc(k)+'"')+'><div class="nr">'+(i+1)+'</div>' +
-    '<div class="wie"><b>'+esc(s.klant || ("Order "+s.order))+'</b><small>'+esc([s.plaats, "order "+s.order].filter(Boolean).join(" · "))+'</small></div>'+(betaalStand(s) ? '<span class="stip '+betaalStand(s).kleur+'" title="'+esc(betaalStand(s).tekst)+'"></span>' : '')+pil+knoppen+'</div>';
+    '<div class="wie"><b>'+esc(s.klant || ("Order "+s.order))+'</b><small>'+esc([s.plaats, "order "+s.order].filter(Boolean).join(" · "))+'</small></div>'+pil+knoppen+'</div>';
   if (!isOpen) return h + '</div>';
   h += '<div class="velden">';
   if (s.gefactureerd) h += veld("Ordernummer", esc(s.order)) + '<div class="veld"><div class="w zacht">Deze order is al gefactureerd; de gegevens staan in Logic4 bij de factuur.</div></div>';
@@ -494,16 +518,17 @@ function stopHtml(r, s, i, opt){
     var info = s.infoAangepast || [s.opmerkingRit, s.notities].filter(Boolean).join("\n\n");
     h += veld("Ordernummer", esc(s.order)) +
       veld("Klantnaam", esc(s.klant || "-") + (s.bedrijf && s.bedrijf !== s.klant ? '<br><small>'+esc(s.bedrijf)+'</small>' : '')) +
-      (betaalStand(s) ? veld("Betaling", '<span class="betaal '+betaalStand(s).kleur+'">'+esc(betaalStand(s).tekst)+'</span>') : '') +
       veld("Telefoonnummer klant", s.telefoon ? esc(s.telefoon)+(opt.alleenKijken ? '' : '<br><a class="knop" href="tel:'+esc(s.telefoon.replace(/[^\d+]/g,""))+'">📞 Bellen</a>') : '<span class="zacht">Er staat nog geen nummer bij deze order in Logic4.</span>') +
       (adres ? veld("Adres", esc(adres)+(opt.alleenKijken ? '' : '<br><a class="knop" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(adres+(s.land && s.land !== "NL" ? ", "+s.land : ""))+'">🧭 Route</a>')) : '') +
-      (opt.bewerk && infoBewerk[k]
-        ? '<div class="veld infobewerk"><div class="k">Chauffeurs info</div><textarea data-infotekst="'+esc(s.order)+'">'+esc(info)+'</textarea>' +
-          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="bewerkknop" data-infobewaar="'+esc(s.order)+'">Bewaren</button>' +
-          '<button type="button" class="bewerkknop" data-infostop="'+esc(k)+'">Annuleren</button>' +
-          (s.infoAangepast ? '<button type="button" class="bewerkknop" data-inforeset="'+esc(s.order)+'">Weer de tekst uit Logic4</button>' : '') + '</div></div>'
-        : '<div class="veld"><div class="k">Chauffeurs info'+(s.infoAangepast ? ' <span class="pil aangepast" style="text-transform:none;letter-spacing:0">aangepast</span>' : '')+'</div>'+(info ? '<div class="w info">'+esc(info)+'</div>' : '<div class="w zacht">Geen bijzonderheden.</div>') +
-          (opt.bewerk ? '<button type="button" class="bewerkknop" style="margin-top:6px" data-infoopen="'+esc(k)+'">Aanpassen</button>' : '') + '</div>') +
+      /* Bij Ritten klaarzetten is de chauffeursinfo meteen een invulveld:
+         typen, en het bewaart zodra je eruit klikt (Manon, 23 okt 2026). */
+      (opt.bewerk
+        ? '<div class="veld infobewerk"><div class="k">Chauffeurs info'+(s.infoAangepast ? ' <span class="pil aangepast" style="text-transform:none;letter-spacing:0">aangepast</span>' : '')+'</div>' +
+          '<textarea data-infotekst="'+esc(s.order)+'" data-infowas="'+esc(info)+'" placeholder="Typ hier wat de chauffeur moet weten">'+esc(info)+'</textarea>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px"><button type="button" class="bewerkknop" data-infobewaar="'+esc(s.order)+'">Bewaren</button>' +
+          (s.infoAangepast ? '<button type="button" class="bewerkknop" data-inforeset="'+esc(s.order)+'">Weer de tekst uit Logic4</button>' : '') +
+          '<span class="melding" data-infomelding="'+esc(s.order)+'"></span></div></div>'
+        : '<div class="veld"><div class="k">Chauffeurs info</div>'+(info ? '<div class="w info">'+esc(info)+'</div>' : '<div class="w zacht">Geen bijzonderheden.</div>') + '</div>') +
       paklijstHtml(r, s, opt.alleenKijken, opt.bewerk) +
       fotosHtml(r, s, !opt.alleenKijken);
   }
@@ -554,6 +579,8 @@ async function rijtijdVullen(ritten, poging){
   } catch(e) {}
 }
 function euro(n){ return "€ " + (Number(n)||0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+/* De betaalstand staat niet meer in beeld (Gerrit, 23 okt 2026): Manon
+   zoekt dat al uit voordat ze de rit maakt. De functie blijft voor later. */
 function betaalStand(s){
   var b = s.betaal; if (!b || s.gefactureerd) return null;
   if (b.isBetaald || b.betaald >= b.totaal - 0.005) return { kleur: "groen", kort: "Betaald", tekst: "Betaald" + (b.totaal ? " (" + euro(b.totaal) + ")" : "") };

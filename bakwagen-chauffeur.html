@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("bakwagen-planning", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor de planning van de bakwagenritten.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bakwagen: chauffeursweergave - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ═════════════════════════════════════════════════════════════════
+     BAKWAGEN: ZO ZIET DE CHAUFFEUR HET
+
+     Gerrit (23 okt 2026): "Geef Manon/Nomi/Fonteynbot ook een tegel waar ze
+     kunnen zien hoe Dani/Jordy/Flex hun routes ZIEN." Dit is een telefoon-
+     scherm met daarin bakwagen.html?als=<chauffeur>&datum=<dag>: precies de
+     weergave van de chauffeur, met dezelfde gegevens. Afmelden, foto's en
+     vinkjes staan daar uit (zie 'voorbeeld' in bakwagen.html).
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:980px;margin:14px auto;padding:0 16px 40px;display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+.keuzes{flex:1 1 260px;max-width:340px}
+.keuzes h2{font-size:15px;color:var(--groen);margin:4px 0 8px}
+.keuzes p{color:var(--grijs);font-size:13.5px;line-height:1.5;margin:0 0 14px}
+.groep{margin-bottom:14px}
+.groep .label{display:block;font-size:12px;font-weight:700;color:var(--grijs);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.knoppen{display:flex;gap:6px;flex-wrap:wrap}
+.knoppen button,.knoppen input{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:9px 13px;font:inherit;font-size:14px;cursor:pointer;color:var(--ink)}
+.knoppen button.aan{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+.telefoon{flex:0 0 auto;width:400px;max-width:100%;height:820px;max-height:calc(100vh - 110px);min-height:560px;border:12px solid #1f2937;border-radius:38px;overflow:hidden;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.telefoon iframe{display:block;width:100%;height:100%;border:0}
+@media (max-width:600px){ main{padding:0 8px 30px} .telefoon{border-width:6px;border-radius:20px;width:100%} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>📱 Bakwagen: zo ziet de chauffeur het</h1>
+</header>
+<main>
+  <div class="keuzes">
+    <h2>Precies het scherm van de chauffeur</h2>
+    <p>Kies een wagen en een dag. Rechts zie je wat de chauffeur op zijn telefoon ziet: alleen de ritten waarvoor akkoord is gegeven. Afmelden, foto's en vinkjes staan hier uit.</p>
+    <div class="groep"><span class="label">Wagen</span><div class="knoppen" id="wagens"></div></div>
+    <div class="groep"><span class="label">Dag</span><div class="knoppen" id="dagen"></div></div>
+  </div>
+  <div class="telefoon"><iframe id="scherm" title="Scherm van de chauffeur"></iframe></div>
+</main>
+<script>
+function $(id){ return document.getElementById(id); }
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function plus(isoD, n){ var d = new Date(isoD+"T12:00:00"); d.setDate(d.getDate()+n); return iso(d); }
+var vandaag = iso(new Date());
+var morgen = plus(vandaag, 1); if (new Date(morgen+"T12:00:00").getDay() === 0) morgen = plus(morgen, 1);
+var wagen = "Dani", dag = vandaag;
+try { wagen = localStorage.getItem("fp.bwc.wagen") || "Dani"; } catch(e) {}
+function teken(){
+  $("wagens").innerHTML = [["Dani","Bakwagen Dani"],["Jordy","Bakwagen Jordy"],["Flex","Flexwagen"]].map(function(w){ return '<button type="button" data-w="'+w[0]+'"'+(w[0]===wagen?' class="aan"':'')+'>'+w[1]+'</button>'; }).join("");
+  $("dagen").innerHTML = '<button type="button" data-d="'+vandaag+'"'+(dag===vandaag?' class="aan"':'')+'>Vandaag</button>' +
+    '<button type="button" data-d="'+morgen+'"'+(dag===morgen?' class="aan"':'')+'>Volgende werkdag</button>' +
+    '<input type="date" id="dagKeus" value="'+dag+'">';
+  $("wagens").querySelectorAll("[data-w]").forEach(function(b){ b.addEventListener("click", function(){ wagen = b.dataset.w; try { localStorage.setItem("fp.bwc.wagen", wagen); } catch(e) {} teken(); laad(); }); });
+  $("dagen").querySelectorAll("[data-d]").forEach(function(b){ b.addEventListener("click", function(){ dag = b.dataset.d; teken(); laad(); }); });
+  $("dagKeus").addEventListener("change", function(){ if (this.value) { dag = this.value; teken(); laad(); } });
+}
+function laad(){ $("scherm").src = "bakwagen.html?als=" + encodeURIComponent(wagen) + "&datum=" + encodeURIComponent(dag); }
+teken(); laad();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"bakwagen-chauffeur",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

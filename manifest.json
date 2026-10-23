@@ -1,5 +1,5 @@
 {
-  "version": "0.35.106",
+  "version": "0.35.107",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -211,6 +211,10 @@
     {
       "name": "orderpicken-sw.js",
       "note": "Offline-helper (service worker) alleen voor orderpicken.html: bewaart de pagina en scripts op de telefoon."
+    },
+    {
+      "name": "bakwagen-chauffeur.html",
+      "note": "Bakwagen: chauffeursweergave - het scherm van de chauffeur (bakwagen.html?als=...) in een telefoonkader, voor de planning"
     },
     {
       "name": "bakwagen.html",

@@ -82,6 +82,10 @@
       uit:"Picklijsten scannen in het magazijn, ook offline",  mobiel:"goed", tile:"tileOrderpicken" },
     { telefoon:true, bestand:"bakwagen.html",       groep:"bakwagen",         ic:"🚛",  naam:"Bakwagenroute",
       uit:"Ritten klaarzetten en afmelden met handtekening", mobiel:"goed", tile:"tileBakwagen" },
+    /* Zo ziet de chauffeur het: het scherm van Dani, Jordy of de flexwagen,
+       voor de planning (Gerrit, 23 okt 2026). */
+    { telefoon:true, bestand:"bakwagen-chauffeur.html", groep:"bakwagen-planning", ic:"📱", naam:"Bakwagen: chauffeursweergave",
+      uit:"Zien wat de chauffeur op zijn telefoon ziet", mobiel:"goed", tile:"tileBakwagenChauffeur" },
     { bestand:"transport.html",      groep:"logistiek",        ic:"🚚",  naam:"Transport laden",
       uit:"Ritten en ladingen",                                    mobiel:"krap", tile:"tileTransport" },
     { bestand:"rapportage.html",     groep:"rapportage",       ic:"📈",  naam:"Rapportage",

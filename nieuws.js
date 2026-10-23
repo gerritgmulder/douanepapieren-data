@@ -52,6 +52,16 @@
   var NIEUWS = [
     {
       datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
+      titel: "Chauffeursinfo direct typen",
+      wat:   "Bij Ritten klaarzetten is de chauffeursinfo meteen een invulveld: typ of vul aan, en het wordt bewaard zodra je ergens anders klikt. De betaling staat niet meer bij de stops, dat is al uitgezocht voordat de rit gemaakt wordt."
+    },
+    {
+      datum: "2026-10-23", bestand: "bakwagen-chauffeur.html", soort: "nieuw",
+      titel: "Bakwagen: chauffeursweergave",
+      wat:   "Nieuwe tegel: kies Dani, Jordy of de flexwagen en een dag, en je ziet precies wat de chauffeur op zijn telefoon ziet."
+    },
+    {
+      datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
       titel: "Korting en montage staan al afgevinkt",
       wat:   "Regels die geen product zijn, zoals korting, compensatie, montage, transport en garantie, staan in de paklijst apart onderaan en zijn al afgevinkt. Daar valt niets te pakken."
     },
