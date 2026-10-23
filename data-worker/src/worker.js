@@ -22,7 +22,7 @@
 import { ppMailVertaal, PP_MAIL_TALEN } from "./pp-mailteksten.js";
 // Service planning (Kevin, 23 okt 2026): meldingen, routes en de klantmails.
 import { svcHandle, svcRonde } from "./service.js";
-const SVC_HULP = (env) => ({ reply, l4Token, RIJ_START, rijNorm, itsTekst,
+const SVC_HULP = (env) => ({ reply, l4Token, RIJ_START, rijNorm, itsTekst, ewsVerstuur,
   // DEV_OPEN bestaat alleen bij een lokale proefdraai, nooit in de uitrol.
   toegangMag: env && env.DEV_OPEN ? async () => true : toegangMag });
 const ALLOWED_BUCKETS = new Set([
@@ -17917,6 +17917,27 @@ function mailOntvangers(lijst, tag) {
   if (!adressen.length) return "";
   return "<t:" + tag + ">" + adressen.map(a =>
     "<t:Mailbox><t:EmailAddress>" + xmlUit(a) + "</t:EmailAddress></t:Mailbox>").join("") + "</t:" + tag + ">";
+}
+
+/* Meteen verzenden vanuit een mailbox van Fonteyn, als HTML-mail. Gerrit
+   (23 okt 2026), voor Service planning: "versturen vanuit het Dashboard naar
+   de mailserver van Fonteyn". De mail komt in Verzonden items van die
+   mailbox, en een antwoord van de klant komt daar ook weer binnen. Werkt
+   pas als EWS_GEBRUIKER en EWS_WACHTWOORD als worker-secret staan en het
+   serviceaccount rechten heeft op de mailbox van de afzender. */
+async function ewsVerstuur(env, van, aan, onderwerp, html) {
+  const body =
+    '<m:CreateItem MessageDisposition="SendAndSaveCopy">' +
+    "<m:SavedItemFolderId><!--SENT--></m:SavedItemFolderId>" +
+    "<m:Items><t:Message>" +
+    "<t:Subject>" + xmlUit(String(onderwerp || "").slice(0, 255)) + "</t:Subject>" +
+    '<t:Body BodyType="HTML">' + xmlUit(html) + "</t:Body>" +
+    mailOntvangers(aan, "ToRecipients") +
+    "<!--VAN-->" +
+    "</t:Message></m:Items></m:CreateItem>";
+  return ewsDoe(env, "CreateItem", modus => body
+    .replace("<!--SENT-->", mapVerwijzing("sentitems", van, modus))
+    .replace("<!--VAN-->", afzender(van, modus)), van);
 }
 
 /* Een concept klaarzetten. Dit is de kern van waar de tegel voor bedoeld is:

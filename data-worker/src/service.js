@@ -63,6 +63,8 @@ const SVC_WEEKDAG = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "v
 const SVC_MAAND = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const SVC_MONTEURS = ["Thieme", "Patrick", "Hans"];
 const SVC_UDDEL = [52.2449, 5.7797];   // als Uddel nog niet in geo_cache staat
+/* De hulpfuncties uit worker.js voor deze aanroep (zie svcHandle/svcRonde). */
+let _svcH = null;
 const SVC_LOGO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png";
 
 /* ── Opslag ─────────────────────────────────────────────────────────────── */
@@ -365,9 +367,23 @@ async function svcMailStuur(env, db, a, m, soort, extra) {
   const naarKlant = String((m.klant && m.klant.mail) || "").toLowerCase().split(/[;,\s]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
   if (!naarKlant.length) { a.json.mailFout = "Er staat nog geen mailadres bij de klant."; a.json.mailWacht = soort; return { ok: false, error: a.json.mailFout }; }
   if (!inst.mailAan) { a.json.mailWacht = soort; if (extra && extra.oudeDatum) a.json.oudeDatum = extra.oudeDatum; return { ok: true, wacht: "mailen staat nog uit" }; }
+  const naar = inst.proefAdres ? [inst.proefAdres] : naarKlant;
+  const d0 = { naam: (m.klant && m.klant.naam) || "klant", datum: a.datum, dagdeel: a.dagdeel, its: a.its, oudeDatum: (extra && extra.oudeDatum) || a.json.oudeDatum || null };
+  /* Eerst via de eigen mailserver van Fonteyn, vanuit spaplanning@ (Gerrit,
+     23 okt 2026). Daar geldt geen grens per dag. Lukt dat (nog) niet, dan via
+     Resend, met de grens van 40 per dag. */
+  if (_svcH && _svcH.ewsVerstuur && env.EWS_GEBRUIKER && env.EWS_WACHTWOORD) {
+    const e = await _svcH.ewsVerstuur(env, SVC_ANTWOORD, naar, svcOnderwerp(soort, d0), svcMailHtml(soort, d0, svcLinkBasis(env) + encodeURIComponent(a.token), true)).catch(x => ({ ok: false, error: String(x && x.message || x) }));
+    if (e.ok) {
+      await db.prepare("INSERT INTO svc_mail (dag, n) VALUES (?1, 1) ON CONFLICT(dag) DO UPDATE SET n = n + 1").bind(svcVandaag()).run();
+      a.json.mails = (a.json.mails || []).concat([{ ts: Date.now(), soort, naar: naar.join(", "), proef: !!inst.proefAdres, via: "fonteyn" }]).slice(-20);
+      delete a.json.mailWacht; delete a.json.mailFout; delete a.json.ewsFout;
+      return { ok: true };
+    }
+    a.json.ewsFout = String(e.uitleg || e.error || "").slice(0, 200);
+  }
   if ((await svcMailTeller(db)) >= SVC_MAIL_MAX) { a.json.mailWacht = soort; if (extra && extra.oudeDatum) a.json.oudeDatum = extra.oudeDatum; return { ok: true, wacht: "dagteller vol" }; }
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) return { ok: false, error: "het mailen is in de worker nog in te richten" };
-  const naar = inst.proefAdres ? [inst.proefAdres] : naarKlant;
   const bron = env.MAIL_FROM_FONTEYN || env.MAIL_FROM;
   const adres = (String(bron).match(/<([^>]+)>/) || [])[1] || String(bron);
   const d = { naam: (m.klant && m.klant.naam) || "klant", datum: a.datum, dagdeel: a.dagdeel, its: a.its, oudeDatum: (extra && extra.oudeDatum) || a.json.oudeDatum || null };
@@ -657,6 +673,7 @@ async function svcAfspraakActie(env, H, wie, b) {
 
 /* ── De herinneringen en de mails die wachten (cron op :15) ─────────────── */
 async function svcRonde(env, H) {
+  _svcH = H;
   const db = await svcDb(env);
   const inst = await svcInstellingen(env);
   if (!inst.mailAan) return { ok: true, uit: true };
@@ -771,6 +788,7 @@ async function svcAntwoordPost(env, request, H) {
 
 /* ── De ingang vanuit worker.js ─────────────────────────────────────────── */
 export async function svcHandle(request, env, url, H) {
+  _svcH = H;
   const p = url.pathname;
   // De klantpagina's: zonder sleutel, het token in de link is de sleutel.
   if (p === "/service/antwoord") {
