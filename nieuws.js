@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "retouren.html", soort: "beter",
+      titel: "Retouren per order, op leverdatum en per periode",
+      wat:   "Ophalen gaat nu op de indicatie leverdatum, en ordernummer en datums staan naast elkaar. Bij Dag, Week, Maand en Jaar kies je zelf welke (met de pijltjes of de kiezer). Adviseur, reden, retourlocatie en uitleg vul je één keer per order in; een order met drie regels telt als één retour, ook in het nieuwe blok Per adviseur."
+    },
+    {
       datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
       titel: "Ordernummer met één klik kopiëren",
       wat:   "Klik op een ordernummer in Bakwagenroute en het staat op het klembord. In Logic4 plak je het daarna met Ctrl+V."

@@ -153,25 +153,28 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <!-- ═══ 1. Op te halen retouren uit Logic4 ═══ -->
   <div class="card">
     <h3>Op te halen retouren ophalen uit Logic4</h3>
-    <div class="row" style="padding-bottom:12px;border-bottom:1px dashed var(--border);margin-bottom:12px;">
-      <label class="fld">Order ophalen op nummer
-        <input type="text" id="lookupOrder" placeholder="bv. 3513742" style="width:160px;">
-      </label>
-      <button class="primary" id="lookupBtn" type="button">Order ophalen</button>
-      <span style="font-size:12px;color:var(--muted);align-self:center;">← betrouwbaarste manier: haal precies de order op die je wilt registreren</span>
-    </div>
-    <div class="row">
-      <label class="fld">Aangemaakt van
-        <input type="date" id="dateFrom">
-      </label>
-      <label class="fld">Aangemaakt t/m
-        <input type="date" id="dateTo">
-      </label>
-      <button class="primary" id="fetchBtn" type="button">Op aanmaakdatum ophalen</button>
+    <!-- Op nummer en op datum naast elkaar (Gerrit, 23 okt 2026): scheelt een hele rij. -->
+    <div class="row" style="gap:14px 26px;">
+      <div class="row" style="gap:10px;">
+        <label class="fld">Order ophalen op nummer
+          <input type="text" id="lookupOrder" placeholder="bv. 3513742" style="width:150px;">
+        </label>
+        <button class="primary" id="lookupBtn" type="button">Order ophalen</button>
+      </div>
+      <div style="align-self:stretch;border-left:1px dashed var(--border);"></div>
+      <div class="row" style="gap:10px;">
+        <label class="fld">Ind. lev. dtm. van
+          <input type="date" id="dateFrom">
+        </label>
+        <label class="fld">Ind. lev. dtm. t/m
+          <input type="date" id="dateTo">
+        </label>
+        <button class="primary" id="fetchBtn" type="button">Ophalen</button>
+      </div>
       <span id="fetchStatus" style="font-size:12.5px;color:var(--muted);align-self:center;"></span>
     </div>
     <div style="font-size:11.5px;color:var(--muted);margin-top:6px;">
-      ⚠ Logic4 filtert op <b>aanmaakdatum</b> (de datum dat de order is ingevoerd); de geplande ophaaldatum vind je via het ordernummer. Voor een specifieke retour: gebruik <b>Order ophalen op nummer</b> hierboven.
+      Het Dashboard kijkt naar de <b>indicatie leverdatum</b> (ind. lev. dtm.) van de order, net als in Logic4.
     </div>
 
     <div id="methodsWrap" class="hidden">
@@ -201,12 +204,20 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <h3>Geregistreerde retouren</h3>
 
     <div class="row" style="justify-content:space-between;">
-      <div class="seg" id="periodSeg">
-        <button data-p="day" type="button">Dag</button>
-        <button data-p="week" type="button">Week</button>
-        <button data-p="month" class="on" type="button">Maand</button>
-        <button data-p="year" type="button">Jaar</button>
-        <button data-p="all" type="button">Alles</button>
+      <div class="row" style="gap:8px;align-items:center;">
+        <div class="seg" id="periodSeg">
+          <button data-p="day" type="button">Dag</button>
+          <button data-p="week" type="button">Week</button>
+          <button data-p="month" class="on" type="button">Maand</button>
+          <button data-p="year" type="button">Jaar</button>
+          <button data-p="all" type="button">Alles</button>
+        </div>
+        <!-- Welke dag, week, maand of jaar (Gerrit, 23 okt 2026). -->
+        <div class="seg" id="periodNav">
+          <button type="button" id="periodPrev" title="Vorige">◀</button>
+          <span id="periodPick"></span>
+          <button type="button" id="periodNext" title="Volgende">▶</button>
+        </div>
       </div>
       <div class="row" style="gap:8px;align-items:center;">
         <input type="search" id="search" placeholder="Zoek in geregistreerde retouren…" title="Doorzoekt alleen de al-geregistreerde retouren hieronder. Een nieuwe order uit Logic4 haal je op via 'Order ophalen op nummer' bovenaan." style="width:280px;">
@@ -218,10 +229,11 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <div class="samenvatting">
       <div class="cijfer">
         <div class="kpi-num" id="totalCount">0</div>
-        <div style="font-size:12px;color:var(--muted);">retouren in deze periode</div>
+        <div style="font-size:12px;color:var(--muted);" id="totalSub">retouren in deze periode</div>
       </div>
       <svg id="pie" viewBox="0 0 200 200" width="170" height="170"></svg>
       <div class="legend" id="legend"></div>
+      <div class="legend" id="perAdviseur" style="flex:0 1 220px;flex-direction:column;flex-wrap:nowrap;gap:4px;"></div>
     </div>
     <div style="overflow-x:auto;">
       <table class="ret register" id="regTable">
@@ -472,14 +484,21 @@ async function fetchReturns() {
   el("fetchBtn").disabled = true;
   setFetch("info","Orders ophalen uit Logic4…");
   try {
-    const PAGE = 500, MAXP = 12;
+    /* Op indicatie leverdatum (Manon, 23 okt 2026: "de aanmaakdatum, daar kijk
+       ik nooit naar"). Logic4 filtert alleen op aanmaakdatum (ook een filter op
+       DeliveryDate negeert hij, nagekeken 23 okt 2026). Dus: ophalen op
+       aanmaakdatum vanaf 60 dagen vóór de gekozen periode tot twee weken erna,
+       en hier zelf de orders kiezen waarvan de ind. lev. dtm. in de periode
+       valt. Rond de 50 orders per dag, dus een paar pagina's. */
+    const plusD = (iso, n) => { const x = new Date(iso + "T12:00:00"); x.setDate(x.getDate() + n); return isoDate(x); };
+    const vandaagIso = isoDate(new Date());
+    const cFrom = plusD(from, -60), cToRuw = plusD(to, 14), cTo = cToRuw > vandaagIso ? vandaagIso : cToRuw;
+    const PAGE = 500, MAXP = 30;
     const all = [];
     for (let p=0; p<MAXP; p++) {
       setFetch("info", "Ophalen — pagina " + (p+1) + " (" + all.length + " orders)…");
-      // CreationDateFrom/CreationDateTo is de ENIGE datumfilter die deze
-      // Logic4 honoreert (probe 2026-06: alle andere params genegeerd).
       const data = await logic4("/v3/Orders/GetOrders", {
-        CreationDateFrom: from + "T00:00:00", CreationDateTo: to + "T23:59:59",
+        CreationDateFrom: cFrom + "T00:00:00", CreationDateTo: (cTo < from ? from : cTo) + "T23:59:59",
         TakeRecords: PAGE, SkipRecords: p*PAGE,
       });
       const arr = Array.isArray(data) ? data : (data && (data.Orders||data.Items) || []);
@@ -489,21 +508,13 @@ async function fetchReturns() {
     }
     lastOrders = all;
 
-    // Harde client-side garde: hou ALLEEN orders met aanmaakdatum in de
-    // gevraagde periode (mocht Logic4 het filter toch negeren, dan zien we
-    // nooit meer per ongeluk 2015-orders) ÉN bedrag <= 0 (retour).
-    const fromMs = new Date(from + "T00:00:00").getTime();
-    const toMs   = new Date(to   + "T23:59:59").getTime();
-    const ignored = all.filter(o => { const c = new Date(o.CreationDate).getTime(); return !(c >= fromMs && c <= toMs); }).length;
+    // Alleen orders met ind. lev. dtm. in de periode en bedrag <= 0 (retour).
     returnOrders = all.filter(o => {
       const amt = Number((o.Totals && o.Totals.AmountIncl) ?? 0);
       if (amt > 0) return false;
-      const c = new Date(o.CreationDate).getTime();
-      return c >= fromMs && c <= toMs;
+      const lev = String(o.DeliveryDate || "").slice(0, 10);
+      return lev >= from && lev <= to;
     });
-    if (ignored > all.length * 0.5 && all.length > 0) {
-      setFetch("warn", "Let op: Logic4 lijkt het datumfilter te negeren — alleen orders met aanmaakdatum in de periode worden getoond.");
-    }
 
     // Diagnose: velden van de eerste order tonen (om datum/methode te checken)
     if (all.length) {
@@ -756,7 +767,7 @@ el("rmSave").addEventListener("click", async () => {
         product: product,
         reason: guessReason(sum.hint + " " + product),   // voorstel; Manon bevestigt of wijzigt
         location: "",
-        explanation: eerste ? sum.hint : "",
+        explanation: sum.hint,
         amount: Number(r.GrossPrice) * (Number(r.Qty) || 0),
         method: (o.ShippingMethod && o.ShippingMethod.Name) || "",
         customer: inv.CompanyName || inv.ContactName || "",
@@ -767,6 +778,7 @@ el("rmSave").addEventListener("click", async () => {
     }
     eerste = false;
   }
+  orderGelijkTrekken(orderNr);
   try { await saveStore(); } catch (e) { alert("Opslaan faalde: " + e.message); return; }
   try { if (window.fpLog) window.fpLog("retour-geregistreerd", "order " + orderNr + " (" + gekozen.length + " regel(s))"); } catch (e) {}
   el("rowsModal").style.display = "none";
@@ -780,32 +792,73 @@ el("rmSave").addEventListener("click", async () => {
 // 2. Geregistreerde retouren — tabel, zoeken, periode, cirkeldiagram
 // ─────────────────────────────────────────────────────────────────
 let period = "month";
+let anker = new Date();          // welke dag/week/maand/jaar er getoond wordt
 let searchTerm = "";
+/* Het ISO-jaar van de week (week 1 van 2027 kan eind december 2026 beginnen). */
+function isoWeekJaar(dt){ const d=new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())); const day=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-day); return d.getUTCFullYear(); }
+function maandagVanWeek(jaar, week){ const d=new Date(jaar,0,4); const dag=(d.getDay()+6)%7; d.setDate(d.getDate()-dag+(week-1)*7); return d; }
+function schuif(n){
+  const d = new Date(anker);
+  if (period === "day") d.setDate(d.getDate()+n);
+  else if (period === "week") d.setDate(d.getDate()+7*n);
+  else if (period === "month") { d.setDate(1); d.setMonth(d.getMonth()+n); }
+  else if (period === "year") d.setFullYear(d.getFullYear()+n);
+  anker = d; renderRegister();
+}
+function tekenPeriodeKeuze(){
+  const nav = el("periodNav"), pick = el("periodPick");
+  nav.classList.toggle("hidden", period === "all");
+  const pad = (n) => String(n).padStart(2,"0");
+  let h = "";
+  if (period === "day") h = '<input type="date" id="pkInput" value="'+isoDate(anker)+'">';
+  else if (period === "week") h = '<input type="week" id="pkInput" value="'+isoWeekJaar(anker)+'-W'+pad(isoWeek(anker))+'">';
+  else if (period === "month") h = '<input type="month" id="pkInput" value="'+anker.getFullYear()+'-'+pad(anker.getMonth()+1)+'">';
+  else if (period === "year") {
+    const jaren = new Set([new Date().getFullYear()]);
+    Object.values(store.records).forEach(r => { const y = parseInt(String(r.date||"").slice(0,4),10); if (y > 2000) jaren.add(y); });
+    h = '<select id="pkInput">' + [...jaren].sort((a,b)=>b-a).map(y => '<option value="'+y+'"'+(y===anker.getFullYear()?' selected':'')+'>'+y+'</option>').join("") + '</select>';
+  }
+  pick.innerHTML = h;
+  const i = el("pkInput"); if (!i) return;
+  i.style.padding = "5px 8px"; i.style.fontSize = "12.5px";
+  i.addEventListener("change", () => {
+    const v = i.value; if (!v) return;
+    if (period === "day") anker = new Date(v + "T12:00:00");
+    else if (period === "week") { const m = v.match(/^(\d{4})-W(\d{2})$/); if (m) anker = maandagVanWeek(+m[1], +m[2]); }
+    else if (period === "month") anker = new Date(v + "-01T12:00:00");
+    else if (period === "year") anker = new Date(+v, 0, 1, 12);
+    renderRegister();
+  });
+}
+el("periodPrev").addEventListener("click", () => schuif(-1));
+el("periodNext").addEventListener("click", () => schuif(1));
 
 el("periodSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-p]"); if (!b) return;
   period = b.dataset.p;
   el("periodSeg").querySelectorAll("button").forEach(x => x.classList.toggle("on", x===b));
+  anker = new Date();   // een andere soort periode begint weer bij vandaag
   renderRegister();
 });
 el("search").addEventListener("input", (e) => { searchTerm = e.target.value.toLowerCase().trim(); renderRegister(); });
 
 function inPeriod(rec) {
   if (period === "all") return true;
-  const d = new Date(rec.date); if (isNaN(d)) return true;
-  const now = new Date();
-  if (period === "day")   return rec.date === isoDate(now);
-  if (period === "week")  return isoWeek(d) === isoWeek(now) && d.getFullYear() === now.getFullYear();
-  if (period === "month") return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  if (period === "year")  return d.getFullYear() === now.getFullYear();
+  const d = new Date(String(rec.date||"").slice(0,10) + "T12:00:00"); if (isNaN(d)) return true;
+  const a = anker;
+  if (period === "day")   return String(rec.date).slice(0,10) === isoDate(a);
+  if (period === "week")  return isoWeek(d) === isoWeek(a) && isoWeekJaar(d) === isoWeekJaar(a);
+  if (period === "month") return d.getMonth() === a.getMonth() && d.getFullYear() === a.getFullYear();
+  if (period === "year")  return d.getFullYear() === a.getFullYear();
   return true;
 }
 function periodLabelText() {
-  const now = new Date();
-  if (period==="day") return "Vandaag (" + now.toLocaleDateString("nl-NL") + ")";
-  if (period==="week") return "Deze week (wk " + isoWeek(now) + ", " + now.getFullYear() + ")";
-  if (period==="month") return now.toLocaleDateString("nl-NL",{month:"long",year:"numeric"});
-  if (period==="year") return "Jaar " + now.getFullYear();
+  const a = anker, vandaag = isoDate(new Date()) === isoDate(a);
+  if (period==="day") return (vandaag ? "Vandaag, " : "") + a.toLocaleDateString("nl-NL",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  if (period==="week") { const ma = maandagVanWeek(isoWeekJaar(a), isoWeek(a)), zo = new Date(ma); zo.setDate(zo.getDate()+6);
+    return "Week " + isoWeek(a) + " van " + isoWeekJaar(a) + " (" + ma.toLocaleDateString("nl-NL",{day:"numeric",month:"short"}) + " t/m " + zo.toLocaleDateString("nl-NL",{day:"numeric",month:"short"}) + ")"; }
+  if (period==="month") return a.toLocaleDateString("nl-NL",{month:"long",year:"numeric"});
+  if (period==="year") return "Jaar " + a.getFullYear();
   return "Alle retouren";
 }
 
@@ -824,10 +877,37 @@ function currentRecords() {
   return recs;
 }
 
+/* ── Per order, niet per regel (Gerrit, 23 okt 2026) ─────────────────
+   Een order met drie regels is één retour: adviseur, reden, retourlocatie en
+   uitleg vul je één keer in, op de eerste regel, en ze gelden voor de hele
+   order. Tellen gaat ook per order, anders telde Don bij één deelorder drie
+   keer mee. Het product blijft per regel. */
+const ORDERVELDEN = ["advisor","reason","location","explanation"];
+function regelsVanOrder(orderNr){ return Object.values(store.records).filter(r => r.orderNr === orderNr); }
+/* Eén waarde per order: wat op een regel staat, en lege regels vullen.
+   Verschilt de uitleg per regel, dan komen ze achter elkaar te staan. */
+function orderGelijkTrekken(orderNr){
+  const regels = regelsVanOrder(orderNr); if (regels.length < 2) return false;
+  let anders = false;
+  for (const f of ORDERVELDEN) {
+    const waarden = [...new Set(regels.map(r => String(r[f]||"").trim()).filter(Boolean))];
+    const w = f === "explanation" ? [...new Set(waarden.flatMap(v => v.split(" / ").map(x => x.trim())).filter(Boolean))].join(" / ") : (waarden[0] || "");
+    for (const r of regels) if (String(r[f]||"").trim() !== w) { r[f] = w; anders = true; }
+  }
+  return anders;
+}
+function perOrder(recs){
+  const m = new Map();
+  for (const r of recs) if (!m.has(r.orderNr)) m.set(r.orderNr, r);
+  return [...m.values()];
+}
 function renderRegister() {
   el("periodLabel").textContent = periodLabelText();
+  tekenPeriodeKeuze();
   const recs = currentRecords();
-  el("totalCount").textContent = recs.length;
+  const orders = perOrder(recs);
+  el("totalCount").textContent = orders.length;
+  el("totalSub").textContent = "retouren in deze periode" + (recs.length !== orders.length ? " (" + recs.length + " regels)" : "");
   el("regEmpty").classList.toggle("hidden", recs.length !== 0);
 
   const body = el("regBody"); body.innerHTML = "";
@@ -851,16 +931,16 @@ function renderRegister() {
       "<td>" + orderCel + "</td>" +
       "<td></td><td></td><td></td><td></td><td></td><td></td>";
     const cells = tr.querySelectorAll("td");
-    // Adviseur
-    cells[3].appendChild(textInput(rec, "advisor"));
-    // Product
+    // Product per regel; adviseur, reden, locatie en uitleg één keer per order.
     cells[4].appendChild(textInput(rec, "product"));
-    // Reden
-    cells[5].appendChild(selectInput(rec, "reason", REASONS));
-    // Locatie
-    cells[6].appendChild(selectInput(rec, "location", LOCATIONS));
-    // Uitleg
-    cells[7].appendChild(textareaInput(rec, "explanation"));
+    if (zelfdeAlsVorige) {
+      for (const c of [3,5,6,7]) cells[c].innerHTML = "<span class='regelnr' title='Geldt voor de hele order; pas het aan op de eerste regel.'>zie boven</span>";
+    } else {
+      cells[3].appendChild(textInput(rec, "advisor"));
+      cells[5].appendChild(selectInput(rec, "reason", REASONS));
+      cells[6].appendChild(selectInput(rec, "location", LOCATIONS));
+      cells[7].appendChild(textareaInput(rec, "explanation"));
+    }
     // Verwijderen
     const del = document.createElement("button");
     del.className = "mini"; del.textContent = "✕"; del.title = "Verwijderen";
@@ -874,13 +954,26 @@ function renderRegister() {
     cells[8].appendChild(del);
     body.appendChild(tr);
   }
-  renderPie(recs);
+  renderPie(orders);
+  renderPerAdviseur(orders);
 }
 
 function commitField(rec, field, value) {
-  rec[field] = value;
-  rec.updatedAt = new Date().toISOString();
+  // Een veld van de order geldt voor alle regels van die order.
+  const doel = ORDERVELDEN.indexOf(field) >= 0 ? regelsVanOrder(rec.orderNr) : [rec];
+  const nu = new Date().toISOString();
+  for (const r of doel) { r[field] = value; r.updatedAt = nu; }
   saveStore().catch(e => console.warn("save:", e.message));
+  if (field === "advisor") renderPerAdviseur(perOrder(currentRecords()));
+}
+/* Aantal retouren per adviseur, per order geteld. */
+function renderPerAdviseur(orders){
+  const box = el("perAdviseur"); if (!box) return;
+  const tel = {};
+  for (const r of orders) { const a = String(r.advisor||"").trim() || "(adviseur volgt)"; tel[a] = (tel[a]||0) + 1; }
+  const rijen = Object.entries(tel).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]));
+  box.innerHTML = rijen.length ? "<div style='font-weight:600;color:var(--fonteyn-green);margin-bottom:2px'>Per adviseur</div>" +
+    rijen.map(([a,n]) => "<div class='li' style='min-width:0'>" + escapeHtml(a) + "<span class='n'>" + n + "</span></div>").join("") : "";
 }
 function textInput(rec, field) {
   const i = document.createElement("input"); i.type="text"; i.value = rec[field]||"";
@@ -897,7 +990,7 @@ function selectInput(rec, field, options) {
   s.appendChild(new Option("-",""));
   for (const o of options) s.appendChild(new Option(field==="reason"?redenNaam(o):o,o));
   s.value = rec[field]||"";
-  s.addEventListener("change", () => { commitField(rec, field, s.value); if (field==="reason") renderPie(currentRecords()); });
+  s.addEventListener("change", () => { commitField(rec, field, s.value); if (field==="reason") renderPie(perOrder(currentRecords())); });
   return s;
 }
 
@@ -1005,6 +1098,10 @@ el("mSave").addEventListener("click", async () => {
     amount: 0, method: "", customer: "", source: "manual",
     addedBy: (localStorage.getItem(EMAIL_KEY)||""), addedAt: new Date().toISOString(),
   };
+  /* Wat hier is ingevuld geldt voor de hele order; lege velden nemen over wat
+     er al bij de order stond. */
+  for (const f of ORDERVELDEN) { const w = store.records[sleutel][f]; if (w) regelsVanOrder(orderNr).forEach(r => { r[f] = w; }); }
+  orderGelijkTrekken(orderNr);
   try { await saveStore(); } catch(e){ alert("Opslaan faalde: "+e.message); return; }
   try{ if(window.fpLog) window.fpLog("retour-geregistreerd","order "+orderNr); }catch(e){}
   el("manualModal").style.display="none";
@@ -1057,6 +1154,10 @@ function loadRetourenDemo() {
   const today = isoDate(new Date());
   el("dateFrom").value = today; el("dateTo").value = today;
   await loadStore();
+  // Herstel: orders met meerdere regels krijgen één adviseur, reden, locatie en uitleg.
+  let hersteld = false;
+  for (const nr of new Set(Object.values(store.records).map(r => r.orderNr))) if (orderGelijkTrekken(nr)) hersteld = true;
+  if (hersteld) saveStore().catch(e => console.warn("save:", e.message));
   renderRegister();
 })();
 </script>
