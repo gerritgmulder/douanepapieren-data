@@ -63,11 +63,20 @@ header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-i
 header h1{margin:0;font-size:15px;font-weight:600;flex:1;min-width:0}
 main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-inset-bottom))}
 
-.dagkeus{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin:0 0 6px;-webkit-overflow-scrolling:touch}
-.dagkeus button{flex:0 0 auto;background:#fff;border:1px solid var(--rand);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink);line-height:1.25;text-align:center}
-.dagkeus button b{display:block;font-size:14px}
+/* De dagkeuze als kleine kalender: zeven gelijke kolommen, ma t/m zo
+   (Gerrit, 23 okt 2026: "maak dit netjes en opgeruimd"). */
+.dagkeus{background:#fff;border:1px solid var(--rand);border-radius:14px;padding:10px 10px 8px;margin:0 0 12px}
+.dagkeus .maand{font-size:13px;font-weight:700;color:var(--groen);margin:0 2px 8px;text-transform:capitalize}
+.dagkeus .raster{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.dagkeus .wd{font-size:10.5px;font-weight:700;color:var(--grijs);text-align:center;text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px}
+.dagkeus button{position:relative;background:#fff;border:1px solid transparent;border-radius:10px;padding:7px 0 11px;font:inherit;font-size:15px;font-weight:600;cursor:pointer;color:var(--ink);text-align:center;line-height:1.1}
+.dagkeus button small{display:block;font-size:10px;font-weight:600;color:var(--grijs);margin-top:1px;text-transform:lowercase}
+.dagkeus button.weekend{color:#9ca3af}
+.dagkeus button.vandaag{border-color:var(--groen)}
 .dagkeus button.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
-.dagkeus button .stip{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--lime);margin-left:4px;vertical-align:middle}
+.dagkeus button.aan small{color:#d1e7d8}
+.dagkeus button .stip{position:absolute;left:50%;bottom:4px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--lime)}
+.dagkeus .leegvak{visibility:hidden}
 
 .route{background:var(--kaart);border:1px solid var(--rand);border-radius:14px;margin-bottom:12px;overflow:hidden}
 .route > h2{margin:0;background:var(--groen);color:#fff;font-size:14px;padding:10px 14px;display:flex;align-items:center;gap:8px}
@@ -288,17 +297,26 @@ function mijnRoutes(dISO){
 }
 
 function tekenDagen(){
-  var box = $("dagen"), html = "", vandaag = new Date();
-  for (var i = -1; i < 14; i++){
-    var d = new Date(vandaag); d.setDate(d.getDate()+i);
+  /* Van gisteren tot twee weken vooruit, in een raster van ma t/m zo. De
+     eerste week begint op maandag; vakjes buiten de reeks blijven leeg. */
+  var box = $("dagen"), vandaag = new Date(); vandaag.setHours(12,0,0,0);
+  var eerste = new Date(vandaag); eerste.setDate(eerste.getDate()-1);
+  var laatste = new Date(vandaag); laatste.setDate(laatste.getDate()+13);
+  var start = new Date(eerste); start.setDate(start.getDate()-dagIndex(start));
+  var kort = ["ma","di","wo","do","vr","za","zo"];
+  var maandNamen = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+  var titel = maandNamen[eerste.getMonth()] + (laatste.getMonth() !== eerste.getMonth() ? " / " + maandNamen[laatste.getMonth()] : "") + " " + laatste.getFullYear();
+  var html = '<div class="maand">'+titel+'</div><div class="raster">' + kort.map(function(k){ return '<div class="wd">'+k+'</div>'; }).join("");
+  for (var d = new Date(start); d <= laatste || dagIndex(d) !== 0; d.setDate(d.getDate()+1)){
+    if (d < eerste || d > laatste){ html += '<span class="leegvak"></span>'; continue; }
     var dISO = iso(d), heeft = mijnRoutes(dISO).some(function(x){ return x.vanMij; });
-    html += '<button type="button" data-d="'+dISO+'" class="'+(dISO===dagGekozen?"aan":"")+'">'+
-      DAGEN[dagIndex(d)]+' '+d.getDate()+' '+MAANDEN[d.getMonth()]+(heeft?'<span class="stip"></span>':'')+
-      '<b>'+(i===0?"vandaag":i===1?"morgen":"&nbsp;")+'</b></button>';
+    var isVandaag = dISO === iso(vandaag), eersteVanMaand = d.getDate() === 1 || +d === +eerste;
+    html += '<button type="button" data-d="'+dISO+'" class="'+[dISO===dagGekozen?"aan":"", isVandaag?"vandaag":"", dagIndex(d)>4?"weekend":""].join(" ").trim()+'"'+
+      ' title="'+DAGEN[dagIndex(d)]+' '+d.getDate()+' '+MAANDEN[d.getMonth()]+'">'+d.getDate()+
+      '<small>'+(isVandaag ? "vandaag" : eersteVanMaand ? MAANDEN[d.getMonth()] : "&nbsp;")+'</small>'+(heeft?'<span class="stip"></span>':'')+'</button>';
   }
-  box.innerHTML = html;
+  box.innerHTML = html + '</div>';
   box.querySelectorAll("button").forEach(function(b){ b.addEventListener("click", function(){ dagGekozen = b.dataset.d; tekenDagen(); teken(); }); });
-  var aan = box.querySelector("button.aan"); if (aan) aan.scrollIntoView({ inline:"center", block:"nearest" });
 }
 
 function sleutel(nr, i){ return String(nr)+"|"+i; }
