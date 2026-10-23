@@ -51,6 +51,19 @@
     "tim":        ["tim.geerestein@fonteyn.nl", "tim.geerestein"],
   };
 
+  /* Toegang tot een datum: vanaf die dag mag deze naam nergens meer bij,
+     in geen enkele groep. Voor wie uit dienst gaat, zodat het op de dag zelf
+     vanzelf dichtgaat. Daarna de naam ook uit de groepen halen.
+     De worker leest dit blok ook (toegangLees). */
+  var TOT = {
+    "dani": "2026-11-01",   // Dani uit dienst (Gerrit, 23 okt 2026)
+  };
+  function verlopen(wie) {
+    var w = String(wie || "").toLowerCase().trim(), d = new Date();
+    var vandaag = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    return Object.keys(TOT).some(function (n) { return vandaag >= TOT[n] && varianten(n).indexOf(w) >= 0; });
+  }
+
   function varianten(naam) {
     if (AFWIJKEND[naam]) return AFWIJKEND[naam].slice();
     return [naam + "@fonteyn.nl", naam, "fonteyn." + naam];
@@ -446,6 +459,7 @@
 
   // De vraag die iedereen stelt: mag deze ingelogde gebruiker hier bij?
   function mag(groep, wie) {
+    if (verlopen(wie)) return false;
     return set(groep).has(String(wie || "").toLowerCase().trim());
   }
 

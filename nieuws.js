@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
+      titel: "Ordernummer met één klik kopiëren",
+      wat:   "Klik op een ordernummer in Bakwagenroute en het staat op het klembord. In Logic4 plak je het daarna met Ctrl+V."
+    },
+    {
+      datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
       titel: "Twee wagens: Jordy en de flexwagen",
       wat:   "De bakwagen van Dani is nu ook een flexwagen. Bij Ritten klaarzetten staan per dag Bakwagen Jordy en de Flexwagen. Bij de flexwagen vul je bij het akkoord in wie er die dag rijdt; zonder naam gaat het akkoord nog niet door."
     },

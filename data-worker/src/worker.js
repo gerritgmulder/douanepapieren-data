@@ -4000,7 +4000,11 @@ function toegangLees(src) {
   const afwijkend = {};
   const blokA = (kaal.match(/AFWIJKEND\s*=\s*\{([\s\S]*?)\n\s*\};/) || [])[1] || "";
   for (const m of blokA.matchAll(/"([^"]+)"\s*:\s*\[([^\]]*)\]/g)) afwijkend[m[1].toLowerCase()] = namen(m[2]);
-  return { groepen, afwijkend };
+  // Toegang tot een datum (TOT): vanaf die dag nergens meer bij.
+  const tot = {};
+  const blokT = (kaal.match(/TOT\s*=\s*\{([\s\S]*?)\}/) || [])[1] || "";
+  for (const m of blokT.matchAll(/"([^"]+)"\s*:\s*"(\d{4}-\d{2}-\d{2})"/g)) tot[m[1].toLowerCase()] = m[2];
+  return { groepen, afwijkend, tot };
 }
 async function toegangMag(env, groep, wie) {
   const w = String(wie || "").toLowerCase().trim();
@@ -4016,12 +4020,16 @@ async function toegangMag(env, groep, wie) {
                             { cf: { cacheTtl: 0 } });
       if (r.ok) {
         const g = toegangLees(await r.text());
-        if (g.groepen[groep]) toegangCache = { ts: Date.now(), groepen: g.groepen, afwijkend: g.afwijkend };
+        if (g.groepen[groep]) toegangCache = { ts: Date.now(), groepen: g.groepen, afwijkend: g.afwijkend, tot: g.tot || {} };
       }
     } catch (e) { console.log("[toegang] toegang.js niet geladen: " + String(e.message || e)); }
   }
   const lijst = (toegangCache.groepen || {})[groep] || [];
   const afw = toegangCache.afwijkend || {};
+  // Uit dienst: vanaf de datum in TOT nergens meer bij (Dani, 1 nov 2026).
+  const vandaagNL = pcVandaag();
+  for (const [naam, datum] of Object.entries(toegangCache.tot || {}))
+    if (vandaagNL >= datum && (afw[naam] || [naam + "@fonteyn.nl", naam, "fonteyn." + naam]).indexOf(w) >= 0) return false;
   for (const naam of lijst) {
     const varianten = afw[naam] || [naam + "@fonteyn.nl", naam, "fonteyn." + naam];
     if (varianten.indexOf(w) >= 0) return true;

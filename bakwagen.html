@@ -181,6 +181,11 @@ main{margin:14px auto;padding:0 14px 60px}
 .voorbeeld .afmeld button,.voorbeeld .afmeld input,.voorbeeld .afmeld textarea,.voorbeeld .hand,.voorbeeld .fotoknop,.voorbeeld .paklijst input,
 .voorbeeld [data-bestuurderbewaar],.voorbeeld [data-bestuurder],.voorbeeld header a,.voorbeeld header button{pointer-events:none}
 .voorbeeld .afmeld .groot{opacity:.55}
+.ordernr{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:5px 10px;font:inherit;font-size:16px;cursor:pointer;color:var(--ink)}
+.ordernr span{font-size:12px;color:var(--grijs);margin-left:4px}
+.ordernr:hover{border-color:var(--groen)}
+#kopieerMelding{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--groen);color:#fff;padding:11px 18px;border-radius:12px;font-size:14.5px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:all .2s;z-index:99999;max-width:calc(100% - 32px)}
+#kopieerMelding.zichtbaar{opacity:1;transform:translateX(-50%) translateY(0)}
 @media (max-width:600px){ main{padding:0 8px 60px} .stops{grid-template-columns:1fr} }
 </style>
 </head>
@@ -517,12 +522,12 @@ function stopHtml(r, s, i, opt){
     '<div class="wie"><b>'+esc(s.klant || ("Order "+s.order))+'</b><small>'+esc([s.plaats, "order "+s.order].filter(Boolean).join(" · "))+'</small></div>'+pil+knoppen+'</div>';
   if (!isOpen) return h + '</div>';
   h += '<div class="velden">';
-  if (s.gefactureerd) h += veld("Ordernummer", esc(s.order)) + '<div class="veld"><div class="w zacht">Deze order is al gefactureerd; de gegevens staan in Logic4 bij de factuur.</div></div>';
-  else if (s.laden) h += veld("Ordernummer", esc(s.order)) + '<div class="veld"><div class="w zacht">De gegevens van deze order worden opgehaald…</div></div>';
+  if (s.gefactureerd) h += veld("Ordernummer", ordernrHtml(s.order)) + '<div class="veld"><div class="w zacht">Deze order is al gefactureerd; de gegevens staan in Logic4 bij de factuur.</div></div>';
+  else if (s.laden) h += veld("Ordernummer", ordernrHtml(s.order)) + '<div class="veld"><div class="w zacht">De gegevens van deze order worden opgehaald…</div></div>';
   else {
     var adres = [s.adres, [s.postcode, s.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", ");
     var info = s.infoAangepast || [s.opmerkingRit, s.notities].filter(Boolean).join("\n\n");
-    h += veld("Ordernummer", esc(s.order)) +
+    h += veld("Ordernummer", ordernrHtml(s.order)) +
       veld("Klantnaam", esc(s.klant || "-") + (s.bedrijf && s.bedrijf !== s.klant ? '<br><small>'+esc(s.bedrijf)+'</small>' : '')) +
       veld("Telefoonnummer klant", s.telefoon ? esc(s.telefoon)+(opt.alleenKijken ? '' : '<br><a class="knop" href="tel:'+esc(s.telefoon.replace(/[^\d+]/g,""))+'">📞 Bellen</a>') : '<span class="zacht">Er staat nog geen nummer bij deze order in Logic4.</span>') +
       (adres ? veld("Adres", esc(adres)+(opt.alleenKijken ? '' : '<br><a class="knop" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(adres+(s.land && s.land !== "NL" ? ", "+s.land : ""))+'">🧭 Route</a>')) : '') +
@@ -619,6 +624,22 @@ function koppelBonMail(waar, opnieuw, vind){
     catch(e){ b.disabled = false; b.textContent = "Versturen"; m.className = "melding slecht"; m.textContent = "Versturen vraagt nog een poging: " + e.message; }
   }); });
 }
+/* Klik op het ordernummer = op het klembord, klaar om in Logic4 te plakken
+   (Gerrit, 23 okt 2026). Alleen voor de planning. */
+function ordernrHtml(nr){
+  if (!planner) return esc(nr);
+  return '<button type="button" class="ordernr" data-kopieer="'+esc(nr)+'" title="Kopiëren om in Logic4 te plakken">'+esc(nr)+' <span>📋 kopiëren</span></button>';
+}
+async function kopieer(nr){
+  var gelukt = false;
+  try { await navigator.clipboard.writeText(nr); gelukt = true; } catch(e) {}
+  if (!gelukt) { try { var t = document.createElement("textarea"); t.value = nr; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); gelukt = document.execCommand("copy"); t.remove(); } catch(e) {} }
+  var m = document.getElementById("kopieerMelding");
+  if (!m) { m = document.createElement("div"); m.id = "kopieerMelding"; document.body.appendChild(m); }
+  m.textContent = gelukt ? "Order " + nr + " staat op het klembord. Plak het in Logic4 (Ctrl+V)." : "Kopiëren vraagt nog een poging; het ordernummer is " + nr + ".";
+  m.className = "zichtbaar"; clearTimeout(m._t); m._t = setTimeout(function(){ m.className = ""; }, 3500);
+}
+document.addEventListener("click", function(e){ var b = e.target.closest && e.target.closest("[data-kopieer]"); if (!b) return; e.preventDefault(); e.stopPropagation(); kopieer(b.dataset.kopieer); }, true);
 function veld(k, w){ return '<div class="veld"><div class="k">'+k+'</div><div class="w">'+w+'</div></div>'; }
 
 /* ═══ Foto's als bewijs (Gerrit, 16 okt 2026) ═══════════════════════════
@@ -699,7 +720,7 @@ function tekenTreffers(){
   if (!d.stops.length) { $("zoekUit").innerHTML = '<p class="leeg">'+(zoekQ ? 'Geen afgemelde stop gevonden voor "'+esc(zoekQ)+'".' : 'Hier komen de stops met een handtekening of foto\'s te staan, zodra de chauffeurs afmelden.')+'</p>'; return; }
   $("zoekUit").innerHTML = '<p class="leeg" style="padding:0 2px 8px">'+d.totaal+' stop'+(d.totaal===1?'':'s')+(d.totaal>d.stops.length?' (de nieuwste '+d.stops.length+')':'')+'</p>' + d.stops.map(function(x){
     var k = sleutel(x.rit, x.order), a = x.af;
-    return '<div class="treffer"><div class="t1"><b>'+esc(x.klant || ("Order "+x.order))+'</b><small>order '+esc(x.order)+(x.plaats?' · '+esc(x.plaats):'')+'</small>' +
+    return '<div class="treffer"><div class="t1"><b>'+esc(x.klant || ("Order "+x.order))+'</b><small>order '+ordernrHtml(x.order)+(x.plaats?' · '+esc(x.plaats):'')+'</small>' +
       (a ? '<span class="pil goed">✓ '+(a.soort==="omruiling"?"Omgeruild":soortLabel(a.soort))+'</span>' : '<span class="pil">foto\'s</span>') + '</div>' +
       '<small>'+esc([x.datum ? dagTekst(x.datum) : "", x.ritnaam, a ? tijd(a.ts)+(a.chauffeur?" door "+chauffeurNaam(a.chauffeur):"") : ""].filter(Boolean).join(" · "))+'</small>' +
       (a && a.naam ? '<div style="margin-top:4px;font-size:14px">Getekend door: '+esc(a.naam)+'</div>' : '') +
