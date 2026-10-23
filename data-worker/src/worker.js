@@ -17391,7 +17391,7 @@ async function bakwagenRit(env, id) {
 async function bakwagenAkkoord(env, wie, b) {
   const id = String(b.rit || "").replace(/\D/g, "");
   const db = await bwDb(env);
-  if (b.akkoord === false) { await db.prepare("DELETE FROM bakwagen_akkoord WHERE rit = ?1").bind(id).run(); return { ok: true }; }
+  if (b.akkoord === false) { await db.prepare("DELETE FROM bakwagen_akkoord WHERE rit = ?1").bind(id).run(); await bwSein(env, wie, "akkoord", id); return { ok: true }; }
   const chauffeur = BW_CHAUFFEURS.map(c => c.naam).find(n => n === b.chauffeur);
   if (!chauffeur) return { ok: false, error: "Kies eerst de chauffeur." };
   const r = await db.prepare("SELECT naam, datum, soort, memo FROM bakwagen_rit WHERE id = ?1").bind(id).first();
@@ -17399,7 +17399,17 @@ async function bakwagenAkkoord(env, wie, b) {
   const bestuurder = chauffeur === "Flex" ? String(b.bestuurder || "").trim().slice(0, 60) : "";
   await db.prepare("INSERT OR REPLACE INTO bakwagen_akkoord (rit, chauffeur, datum, naam, soort, memo, door, ts, bestuurder) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
     .bind(id, chauffeur, r.datum, r.naam, r.soort, r.memo || "", wie, Date.now(), bestuurder).run();
+  await bwSein(env, wie, "akkoord", id);
   return { ok: true, akkoord: { chauffeur, bestuurder, door: wie, ts: Date.now() } };
+}
+/* Seintje naar de live kamer van Bakwagenroute: wie er meekijkt, haalt de
+   rit opnieuw op (Gerrit, 23 okt 2026). Mag nooit het eigenlijke werk
+   tegenhouden. */
+async function bwSein(env, wie, wat, rit) {
+  try {
+    await env.LIVE.get(env.LIVE.idFromName("bakwagen")).fetch(new Request("https://live/sein", { method: "POST",
+      headers: { "X-Live-Intern": env.SHARED_SECRET, "Content-Type": "application/json" }, body: JSON.stringify({ wie, wat, rit }) }));
+  } catch (e) {}
 }
 /* De planning past een rit aan (Manon, 21 okt 2026). Alles hier ligt over
    de rit uit Logic4 heen; in Logic4 zelf verandert er niets.
@@ -17442,6 +17452,7 @@ async function bakwagenAanpas(env, wie, b) {
   }
   else return { ok: false, error: "onbekende aanpassing" };
   await db.prepare("INSERT OR REPLACE INTO bakwagen_aanpas (rit, json, door, ts) VALUES (?1, ?2, ?3, ?4)").bind(rit, JSON.stringify(ap), wie, Date.now()).run();
+  await bwSein(env, wie, "aanpas", rit);
   return { ok: true };
 }
 /* 3. De chauffeur: zijn goedgekeurde ritten van vandaag (de planning kan
@@ -17471,6 +17482,7 @@ async function bakwagenBestuurder(env, wie, planner, b) {
   const db = await bwDb(env);
   if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
   await db.prepare("UPDATE bakwagen_akkoord SET bestuurder = ?1 WHERE rit = ?2 AND chauffeur = 'Flex'").bind(naam, rit).run();
+  await bwSein(env, wie, "bestuurder", rit);
   return { ok: true, bestuurder: naam };
 }
 async function bwMagBijRit(env, db, wie, planner, rit) {
@@ -17505,6 +17517,7 @@ async function bakwagenAfmelden(env, wie, planner, b) {
       await env.FONTEYN_DATA.put(BERICHTEN_KEY, JSON.stringify(d));
     }
   }
+  await bwSein(env, wie, "afmelden", rit);
   return { ok: true, ts, chauffeur };
 }
 /* Foto's van de chauffeur bij een stop, als bewijs (Gerrit, 16 okt 2026:
@@ -17525,6 +17538,7 @@ async function bakwagenFotoZet(env, wie, planner, b) {
   const chauffeur = await bwWieReed(db, wie, rit, b.chauffeur);
   await db.prepare("INSERT INTO bakwagen_foto (id, rit, orderid, door, chauffeur, ts, grootte) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
     .bind(id, rit, order, wie, chauffeur, Date.now(), bytes.length).run();
+  await bwSein(env, wie, "foto", rit);
   return { ok: true, id, ts: Date.now() };
 }
 async function bakwagenFotoLees(env, wie, planner, id) {
@@ -17569,6 +17583,7 @@ async function bakwagenPak(env, wie, planner, b) {
   if (!(await bwMagBijRit(env, db, wie, planner, rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
   if (b.aan) await db.prepare("INSERT OR REPLACE INTO bakwagen_pak (rit, orderid, sleutel, door, ts) VALUES (?1, ?2, ?3, ?4, ?5)").bind(rit, order, sleutel, wie, Date.now()).run();
   else await db.prepare("DELETE FROM bakwagen_pak WHERE rit = ?1 AND orderid = ?2 AND sleutel = ?3").bind(rit, order, sleutel).run();
+  await bwSein(env, wie, "pak", rit);
   return { ok: true };
 }
 /* De getekende bevestiging naar de klant (Gerrit, 21 okt 2026), zoals de
@@ -17647,6 +17662,7 @@ async function bakwagenBonMail(env, wie, b, voorbeeld) {
   const gm = { naar, ts: Date.now(), door: wie };
   const db = await bwDb(env);
   await db.prepare("UPDATE bakwagen_af SET gemaild = ?1 WHERE rit = ?2 AND orderid = ?3").bind(JSON.stringify(gm), rit, order).run();
+  await bwSein(env, wie, "gemaild", rit);
   return { ok: true, gemaild: gm };
 }
 async function bakwagenHandtekening(env, wie, planner, rit, order) {
@@ -18644,6 +18660,14 @@ export class LiveKamer {
   constructor(state, env) { this.state = state; this.env = env; }
 
   async fetch(request) {
+    /* Een seintje van de server zelf (Bakwagenroute, 23 okt 2026): een
+       chauffeur meldt af of zet een vinkje, en de planning ziet het meteen.
+       Alleen met de teamsleutel; de kamer geeft het door aan wie er bij zit. */
+    if (request.method === "POST" && this.env.SHARED_SECRET && request.headers.get("X-Live-Intern") === this.env.SHARED_SECRET) {
+      const d = await request.json().catch(() => ({}));
+      this.rondsturen({ soort: "gewijzigd", wie: String(d.wie || "").slice(0, 80), wat: String(d.wat || "").slice(0, 60), rit: String(d.rit || "").slice(0, 20) });
+      return new Response("ok");
+    }
     if (request.headers.get("Upgrade") !== "websocket")
       return new Response("Alleen WebSocket", { status: 426 });
     const paar = new WebSocketPair();
@@ -18651,6 +18675,8 @@ export class LiveKamer {
     // Hibernation-API: de kamer mag slapen tussen berichten door; dat houdt
     // hem ruim binnen het gratis plan.
     this.state.acceptWebSocket(server);
+    // Welke kamer: de kamer van Bakwagenroute laat ook de chauffeurs binnen.
+    try { server.serializeAttachment({ kamer: new URL(request.url).pathname.replace(/^\/live\//, "").slice(0, 40) }); } catch (e) {}
     return new Response(null, { status: 101, webSocket: klant });
   }
 
@@ -18671,16 +18697,24 @@ export class LiveKamer {
     }
   }
 
-  webSocketMessage(ws, bericht) {
+  async webSocketMessage(ws, bericht) {
     let d = null;
     try { d = JSON.parse(bericht); } catch (e) { return; }
     let att = null;
     try { att = ws.deserializeAttachment(); } catch (e) {}
 
     if (!att || !att.aangemeld) {
-      if (d.soort === "hallo" && this.env.SHARED_SECRET && d.sleutel === this.env.SHARED_SECRET) {
+      /* De chauffeurs van de bakwagen hebben een eigen sleutel (extern); die
+         mag alleen in de kamer van Bakwagenroute. */
+      let extern = false;
+      if (d.soort === "hallo" && att && att.kamer === "bakwagen" && /^ext1\./.test(String(d.sleutel || ""))) {
+        const [, naamEnc, sig] = String(d.sleutel).split(".");
+        const naam = decodeURIComponent(naamEnc || "").toLowerCase();
+        extern = !!naam && sig === await externHandtekening(this.env, naam) && await toegangMag(this.env, "extern", naam);
+      }
+      if (d.soort === "hallo" && ((this.env.SHARED_SECRET && d.sleutel === this.env.SHARED_SECRET) || extern)) {
         const wie = String(d.wie || "onbekend").toLowerCase().slice(0, 80);
-        ws.serializeAttachment({ aangemeld: true, wie });
+        ws.serializeAttachment({ aangemeld: true, wie, kamer: att && att.kamer, extern });
         ws.send(JSON.stringify({ soort: "welkom", aanwezig: this.wieAllemaal() }));
         this.rondsturen({ soort: "erbij", wie }, ws);
       } else {

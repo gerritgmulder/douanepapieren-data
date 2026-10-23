@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
+      titel: "Live meekijken en bevestiging mailen",
+      wat:   "Een afmelding, foto of vinkje van een chauffeur zie je meteen, zonder te verversen. Bovenaan staat wie er meekijkt. Na het afmelden mail je de klant met één klik een bevestiging met de handtekening erin, ook vanuit Zoeken."
+    },
+    {
       datum: "2026-10-21", bestand: "bakwagen.html", soort: "beter",
       titel: "Route, rijtijd, betaling en gedeelde paklijst",
       wat:   "Bij elke rit staat een knop om de hele route in Google Maps te openen, met de rijtijd en de kilometers erbij. Bij elke stop zie je of de order betaald is (groen), aanbetaald (oranje) of nog betaald moet worden (rood). De vinkjes in de paklijst zijn nu voor iedereen gelijk: wat de chauffeur inlaadt, ziet de planning ook."

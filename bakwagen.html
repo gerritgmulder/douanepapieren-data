@@ -183,6 +183,7 @@ main{margin:14px auto;padding:0 14px 60px}
 <header>
   <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
   <h1>🚛 Bakwagenroute</h1>
+  <span id="liveAanwezig" style="font-size:12px;opacity:.9"></span>
   <span id="stand" style="font-size:12px;opacity:.85"></span>
 </header>
 <main>
@@ -552,7 +553,7 @@ function betaalStand(s){
   return { kleur: "rood", kort: "Nog te betalen", tekst: "Nog te betalen: " + euro(b.totaal) };
 }
 /* De bevestiging mailen: staat klaar, gaat aan na akkoord van Gerrit op het voorbeeld. */
-var BON_MAIL_AAN = false;
+var BON_MAIL_AAN = true;   // akkoord Gerrit op het voorbeeld, 23 okt 2026
 var bonMailOpen = {};
 function bonMailHtml(k, a, mail){
   if (!planner || !BON_MAIL_AAN || !a || !a.getekend) return '';
@@ -777,10 +778,49 @@ async function afmelden(k, knop){
     if (m) { m.className = "melding slecht"; m.textContent = "Afmelden vraagt nog een poging (geen verbinding?). Wat je hebt ingevuld blijft staan; probeer het zo opnieuw."; }
   }
 }
+/* ═══ Live meekijken (Gerrit, 23 okt 2026) ══════════════════════════════
+   Zelfde kamer als bij Planning: er gaat alleen een seintje rond ("er is
+   iets veranderd aan rit X"), de server geeft het zelf bij afmelden, foto's,
+   vinkjes en aanpassingen. Wie meekijkt haalt de rit opnieuw op. Nooit
+   terwijl iemand aan het tekenen, typen of aanpassen is; dan even later.
+   Valt de verbinding weg, dan blijft de verversing van twee minuten. */
+var liveWs = null, liveAanwezig = [], liveTimer = null, liveWacht = null;
+function liveStart(){
+  if (!teamKey()) return;
+  try { liveWs = new WebSocket("wss://fonteyn-data-store.g-mulder.workers.dev/live/bakwagen"); } catch(e){ return; }
+  liveWs.addEventListener("open", function(){ liveWs.send(JSON.stringify({ soort: "hallo", sleutel: teamKey(), wie: ik || "onbekend" })); });
+  liveWs.addEventListener("message", function(ev){
+    var d = null; try { d = JSON.parse(ev.data); } catch(e){ return; }
+    if (d.soort === "welkom"){ liveAanwezig = d.aanwezig || []; toonAanwezig(); return; }
+    if (d.soort === "erbij"){ if (liveAanwezig.indexOf(d.wie) < 0) liveAanwezig.push(d.wie); toonAanwezig(); return; }
+    if (d.soort === "weg"){ liveAanwezig = liveAanwezig.filter(function(w){ return w !== d.wie; }); toonAanwezig(); return; }
+    if (d.soort === "gewijzigd" && d.wie !== ik) liveVervers(d);
+  });
+  liveWs.addEventListener("close", function(){ liveAanwezig = []; toonAanwezig(); setTimeout(liveStart, 5000 + Math.random()*5000); });
+  liveWs.addEventListener("error", function(){ try{ liveWs.close(); }catch(e){} });
+}
+function liveVervers(d){
+  clearTimeout(liveWacht);
+  var bezig = heeftConcept() || Object.keys(infoBewerk).length || Object.keys(bonMailOpen).length || (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName));
+  if (bezig) { liveWacht = setTimeout(function(){ liveVervers(d); }, 3000); return; }
+  if (tab === "onderweg") laadDag(0);
+  else if (tab === "planning" && openRit && (!d.rit || d.rit === openRit)) laadRit(openRit, 0);
+  else if (tab === "zoeken" && zoekData) zoek();
+  var el = $("stand"); if (el) { el.textContent = "Bijgewerkt door " + (chauffeurVanInlog(d.wie) ? chauffeurNaam(chauffeurVanInlog(d.wie)) : naamVan(d.wie)); clearTimeout(liveTimer); liveTimer = setTimeout(function(){ el.textContent = "Bijgewerkt om " + tijd(Date.now()); }, 5000); }
+}
+/* Wie er meekijkt, alleen voor de planning. */
+function toonAanwezig(){
+  var el = $("liveAanwezig"); if (!el) return;
+  if (!planner) { el.textContent = ""; return; }
+  var anderen = liveAanwezig.filter(function(w, i){ return w !== ik && liveAanwezig.indexOf(w) === i; })
+    .map(function(w){ return chauffeurVanInlog(w) ? chauffeurNaam(chauffeurVanInlog(w)) : naamVan(w); });
+  el.textContent = anderen.length ? "● " + anderen.join(", ") + (anderen.length === 1 ? " kijkt mee" : " kijken mee") : "";
+}
 (async function(){
   for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
   if (!planner && !ikChauffeur) { $("lijst").innerHTML = '<p class="leeg">Deze tegel is voor de bakwagenchauffeurs en de planning van de ritten.</p>'; $("onderweg").hidden = false; return; }
   toon();
+  liveStart();
   /* Elke twee minuten opnieuw, zodat een rit die later klaargezet wordt vanzelf
      verschijnt; maar nooit terwijl er iemand aan het tekenen of typen is. */
   setInterval(function(){ if (!document.hidden && tab === "onderweg" && !heeftConcept()) laadDag(0); }, 120000);
