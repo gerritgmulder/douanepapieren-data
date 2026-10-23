@@ -207,6 +207,8 @@ main{max-width:none;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(sa
 /* Alleen leveren (Kevin, 13 okt 2026): goed zichtbaar op blok en kaartje. */
 .blok .al{display:inline-block;margin:1px 0;padding:0 5px;border-radius:4px;background:#fde68a;color:#7c2d12;font-size:9.5px;font-weight:700;white-space:nowrap}
 .afs .badge.al{background:#fde68a!important;color:#7c2d12!important}
+.blok .ak{display:inline-block;margin:1px 0 1px 3px;padding:0 5px;border-radius:4px;background:#dcfce7;color:#14532d;font-size:9.5px;font-weight:700;white-space:nowrap}
+.afs .badge.ak{background:#dcfce7!important;color:#14532d!important}
 
 .blokinfo{position:fixed;z-index:45;background:#fff;border:1px solid var(--rand);border-radius:12px;
    box-shadow:0 10px 30px rgba(15,23,42,.22);padding:12px 14px;width:290px;max-width:calc(100vw - 24px);
@@ -2564,6 +2566,7 @@ function blokken(items){
       ((a.ordernr||a.itsId)?'<div class="nr">'+(a.ordernr?esc(a.ordernr):'')+(a.ordernr&&a.itsId?' · ':'')+(a.itsId?'ITS '+esc(a.itsId):'')+'</div>':'')+
       /* Kevin (video 13 okt 2026): "alleen leveren" ook op het blok zelf. */
       (a.alleenLeveren?'<div class="al">Alleen leveren</div>':'')+
+      (a.klantAkkoord?'<div class="ak">&#10003; klant akkoord</div>':'')+
       /* Direct onder het nummer, zodat hij ook in een kort blok te zien is. */
       (wpRegel?'<div class="m wp">+ warmtepomp</div>':"")+
       '<div class="k" data-bewerk="klant" title="Klik om de naam aan te passen">'+esc(a.klant||c.naam)+'</div>'+
@@ -2584,7 +2587,8 @@ function kaartje(a){
   return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';'+betaalRand(a)+'">'+
     '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
     '<span class="badge" style="background:rgba(255,255,255,.55);color:inherit">'+esc(c.naam)+'</span>'+
-    (a.alleenLeveren?'<span class="badge al">Alleen leveren</span>':'')+'</div>'+
+    (a.alleenLeveren?'<span class="badge al">Alleen leveren</span>':'')+
+    (a.klantAkkoord?'<span class="badge ak">&#10003; klant akkoord</span>':'')+'</div>'+
     '<div class="klant">'+esc(a.klant||"(naam nog invullen)")+'</div>'+
     (sub?'<div class="sub">'+sub+'</div>':"")+
     (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';
@@ -2736,6 +2740,11 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fAlleenLev" style="width:auto"'+(a.alleenLeveren?" checked":"")+'> '+
       '<span>Alleen leveren <span style="color:var(--grijs)">(op de opleverbon geen checklist, alleen pakbon en handtekeningen)</span></span></label>'+
+    /* Kevin (video 19 okt 2026): "een vinkje dat ik aan kan klikken zodra
+       een klant akkoord geeft", en dat ziet de monteur in Mijn route. */
+    '<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
+      '<input type="checkbox" id="fAkkoord" style="width:auto"'+(a.klantAkkoord?" checked":"")+'> '+
+      '<span>Klant akkoord <span style="color:var(--grijs)">(de klant heeft de afspraak bevestigd; de monteur ziet dit in Mijn route)</span></span></label>'+
     (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
     (nieuw?"":'<div class="gepland-door">Ingepland door '+esc(planNaam(a.door||"?"))+
@@ -2909,6 +2918,9 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       uitVoorraad: a.uitVoorraad || null,
       letop: $("fLetop").checked,
       alleenLeveren: $("fAlleenLev").checked,
+      klantAkkoord: $("fAkkoord").checked,
+      klantAkkoordDoor: $("fAkkoord").checked ? (a.klantAkkoord ? (a.klantAkkoordDoor || ik) : ik) : null,
+      klantAkkoordTs: $("fAkkoord").checked ? (a.klantAkkoord ? (a.klantAkkoordTs || new Date().toISOString()) : new Date().toISOString()) : null,
       door: nieuw ? ik : (a.door||ik), gewijzigdDoor: ik,
       gemaakt: a.gemaakt || new Date().toISOString(), gewijzigd: new Date().toISOString()
     };

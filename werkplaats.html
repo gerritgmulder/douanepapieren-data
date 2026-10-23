@@ -59,6 +59,7 @@ main{max-width:1100px;margin:16px auto;padding:0 14px 40px}
 .kop{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
 .datum{flex:0 0 auto;min-width:96px;font-weight:700;color:var(--groen);font-size:15px;line-height:1.2}
 .datum small{display:block;font-weight:500;color:var(--grijs);font-size:11px}
+.datum small.l4anders{color:#c2410c;font-weight:600}
 .datum input{font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--rand);border-radius:7px;margin-top:2px;max-width:140px}
 .wat{flex:1 1 220px;min-width:0}
 .wat b{font-size:15px}
@@ -180,6 +181,11 @@ async function laad(){
   }
   regels = alle.filter(function(x){
     if (wp.extra[String(x.ordernr)]) return true;
+    /* Dealerorders test de werkplaats niet (Kevin, 22 okt 2026: "hoe kan het
+       zijn dat er oude orders van dealers in de lijst van de werkplaats komen
+       te staan?"). Ze kwamen erin zodra iemand ze in Voorraadbeheer op
+       gepland zette. Moet er toch een getest worden: Ordernummer toevoegen. */
+    if (x.type === "partner" || x.type === "zakelijk") return false;
     var n = notities[x.regelId] || (x.regelIdOud && notities[x.regelIdOud]) || {};
     // Geannuleerd hoort niet getest te worden (Kevin, 8 okt 2026).
     return n.gepland && !n.verwijderd && !n.geannuleerd;
@@ -192,10 +198,15 @@ async function laad(){
        Planning; en anders wat de werkplaats zelf heeft ingevuld. */
     var afs = afspraken.filter(function(a){ return String(a.ordernr||"") === String(x.ordernr) && !a.klaar && a.datum; })
       .sort(function(a,b){ return String(a.datum).localeCompare(String(b.datum)); });
-    var lever = x.leverdatum || (afs.length ? afs[0].datum : (w.leverdatum || ""));
-    var bron = x.leverdatum ? "logic4" : (afs.length ? "planning" : (w.leverdatum ? "werkplaats" : ""));
-    var tijd = afs.length && (!x.leverdatum || afs[0].datum === x.leverdatum) ? (afs[0].tijd||"") : "";
-    return { r: x, n: n, w: w, lever: lever, leverBron: bron, tijd: tijd };
+    /* Kevin (video 22 okt 2026): "hier zie je 2-10 staan maar deze spa is
+       gewoon ingepland op 6-11". De afspraak was in Planning verzet; Logic4
+       hield de oude datum. Staat er een open afspraak, dan telt die, met de
+       afwijkende Logic4-datum klein eronder. */
+    var lever = afs.length ? afs[0].datum : (x.leverdatum || w.leverdatum || "");
+    var bron = afs.length ? "planning" : (x.leverdatum ? "logic4" : (w.leverdatum ? "werkplaats" : ""));
+    var tijd = afs.length ? (afs[0].tijd||"") : "";
+    var logic4Anders = afs.length && x.leverdatum && x.leverdatum !== afs[0].datum ? x.leverdatum : "";
+    return { r: x, n: n, w: w, lever: lever, leverBron: bron, tijd: tijd, logic4Anders: logic4Anders };
   });
   $("stand").textContent = "stand " + (live.updated ? String(live.updated).replace("T"," ").slice(0,16) : "");
   teken();
@@ -227,7 +238,7 @@ function teken(){
     var r = x.r, id = esc(r.regelId), o = orders[String(r.ordernr)];
     var laat = x.lever && x.lever < vandaag && !x.w.getest;
     var datum = x.lever
-      ? '<div class="datum">' + esc(datumNL(x.lever)) + '<small>' + esc(dagNaam(x.lever)) + (x.tijd ? " " + esc(x.tijd) : "") + (x.leverBron === "werkplaats" ? " · zelf gezet" : x.leverBron === "planning" ? " · uit Planning" : "") + '</small></div>'
+      ? '<div class="datum">' + esc(datumNL(x.lever)) + '<small>' + esc(dagNaam(x.lever)) + (x.tijd ? " " + esc(x.tijd) : "") + (x.leverBron === "werkplaats" ? " · zelf gezet" : x.leverBron === "planning" ? " · uit Planning" : "") + '</small>' + (x.logic4Anders ? '<small class="l4anders">Logic4: ' + esc(datumNL(x.logic4Anders)) + '</small>' : '') + '</div>'
       : '<div class="datum"><small>leverdatum volgt uit Logic4</small><input type="date" data-datum="' + id + '" title="Leverdatum zelf zetten; zodra er in Logic4 een leverdatum op de order staat gaat die voor"></div>';
     return '<div class="kaart' + (x.w.getest ? " getest" : "") + (laat ? " laat" : "") + '">' +
       '<div class="kop">' + datum +

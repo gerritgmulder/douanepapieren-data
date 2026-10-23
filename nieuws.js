@@ -51,6 +51,22 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "planning.html", soort: "nieuw",
+      titel: "Planning: vinkje Klant akkoord",
+      wat: "Zet bij een afspraak het vinkje Klant akkoord zodra de klant de afspraak bevestigt. Het staat dan groen op de afspraak, en de monteur ziet het in Mijn route." },
+    {
+      datum: "2026-10-23", bestand: "werkplaats.html", soort: "beter",
+      titel: "Werkplaats: datum uit Planning en alleen eigen klanten",
+      wat: "De datum bij een spa is nu de afspraak uit Planning. Staat er in Logic4 een andere datum, dan zie je die klein in oranje eronder. De lijst toont alleen orders van eigen klanten; een dealerorder testen kan via Ordernummer toevoegen." },
+    {
+      datum: "2026-10-23", bestand: "voorraad.html", soort: "beter",
+      titel: "Voorraadbeheer: geannuleerd blijft staan",
+      wat: "Een order die je op geannuleerd zet, blijft nu in het blok Geannuleerd staan, ook als hij in Logic4 is afgehandeld. Je ziet dan 'afgehandeld in Logic4' bij het ordernummer." },
+    {
+      datum: "2026-10-23", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Opleverbon naar meerdere mailadressen",
+      wat: "Staan er meerdere mailadressen bij de klant, dan gaat de opleverbon naar allemaal. Zet ze achter elkaar, met een komma of puntkomma ertussen." },
+    {
       datum: "2026-10-23", bestand: "personeel.html", soort: "nieuw",
       titel: "Personeel: alles uit het Excel Roemenen en Kroaten",
       wat:   "Het schema staat nu per kamer met de woensdagen naast elkaar; een shift begint op woensdag en duurt twee weken, en met één vinkje herhaal je hem om de 4 weken. Bij Medewerkers staan alle mensen met hun gegevens, en bij Uren de gewerkte uren per week. Verder Kamers vandaag, Vluchten per woensdag en Delano. Gestippelde shifts zijn bij het inlezen niet zeker gekoppeld: klik erop en kies de juiste persoon."

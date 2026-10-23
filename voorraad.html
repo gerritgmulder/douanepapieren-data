@@ -2604,6 +2604,20 @@ function resvAlleRegels(){
   for(const [model,list] of Object.entries(resvData.byModel||{})){
     for(const r of (list||[])) uit.push(Object.assign({model},r));
   }
+  /* Geannuleerd blijft staan (Kevin, 23 okt 2026: "de orders die we op
+     geannuleerd zetten verdwijnen iedere keer"). De regels komen uit de open
+     orders van Logic4; wordt de order daar geannuleerd of afgesloten, dan
+     valt hij eruit, en daarmee ook uit het blok Geannuleerd. Daarom bewaart
+     het vinkje een kopie van de regel, en wat vóór 23 okt is aangevinkt
+     bouwen we op uit de sleutel (ordernummer|model|kleur|magazijn). */
+  const al=new Set(uit.map(r=>r.regelId));
+  const grens=new Date(Date.now()-180*864e5).toISOString();
+  for(const [k,n] of Object.entries(notities||{})){
+    if(!n||!n.geannuleerd||al.has(k)||String(n.ts||"")<grens) continue;
+    const d=String(k).split("|");
+    const rij=n.rij||{ ordernr:d[0], model:d[1]||"", kleur:d[2]||"", qty:1, naam:"", type:"particulier" };
+    uit.push(Object.assign({},rij,{regelId:k,uitLogic4:true,model:rij.model||d[1]||""}));
+  }
   return uit;
 }
 /* Partner of particulier? Eerst wat Chantal zelf heeft aangewezen, daarna
@@ -2750,6 +2764,11 @@ function zetNotitie(r,veld,waarde){
   }
   const n=notities[k]||(notities[k]={});
   n[veld]=waarde;
+  // Bij geannuleerd een kopie van de regel bewaren: zie resvAlleRegels.
+  if(veld==="geannuleerd"&&waarde&&!r.uitLogic4){
+    const kopie={}; Object.keys(r).forEach(function(x){ const v=r[x]; if(v==null||typeof v!=="object") kopie[x]=v; });
+    n.rij=kopie;
+  }
   n.door=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
   n.ts=new Date().toISOString();
   notitiesVuil.add(k);
@@ -3875,7 +3894,7 @@ function renderParticulierBlok(){
         const stijl=(n.inplannen?"background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"")
                                :"background:#f3e8ff;border-left:4px solid #7c3aed")+(n.spoed?";border-left:5px solid #c8102e":"");
         return "<tr class='hoofdrij gemerkt' style='"+stijl+"'>"+
-          "<td>"+esc(r.ordernr)+"</td>"+
+          "<td>"+esc(r.ordernr)+(r.uitLogic4?"<div style='font-size:10.5px;color:#6b7280' title='Deze order staat in Logic4 niet meer open; hij blijft hier staan omdat hij op geannuleerd staat.'>afgehandeld in Logic4</div>":"")+"</td>"+
           /* Kevin (8 okt 2026): de vervoerder hier zelf kunnen aanpassen, als
              hij in Logic4 verkeerd stond of nog niet is bijgewerkt. */
           "<td style='font-size:12px'><select class='notTransport' data-id='"+id+"' title='vervoerder - in Logic4: "+esc(r.transport||"leeg")+"'"+uit+
@@ -4041,7 +4060,7 @@ function pcUsaRegels(){
 }
 function pcOrders(){
   const per={};
-  for(const r of resvAlleRegels().filter(x=>x.container).concat(pcUsaRegels())){
+  for(const r of resvAlleRegels().filter(x=>x.container&&!x.uitLogic4).concat(pcUsaRegels())){
     const k=String(r.ordernr);
     const o=per[k]||(per[k]={ordernr:r.ordernr,naam:r.naam,datum:r.datum,betaald:r.betaald,
       betaaldPct:r.betaaldPct,containerNr:r.containerNr||null,referentie:r.referentie||null,regels:[],qty:0,usa:!!r.usa});

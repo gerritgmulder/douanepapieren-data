@@ -7964,8 +7964,12 @@ async function bonHandle(request, env, url) {
     const bon = b.id ? await env.FONTEYN_DATA.get(BON_SLEUTEL(b.id), { type: "json" }) : null;
     if (!bon) return reply(404, { ok: false, error: "bon niet gevonden" });
     if (!["klaar", "akkoord", "gemaild"].includes(bon.status)) return reply(400, { ok: false, error: "de bon is nog niet afgerond" });
-    const naar = String(b.naar || bon.klantMail || "").trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) return reply(400, { ok: false, error: "geen geldig mailadres van de klant" });
+    /* Meerdere adressen mag, gescheiden door ; of , (Kevin, 23 okt 2026:
+       "s.schuurman@hetnet.nl; patricksch@hetnet.nl" gaf "geen geldig mailadres"). */
+    const adressen = [...new Set(String(b.naar || bon.klantMail || "").toLowerCase().split(/[;,\s]+/).map(x => x.trim()).filter(Boolean))];
+    const fout = adressen.filter(x => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+    if (!adressen.length || fout.length) return reply(400, { ok: false, error: fout.length ? "dit mailadres klopt nog niet: " + fout.join(", ") : "vul het mailadres van de klant in" });
+    const naar = adressen.join(", ");
     if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
     const html = bonHtml(bon, Array.isArray(b.vragen) ? b.vragen : []);
     const adres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
@@ -7978,7 +7982,7 @@ async function bonHandle(request, env, url) {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Fonteyn Bezorgservice <" + adres + ">", to: [naar],
+        from: "Fonteyn Bezorgservice <" + adres + ">", to: adressen,
         /* Een antwoord van de klant op een bon hoort bij Spa service, niet in
            de mailbox van wie hem verstuurde. Eerst alleen servicebonnen
            (Kevin, 12 okt 2026), sinds 14 okt ook de opleverbonnen: Kevin

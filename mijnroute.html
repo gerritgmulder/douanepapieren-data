@@ -103,6 +103,7 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .stop .blokje a{color:var(--groen)}
 .stop .blokje .product{color:var(--ink);font-size:13px}
 .stop.open .details{display:block}
+.stop .klantok{display:inline-block;background:#dcfce7;color:#14532d;font-weight:700;font-size:12.5px;padding:3px 10px;border-radius:999px;margin:6px 0 0 22px}
 .stop .let{background:#fee2e2;border-left:4px solid var(--rood);padding:6px 10px;border-radius:8px;font-size:12.5px;margin-top:8px;font-weight:600}
 .paklijst{margin-top:10px;border:1px solid var(--rand);border-radius:10px;overflow:hidden}
 .paklijst .pk{display:flex;align-items:center;justify-content:space-between;background:#f8faf5;padding:7px 11px;font-size:12px;font-weight:700;color:var(--groen);text-transform:uppercase;letter-spacing:.04em}
@@ -386,6 +387,8 @@ function stopHtml(a){
     '<div class="klapkop" data-klap="'+esc(String(a.id))+'"><span class="pijl">'+(open?'▾':'▸')+'</span>'+
       '<span class="naam">'+esc(a.klant||c.naam)+'</span>'+
       (tel ? '<a class="telkort" href="tel:'+esc(tel.replace(/[^\d+]/g,""))+'">&#128222; '+esc(tel)+'</a>' : '')+'</div>'+
+    /* Kevin (video 19 okt 2026): de monteur ziet dat de klant akkoord gaf. */
+    (a.klantAkkoord ? '<div class="klantok">&#10003; Klant akkoord</div>' : '')+
     /* Altijd in beeld: adres en wat de klant krijgt (Gerrit, 23 okt 2026). */
     ((a.plaats || (a.wat && !a.itsId)) ? '<div class="blokje">'+
       (a.plaats ? '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a.plaats)+'" target="_blank" rel="noopener">'+esc(a.plaats)+'</a>' : '')+
