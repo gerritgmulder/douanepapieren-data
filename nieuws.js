@@ -57,7 +57,7 @@
     {
       datum: "2026-10-23", bestand: "opleverbonnen-service.html", soort: "nieuw",
       titel: "Opleverbonnen Service",
-      wat: "De werkbonnen van de servicemonteurs in één lijst Te doen. Met Akkoord en mailen krijgt de klant de werkbon, zonder prijzen. Met Factuur aanmaken zet het Dashboard de order en de factuur in Logic4, met de materialen, de kilometers en de uren; je ziet eerst wat erop komt." },
+      wat: "De werkbonnen van de servicemonteurs in één lijst Te doen. Met Akkoord en mailen krijgt de klant de werkbon, zonder prijzen. Met Factuur aanmaken zet het Dashboard de order en de factuur in Logic4, met de materialen, de kilometers en de uren; je ziet eerst wat erop komt. Bij een garantiemelding staat de betaalmethode al op Garantie." },
     {
       datum: "2026-10-23", bestand: "service-meldingen.html", soort: "nieuw",
       titel: "In te plannen meldingen",

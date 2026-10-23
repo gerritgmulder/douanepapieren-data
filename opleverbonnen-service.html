@@ -209,7 +209,9 @@ async function factuur(b){
       romp.querySelector("#fOk").onclick = function(){ v.dicht(); laad(); };
     };
   }
-  toon(6);   // Kevin: altijd Rekening 14 dagen; bij garantie kan kantoor kiezen
+  /* Bij een garantiemelding staat Garantie al klaar (Gerrit, 23 okt 2026;
+     nog na te vragen bij Kevin). Kantoor kan het altijd omzetten. */
+  toon(/^ja/i.test(b.garantie||"") ? 30 : 6);
 }
 async function laad(){
   try {
