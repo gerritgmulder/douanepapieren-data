@@ -7368,6 +7368,7 @@ async function dpRefreshShipEtas(env) {
   const vandaag = new Date().toISOString().slice(0, 10);
   const kandidaten = ships.filter(s => {
     if (!String(s.trackRef || "").trim()) return false;
+    if (s.binnenGemeld) return false;        // al binnen: niets meer na te vragen
     if (s.etaHand) return true;              // wel navragen, niet overschrijven
     // Al meer dan een week binnen? Dan is het klaar.
     if (s.eta && s.eta < vandaag && s.track && s.track.progress >= 100) return false;
@@ -11312,53 +11313,55 @@ async function merzarioTrack(env, refs, opts = {}) {
   }
 
   if (stale.length) {
-    // Elke stale-referentie uitbreiden naar losse zoektermen (split op & , ; / spatie)
-    const candByRef = {};                        // ref → [zoektermen]
-    const allCandidates = new Set();
-    for (const ref of stale) {
-      const cands = merzarioCandidates(ref);
-      candByRef[ref] = cands;
-      cands.forEach(c => allCandidates.add(c));
-    }
-    let arr = [];
-    try {
-      const r = await fetch(MERZARIO_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ trackingNumbers: [...allCandidates].slice(0, 100) }),
-      });
-      if (r.ok) {
-        const j = await r.json().catch(() => null);
-        arr = Array.isArray(j) ? j : [];
-      } else {
-        // 429/5xx of Cloudflare-challenge: laat oude cache staan, markeer live-fout
-        out.__error = "Merzario gaf HTTP " + r.status + " (probeer later opnieuw).";
-      }
-    } catch (e) {
-      out.__error = "Merzario niet bereikbaar: " + (e.message || e);
-    }
-    // Records terugmatchen. LET OP: Merzario's ORDERREFERENCE kan zelf gecombineerd
-    // zijn ("3317-6, 3332-3"), dus ook de record-sleutels in losse tokens splitsen.
-    for (const rec of arr) {
-      const norm = normalizeTrackRecord(rec);
-      const keyTokens = new Set();
+    /* Per zending een eigen vraag (23 okt 2026).
+       ═══════════════════════════════════════════════════════════════════
+       Merzario geeft per vraag hooguit 10 zendingen terug. Alles in één vraag
+       (14 zendingen, 40 zoektermen) liet er dus stilletjes een paar weg: bij
+       3352-4&3362-1 bleef de ETA op 24 oktober staan terwijl Merzario al 26
+       oktober meldde (Gerrit). Nu één vraag per zending, met alleen de
+       zoektermen van die zending. Komt er geen antwoord, dan blijft de vorige
+       stand staan in plaats van "onbekend". Passen er meerdere zendingen op
+       (dezelfde orderreferentie van een oude reis), dan wint de nieuwste. */
+    const tokensVan = (norm) => {
+      const t = new Set();
       for (const k of [norm.container, norm.shipmentId, norm.orderReference, norm.houseBill]) {
         if (!k) continue;
-        keyTokens.add(String(k).trim());
-        for (const part of String(k).split(/[&,;/\s]+/)) { const p = part.trim(); if (p.length >= 3) keyTokens.add(p); }
+        t.add(String(k).trim());
+        for (const part of String(k).split(/[&,;/\s]+/)) { const p = part.trim(); if (p.length >= 3) t.add(p); }
       }
-      for (const ref of stale) {
-        if (out[ref]) continue;                   // al gevonden
-        if ((candByRef[ref] || []).some(c => keyTokens.has(c))) {
-          out[ref] = norm;
-          cache.records[ref] = { fetchedAt: now, record: norm };
-        }
+      return t;
+    };
+    let fouten = 0;
+    for (const ref of stale.slice(0, 30)) {
+      // Losse woorden zonder cijfer ("Show", "Devine") leveren alleen ruis op.
+      const cands = merzarioCandidates(ref).filter(c => /\d/.test(c)).slice(0, 8);
+      if (!cands.length) { out[ref] = null; cache.records[ref] = { fetchedAt: now, record: null }; continue; }
+      let arr = null;
+      try {
+        const r = await fetch(MERZARIO_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ trackingNumbers: cands }),
+        });
+        if (r.ok) { const j = await r.json().catch(() => null); arr = Array.isArray(j) ? j : (j && (j.trackerList || j.records || j.data)) || []; }
+      } catch (e) { arr = null; }
+      if (!Array.isArray(arr)) {
+        fouten++;
+        const oud = cache.records[ref];
+        out[ref] = oud ? oud.record : null;      // vorige stand houden
+        continue;
       }
+      let beste = null;
+      for (const rec of arr) {
+        const norm = normalizeTrackRecord(rec);
+        if (!cands.some(c => tokensVan(norm).has(c))) continue;
+        if (!beste || String(norm.arrival || "") > String(beste.arrival || "")) beste = norm;
+      }
+      out[ref] = beste;
+      cache.records[ref] = { fetchedAt: now, record: beste };
     }
-    // Referenties zonder match expliciet op null (en cachen, zodat we niet blijven hameren)
-    for (const ref of stale) {
-      if (!(ref in out)) { out[ref] = null; cache.records[ref] = { fetchedAt: now, record: null }; }
-    }
+    if (fouten) out.__error = "Merzario gaf bij " + fouten + " zending(en) even geen antwoord; de vorige stand blijft staan.";
+    for (const ref of stale.slice(30)) { const oud = cache.records[ref]; out[ref] = oud ? oud.record : null; }
     // Cache opschonen (max 500 refs) en wegschrijven
     const keys = Object.keys(cache.records);
     if (keys.length > 500) {
