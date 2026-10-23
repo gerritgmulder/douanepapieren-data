@@ -9895,7 +9895,8 @@ async function berichtenRonde(env) {
       }
     }
   } catch (e) { console.log("[berichten] partnercontainers: " + (e.message || e)); }
-  /* 2. Vrijgave: 2 dagen na de ETA de vraag aan Manon en Chantal. Alleen schepen
+  /* 2. Vrijgave: 6 werkdagen na de ETA de vraag aan Manon en Chantal, net als
+        het binnen melden (Gerrit, 23 okt 2026; was 2 dagen). Alleen schepen
         met een ETA in de laatste 60 dagen, anders komt de hele geschiedenis langs. */
   try {
     const sch = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
@@ -9905,11 +9906,11 @@ async function berichtenRonde(env) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(eta)) continue;
       const sid = String(s.ref || s.trackRef || s.file || "").replace(/\s+/g, " ").trim();
       if (!sid || vg[sid] || s.binnenGemeld) continue;
-      if (vandaag < pcPlusDagen(eta, 2) || pcPlusDagen(eta, 60) < vandaag) continue;
+      if (vandaag < plusWerkdagen(eta, 6) || pcPlusDagen(eta, 60) < vandaag) continue;
       const naam = String(s.trackRef || s.ref || s.file || sid).replace(/\s+/g, " ").trim().slice(0, 80);
       if (berichtErbij(d, { id: "vrijgave:" + sid, aan: [BERICHT_MANON, BERICHT_CHANTAL], soort: "vrijgave", ref: { schip: sid, naam },
           titel: "Is de container vrijgegeven? " + naam,
-          tekst: "De ETA was " + pcDatum(eta) + ", twee dagen geleden of langer. Heb je de container vrijgegeven?" })) nieuw++;
+          tekst: "De ETA was " + pcDatum(eta) + ", zes werkdagen geleden of langer. Heb je de container vrijgegeven?" })) nieuw++;
     }
   } catch (e) { console.log("[berichten] vrijgave: " + (e.message || e)); }
   /* 4. Opleverbonnen die de dag erna nog open staan (Kevin, 12 okt 2026). */
