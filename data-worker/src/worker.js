@@ -20,6 +20,11 @@
 // op deze schaal (~10-30 records met persoonsgegevens).
 
 import { ppMailVertaal, PP_MAIL_TALEN } from "./pp-mailteksten.js";
+// Service planning (Kevin, 23 okt 2026): meldingen, routes en de klantmails.
+import { svcHandle, svcRonde } from "./service.js";
+const SVC_HULP = (env) => ({ reply, l4Token, RIJ_START, rijNorm, itsTekst,
+  // DEV_OPEN bestaat alleen bij een lokale proefdraai, nooit in de uitrol.
+  toegangMag: env && env.DEV_OPEN ? async () => true : toegangMag });
 const ALLOWED_BUCKETS = new Set([
   "personeel",
   "koeien",
@@ -19526,6 +19531,9 @@ const FP_WORKER = {
           /* De berichten (Chantal, Manon): licht, vooral KV, een enkele mail. */
           const br = await berichtenRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           if (br.nieuw || br.error) console.log("[cron] berichten: " + JSON.stringify(br));
+          /* Service planning: herinneringen en mails die op de dagteller wachtten. */
+          const sv = await svcRonde(env, SVC_HULP(env)).catch(e => ({ ok: false, error: String(e.message || e) }));
+          if (sv.verstuurd || sv.error) console.log("[cron] service: " + JSON.stringify(sv));
           if (wq.status === "loopt" || wq.error) console.log("[cron] welkomstmail-wachtrij: " + JSON.stringify(wq));
           const wr = await wireRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] wire-bewaking: " + JSON.stringify({ ok: wr.ok, actie: wr.actie || null, teller: wr.toestand && wr.toestand.teller, fout: wr.error || null }));
@@ -20563,6 +20571,10 @@ const FP_WORKER = {
     /* Bakwagenroute (Gerrit, 16 okt 2026): Manon en Nomi halen de ritten op,
        controleren ze en zetten ze klaar; de chauffeur ziet alleen zijn eigen
        rit van vandaag en meldt per stop af met handtekening en opmerking. */
+    /* Service planning (Kevin, 23 okt 2026). /service/antwoord is de pagina
+       voor de klant (het token in de link is de sleutel); de rest vraagt de
+       teamsleutel en de groep service-planning. Zie service.js. */
+    if (url.pathname.startsWith("/service/")) return svcHandle(request, env, url, SVC_HULP(env));
     if (url.pathname.startsWith("/bakwagen/")) {
       if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);

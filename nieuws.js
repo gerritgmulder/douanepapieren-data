@@ -51,6 +51,14 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "service-meldingen.html", soort: "nieuw",
+      titel: "In te plannen meldingen",
+      wat: "Zet een ITS-nummer neer, vul de verwachte duur in en eventueel de voorkeursdagen, een eerste datum of een vakantie van de klant. Met de knop Plannen komt alles in de routes van Planning Service. Met Eerst bekijken zie je vooraf waar elke melding terechtkomt." },
+    {
+      datum: "2026-10-23", bestand: "planning-service.html", soort: "nieuw",
+      titel: "Planning Service",
+      wat: "De routes van de servicemonteurs per dag, op volgorde. Zet een monteur bij een route om hem beschikbaar te maken, en pas aan als hij later begint of eerder terug moet. Akkoord van de klant staat er vanzelf groen bij. Met Monteur ziek gaan de afspraken naar andere routes, en met Direct inplannen zet je één melding meteen in een route." },
+    {
       datum: "2026-10-23", bestand: "planning.html", soort: "nieuw",
       titel: "Planning: vinkje Klant akkoord",
       wat: "Zet bij een afspraak het vinkje Klant akkoord zodra de klant de afspraak bevestigt. Het staat dan groen op de afspraak, en de monteur ziet het in Mijn route." },

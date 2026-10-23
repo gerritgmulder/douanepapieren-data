@@ -361,6 +361,12 @@
        wil dat je enkel voor Gerwin een tegel maakt waar hij dat overzicht in
        kan uploaden". Dus letterlijk alleen hij, met de beheerlaag erboven
        zoals overal. */
+    /* Service planning (Kevin, document "Service planning", 23 okt 2026):
+       In te plannen meldingen en Planning Service. Dezelfde mensen als die
+       in Planning mogen inplannen. */
+    "service-planning": [
+      "bart.vdb", "bertjan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
+    ],
     "urencontrole": [
       "dolf", "fonteynbot", "gerrit", "gerwin",
     ],

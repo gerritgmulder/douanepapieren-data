@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("service-planning", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor de planning van Service.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>In te plannen meldingen - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="service-form.js"></script>
+<!-- ═════════════════════════════════════════════════════════════════
+     IN TE PLANNEN MELDINGEN (Service)
+
+     Kevin (document "Service planning", 23 okt 2026): "Zodra wij een ITS-
+     melding in het systeem zetten dan willen we de meldingen in dit grit
+     zetten." Per melding de verwachte duur (verplicht), voorkeursdagen,
+     inplannen vanaf en een periode waarin de klant weg is. De knop Plannen
+     zet alles wat open staat in de routes van Planning Service en mailt de
+     klant een voorstel met Akkoord / Andere datum kiezen.
+
+     Kiest de klant een andere datum, dan komt de melding vanzelf terug in
+     deze lijst met zijn wensen erbij. Mag de afspraak vervallen, dan
+     verdwijnt hij.
+
+     De motor staat in data-worker/src/service.js. Gedeelde stukken (het
+     invulvenster, de vensters) in service-form.js.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --oranje:#c2410c; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1200px;margin:0 auto;padding:16px 16px 50px}
+.balk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.balk .vul{flex:1}
+.balk input{font:inherit;font-size:14px;border:1px solid var(--rand);border-radius:9px;padding:9px 11px;width:170px}
+.knop{background:var(--lime);color:var(--groen);border:0;border-radius:9px;padding:9px 16px;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer;white-space:nowrap}
+.knop:hover{background:#72a531;color:#fff}
+.knop.groen{background:var(--groen);color:#fff}.knop.groen:hover{background:#0d3325}
+.knop.wit{background:#fff;color:var(--groen);border:1px solid var(--rand);font-weight:600}
+.knop.klein{padding:5px 10px;font-size:12px}
+.mailbalk{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:9px 12px;font-size:12.5px;color:var(--grijs);display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.mailbalk b{color:var(--ink)}
+.kaarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.kaart.terug{border-left:4px solid var(--oranje)}
+.kaart .kop{display:flex;gap:8px;align-items:baseline}
+.kaart .naam{font-weight:700;font-size:14.5px;flex:1;min-width:0;overflow-wrap:break-word}
+.kaart .its{font-size:11.5px;color:var(--grijs);white-space:nowrap}
+.kaart .sub{font-size:12.5px;color:var(--grijs);overflow-wrap:break-word}
+.kaart .wat{font-size:12.5px;line-height:1.45;max-height:3.7em;overflow:hidden}
+.kaart .pillen{display:flex;gap:5px;flex-wrap:wrap}
+.kaart .acties{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.rood{background:#fee2e2;color:var(--rood)}.pil.grijs{background:#f3f4f6;color:var(--grijs)}.pil.groen{background:#dcfce7;color:#14532d}
+.leeg{background:#fff;border:1px dashed var(--rand);border-radius:12px;padding:30px;text-align:center;color:var(--grijs)}
+.tel{font-size:12.5px;color:var(--grijs);margin:18px 0 8px}
+#fout{color:var(--rood);font-weight:600;margin-bottom:10px}
+@media (max-width:600px){ main{padding:12px 10px 40px} .balk input{width:100%} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🛠️ In te plannen meldingen</h1>
+  <a class="fp-kop-knop" href="planning-service.html">Planning Service &rarr;</a>
+</header>
+<main>
+  <div id="fout"></div>
+  <div class="balk">
+    <input id="nieuwIts" inputmode="numeric" placeholder="ITS-nummer" autocomplete="off">
+    <button class="knop wit" id="nieuwKnop" type="button">+ Melding toevoegen</button>
+    <span class="vul"></span>
+    <button class="knop wit" id="bekijkKnop" type="button">Eerst bekijken</button>
+    <button class="knop groen" id="planKnop" type="button">Plannen</button>
+  </div>
+  <div class="mailbalk" id="mailbalk"></div>
+  <div id="lijst"></div>
+</main>
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var esc = svc.esc, data = null;
+
+function wensen(m){
+  var p = [];
+  if (m.voorkeur && m.voorkeur.length) p.push('<span class="pil">' + m.voorkeur.map(function(d){ return svc.DAG[d]; }).join(" ") + '</span>');
+  if (m.vanaf) p.push('<span class="pil">vanaf ' + esc(svc.datumNL(m.vanaf)) + '</span>');
+  if (m.nietVan && m.nietTot) p.push('<span class="pil grijs">weg ' + esc(svc.datumNL(m.nietVan)) + ' t/m ' + esc(svc.datumNL(m.nietTot)) + '</span>');
+  return p.join("");
+}
+function teken(){
+  var open = (data.meldingen||[]).filter(function(m){ return m.status === "open"; })
+    .sort(function(a,b){ return (b.klantWens||b.ziekVan ? 1 : 0) - (a.klantWens||a.ziekVan ? 1 : 0) || String(a.gemeld||a.gemaakt||"").localeCompare(String(b.gemeld||b.gemaakt||"")); });
+  var gepland = (data.meldingen||[]).filter(function(m){ return m.status === "gepland"; }).length;
+  var ml = data.mail || {};
+  $("mailbalk").innerHTML = (ml.aan ? '✉️ Klantmails <b>staan aan</b>' + (ml.proef ? ' (proef: alles gaat naar ' + esc(ml.proef) + ')' : '') : '✉️ Klantmails <b>staan nog uit</b>: Plannen zet de mails klaar, ze gaan mee zodra het mailen aan staat')
+    + ' · vandaag ' + (ml.vandaag||0) + ' van ' + (ml.max||40) + ' verstuurd'
+    + ' <button class="knop wit klein" id="vbKnop" type="button">Voorbeeld klantmail</button>';
+  $("vbKnop").onclick = svc.mailVoorbeeld;
+  if (!open.length) {
+    $("lijst").innerHTML = '<div class="leeg">Alles is ingepland. Zet hierboven een ITS-nummer neer om een nieuwe melding toe te voegen.</div>' +
+      (gepland ? '<p class="tel">' + gepland + ' melding(en) staan ingepland in <a href="planning-service.html">Planning Service</a>.</p>' : '');
+    return;
+  }
+  $("lijst").innerHTML = '<p class="tel">' + open.length + ' melding(en) in te plannen' + (gepland ? ' · ' + gepland + ' al ingepland in <a href="planning-service.html">Planning Service</a>' : '') + '</p>' +
+    '<div class="kaarten">' + open.map(function(m){
+      var k = m.klant || {};
+      var terug = m.klantWens || m.ziekVan;
+      var w = m.klantWens;
+      return '<div class="kaart' + (terug ? " terug" : "") + '" data-its="' + esc(m.its) + '">' +
+        '<div class="kop"><span class="naam">' + esc(k.naam || m.titel || "ITS " + m.its) + '</span><span class="its">ITS ' + esc(m.its) + '</span></div>' +
+        '<div class="sub">' + esc(k.adres || "adres nog invullen") + (k.tel ? ' · ' + esc(k.tel) : '') + '</div>' +
+        (m.titel || m.omschrijving ? '<div class="wat">' + esc(m.titel ? m.titel + (m.omschrijving ? ": " + m.omschrijving : "") : m.omschrijving) + '</div>' : '') +
+        '<div class="pillen"><span class="pil">' + esc(svc.duurTekst(m.duur)) + '</span>' + wensen(m) +
+          (/^ja/i.test(m.garantie||"") ? '<span class="pil groen">garantie</span>' : '') +
+          (!k.mail ? '<span class="pil rood">mailadres invullen</span>' : '') +
+          (!m.geo ? '<span class="pil oranje">adres nakijken</span>' : '') +
+          (m.ziekVan ? '<span class="pil rood">monteur ziek op ' + esc(svc.datumNL(m.ziekVan)) + ': klant bellen</span>' : '') +
+          (w && !w.nietNodig ? '<span class="pil oranje">klant koos andere datum (was ' + esc(svc.datumNL(w.datumWas)) + ')</span>' : '') +
+        '</div>' +
+        (w && w.opmerking ? '<div class="sub">💬 ' + esc(w.opmerking) + '</div>' : '') +
+        (m.opmerking ? '<div class="sub">📝 ' + esc(m.opmerking) + '</div>' : '') +
+        '<div class="acties"><button class="knop wit klein" data-act="bewerk" type="button">Bewerken</button>' +
+        '<button class="knop wit klein" data-act="direct" type="button">Meteen inplannen</button>' +
+        '<button class="knop wit klein" data-act="weg" type="button">Uit de lijst</button></div></div>';
+    }).join("") + '</div>';
+  $("lijst").querySelectorAll("[data-act]").forEach(function(b){
+    b.onclick = function(){
+      var its = b.closest(".kaart").dataset.its, m = data.meldingen.find(function(x){ return String(x.its) === String(its); });
+      if (b.dataset.act === "bewerk") svc.formulier({ melding: m, opgeslagen: laad });
+      if (b.dataset.act === "direct") plan([its]);
+      if (b.dataset.act === "weg") weg(m);
+    };
+  });
+}
+async function weg(m){
+  var v = svc.venster('<h3>Uit de lijst halen</h3><p style="font-size:13.5px">ITS ' + esc(m.its) + ' · ' + esc((m.klant||{}).naam||"") + '</p>' +
+    '<label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:#6b7280">Waarom (komt in de geschiedenis)<input id="wegReden" placeholder="bijvoorbeeld: telefonisch opgelost"></label>' +
+    '<div class="svc-knoppen"><button type="button" class="svc-knop wit" id="wegTerug">Terug</button><button type="button" class="svc-knop" id="wegJa">Uit de lijst</button></div><div class="svc-melding fout" id="wegMeld"></div>');
+  v.el.querySelector("#wegTerug").onclick = v.dicht;
+  v.el.querySelector("#wegJa").onclick = async function(){
+    var j = await svc.api("/service/melding/weg", { its: m.its, reden: v.el.querySelector("#wegReden").value }).catch(function(e){ return { ok:false, error:e.message }; });
+    if (!j.ok) { v.el.querySelector("#wegMeld").textContent = j.error; return; }
+    try { if (window.fpLog) fpLog("service-uit-lijst", "ITS " + m.its); } catch(e) {}
+    v.dicht(); laad();
+  };
+}
+async function plan(alleen, voorbeeld){
+  var v = svc.venster('<h3>' + (voorbeeld ? "Zo zou het worden" : "Plannen") + '</h3><div id="planRomp"><p style="font-size:13.5px">Bezig met plannen…</p></div>', { breed: true, vast: !voorbeeld });
+  var j = await svc.api("/service/plannen", { its: alleen || undefined, voorbeeld: !!voorbeeld }).catch(function(e){ return { ok:false, error:e.message }; });
+  try { if (!voorbeeld && window.fpLog) fpLog("service-plannen", (j.gepland||[]).length + " ingepland, " + (j.over||[]).length + " zonder plek"); } catch(e) {}
+  v.el.querySelector("#planRomp").innerHTML = svc.uitslagHtml(j) +
+    (j.geenRoutes ? '<p style="font-size:13px"><a href="planning-service.html">Naar Planning Service om routes klaar te zetten &rarr;</a></p>' : '') +
+    '<div class="svc-knoppen">' + (voorbeeld && j.ok && (j.gepland||[]).length ? '<button type="button" class="svc-knop wit" id="planEcht">Nu echt plannen</button>' : '') + '<button type="button" class="svc-knop" id="planOk">Klaar</button></div>';
+  v.el.querySelector("#planOk").onclick = function(){ v.dicht(); laad(); };
+  var e = v.el.querySelector("#planEcht"); if (e) e.onclick = function(){ v.dicht(); plan(alleen, false); };
+}
+async function laad(){
+  try {
+    var j = await svc.api("/service/overzicht");
+    if (!j.ok) throw new Error(j.error || "Laden lukte nog niet.");
+    data = j; $("fout").textContent = ""; teken();
+  } catch(e) { $("fout").textContent = e.message; }
+}
+$("nieuwKnop").onclick = function(){ svc.formulier({ its: $("nieuwIts").value.replace(/\D/g,""), opgeslagen: function(){ $("nieuwIts").value = ""; laad(); } }); };
+$("nieuwIts").addEventListener("keydown", function(e){ if (e.key === "Enter") $("nieuwKnop").click(); });
+$("planKnop").onclick = function(){ plan(null, false); };
+$("bekijkKnop").onclick = function(){ plan(null, true); };
+laad();
+setInterval(function(){ if (!document.querySelector(".svc-laag")) laad(); }, 60000);
+document.addEventListener("visibilitychange", function(){ if (!document.hidden && !document.querySelector(".svc-laag")) laad(); });
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"service-meldingen",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

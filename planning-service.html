@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("service-planning", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor de planning van Service.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Planning Service - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="service-form.js"></script>
+<!-- ═════════════════════════════════════════════════════════════════
+     PLANNING SERVICE
+
+     Kevin (document "Service planning", 23 okt 2026): zoals de Planning
+     voor de plaatsing, maar:
+     - akkoord gaat vanzelf: de klant klikt in de mail op Akkoord, en kiest
+       hij een andere datum, dan gaat de afspraak er vanzelf uit;
+     - een route is beschikbaar zodra er een monteur bij staat; Plannen
+       vult eerst de routes die al afspraken hebben, daarna pas lege;
+     - per route: later beginnen of eerder terug;
+     - geen tijden, alleen de volgorde van de stops onder elkaar;
+     - knop Ziek: de route wordt zo snel mogelijk over andere routes
+       verdeeld en de klanten krijgen een mail met de nieuwe datum;
+     - direct inplannen: één ITS-melding invoeren, meteen een plek en een
+       mail naar de klant.
+
+     De vulbalk onder een route is een schatting (rijtijd hemelsbreed plus
+     de duur van elke melding), dezelfde als waarmee Plannen rekent.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --oranje:#c2410c; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:none;margin:0 auto;padding:14px 14px 50px}
+.balk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.balk h2{margin:0;font-size:16px;color:var(--groen);flex:1;min-width:180px}
+.balk input{font:inherit;font-size:13.5px;border:1px solid var(--rand);border-radius:9px;padding:8px 10px;width:140px}
+.knop{background:var(--lime);color:var(--groen);border:0;border-radius:9px;padding:8px 14px;font:inherit;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
+.knop:hover{background:#72a531;color:#fff}
+.knop.groen{background:var(--groen);color:#fff}.knop.groen:hover{background:#0d3325}
+.knop.wit{background:#fff;color:var(--groen);border:1px solid var(--rand);font-weight:600}
+.knop.klein{padding:5px 10px;font-size:12px}
+.knop.rood{background:#fff;color:var(--rood);border:1px solid #fca5a5}
+.melding{background:#fff7ed;border:1px solid #fed7aa;color:var(--oranje);border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;margin-bottom:10px}
+.week{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start}
+.dag{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:10px;min-width:0}
+.dag.vandaag{border-color:var(--groen);box-shadow:0 0 0 2px rgba(20,71,52,.12)}
+.dag.voorbij{opacity:.7}
+.dag h3{margin:0 0 8px;font-size:13.5px;color:var(--groen);display:flex;gap:6px;align-items:baseline}
+.dag h3 small{color:var(--grijs);font-weight:500}
+.route{border:1px solid #ecebe4;border-radius:10px;margin-bottom:8px;overflow:hidden;background:#fbfbf8}
+.route.ziek{border-color:#fca5a5;background:#fef2f2}
+.route .rkop{display:flex;align-items:center;gap:6px;padding:7px 9px;cursor:pointer;background:#f3f6ef}
+.route.ziek .rkop{background:#fee2e2}
+.route .rnr{background:var(--groen);color:#fff;border-radius:5px;padding:1px 6px;font-size:11px;font-weight:700}
+.route .rwie{font-weight:700;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route .rtijd{font-size:10.5px;color:var(--oranje);font-weight:700;white-space:nowrap}
+.vul{height:5px;background:#e5e7eb}
+.vul span{display:block;height:100%;background:var(--lime)}
+.vul span.vol{background:var(--oranje)}
+.stops{list-style:none;margin:0;padding:4px 0}
+.stop{display:flex;gap:7px;padding:6px 9px;border-top:1px solid #f0efe8;cursor:pointer;align-items:flex-start}
+.stop:first-child{border-top:0}
+.stop:hover{background:#f4f9ee}
+.stop .nr{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#e5e7eb;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.stop.akkoord .nr{background:#15803d;color:#fff}
+.stop .wat{flex:1;min-width:0}
+.stop .k{font-weight:600;font-size:12.5px;overflow-wrap:break-word}
+.stop .p{font-size:11.5px;color:var(--grijs);overflow-wrap:break-word}
+.stop .pillen{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.stop.klaar{opacity:.55}
+.pil{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.rood{background:#fee2e2;color:var(--rood)}.pil.grijs{background:#f3f4f6;color:var(--grijs)}.pil.groen{background:#dcfce7;color:#14532d}
+.leegroute{font-size:12px;color:var(--grijs);padding:8px 9px;font-style:italic}
+.plus{width:100%;border:1px dashed #d1d5db;background:transparent;border-radius:9px;padding:7px;font:inherit;font-size:12.5px;color:var(--groen);cursor:pointer;font-weight:600}
+.plus:hover{border-color:var(--lime);background:#f7fbef}
+#fout{color:var(--rood);font-weight:600;margin-bottom:10px}
+.log{font-size:12px;color:var(--grijs);max-height:180px;overflow:auto;margin-top:8px;border-top:1px solid #f0efe8;padding-top:6px}
+.log div{padding:2px 0}
+@media (max-width:1100px){ .week{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))} }
+@media (max-width:600px){ main{padding:10px 8px 40px} .week{grid-template-columns:1fr} .balk input{width:100%} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🗓️ Planning Service</h1>
+  <a class="fp-kop-knop" href="service-meldingen.html" id="naarLijst">In te plannen meldingen</a>
+</header>
+<main>
+  <div id="fout"></div>
+  <div class="balk">
+    <button class="knop wit" id="vorige" type="button">&larr;</button>
+    <button class="knop wit" id="dezeWeek" type="button">Deze week</button>
+    <button class="knop wit" id="volgende" type="button">&rarr;</button>
+    <h2 id="weekTitel"></h2>
+    <input id="directIts" inputmode="numeric" placeholder="ITS-nummer" autocomplete="off">
+    <button class="knop groen" id="directKnop" type="button">Direct inplannen</button>
+  </div>
+  <div id="meldingen"></div>
+  <div class="week" id="week"></div>
+</main>
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var esc = svc.esc, data = null, maandag = null;
+var THUIS = [52.2449, 5.7797];
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function plus(isoD, n){ var d = new Date(isoD+"T12:00:00"); d.setDate(d.getDate()+n); return iso(d); }
+function maandagVan(isoD){ var d = new Date(isoD+"T12:00:00"); var w = (d.getDay()+6)%7; d.setDate(d.getDate()-w); return iso(d); }
+function tijd(min){ return Math.floor(min/60)+":"+String(min%60).padStart(2,"0"); }
+var vandaag = iso(new Date());
+try { maandag = sessionStorage.getItem("ps.week") || null; } catch(e) {}
+if (!maandag) maandag = maandagVan(new Date().getDay() === 6 || new Date().getDay() === 0 ? plus(vandaag, 2) : vandaag);
+
+/* Zelfde schatting als de motor in de worker (service.js). */
+function km(a,b){ var r=Math.PI/180, dLa=(b[0]-a[0])*r, dLo=(b[1]-a[1])*r; var h=Math.pow(Math.sin(dLa/2),2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.pow(Math.sin(dLo/2),2); return 2*6371*Math.asin(Math.sqrt(h)); }
+function rij(a,b){ if(!a||!b) return 45; return Math.round(km(a,b)*1.3/75*60)+5; }
+function terugOm(route, stops){
+  var t = route.start, vorige = THUIS;
+  stops.forEach(function(s){ var m = melding(s.its)||{}; t += rij(vorige, m.geo) + (Number(m.duur)||60); vorige = m.geo; });
+  if (stops.length) t += rij(vorige, THUIS);
+  return t;
+}
+function melding(its){ return (data.meldingen||[]).find(function(m){ return String(m.its) === String(its); }); }
+
+function stopHtml(a, i){
+  var m = melding(a.its) || {}, k = m.klant || {}, j = a.json || {};
+  var pillen = '<span class="pil grijs">' + esc(svc.DAGDEEL[a.dagdeel]||"") + '</span>';
+  if (a.status === "akkoord") pillen += '<span class="pil groen">akkoord</span>';
+  else if (a.status === "klaar") pillen += '<span class="pil grijs">klaar</span>';
+  else if (j.mailFout) pillen += '<span class="pil rood">' + esc(/mailadres/.test(j.mailFout) ? "mailadres ontbreekt" : "mail opnieuw proberen") + '</span>';
+  else if (j.mailWacht) pillen += '<span class="pil oranje">mail klaar</span>';
+  else pillen += '<span class="pil">wacht op klant</span>';
+  if (j.ziek) pillen += '<span class="pil oranje">na ziekte</span>';
+  /* De klant kreeg een ander dagdeel gemaild dan waar hij nu uitkomt. */
+  if (j.dagdeelNu && a.status !== "klaar") pillen += '<span class="pil rood" title="Gemaild: ' + esc(svc.DAGDEEL[a.dagdeel]) + '">verschuift naar: ' + esc(svc.DAGDEEL[j.dagdeelNu]) + '</span>';
+  if (/^ja/i.test(m.garantie||"")) pillen += '<span class="pil groen">garantie</span>';
+  return '<li class="stop ' + a.status + '" data-id="' + esc(a.id) + '"><span class="nr">' + (i+1) + '</span><div class="wat">' +
+    '<div class="k">' + esc(k.naam || "ITS " + a.its) + '</div>' +
+    '<div class="p">' + esc(k.plaats || (k.adres||"").split(",").pop()) + ' · ITS ' + esc(a.its) + ' · ' + esc(svc.duurTekst(m.duur)) + '</div>' +
+    '<div class="pillen">' + pillen + '</div></div></li>';
+}
+function teken(){
+  var titel = "Week " + weekNr(maandag) + " · " + svc.datumNL(maandag) + " t/m " + svc.datumNL(plus(maandag, 4));
+  $("weekTitel").textContent = titel;
+  var open = (data.meldingen||[]).filter(function(m){ return m.status === "open"; }).length;
+  $("naarLijst").textContent = "In te plannen meldingen (" + open + ")";
+  var toekomst = (data.routes||[]).filter(function(r){ return r.datum > vandaag && r.monteur && !r.ziek; });
+  var leeg = toekomst.filter(function(r){ return !(data.afspraken||[]).some(function(a){ return a.datum === r.datum && a.nr === r.nr && (a.status === "voorstel" || a.status === "akkoord"); }); });
+  var ml = data.mail || {};
+  $("meldingen").innerHTML =
+    (!toekomst.length ? '<div class="melding">Er staan nog geen routes klaar. Klik bij een dag op "+ Route met monteur" om een route beschikbaar te maken.</div>'
+      : !leeg.length && open ? '<div class="melding">Alle routes hebben al afspraken. Maak een nieuwe route aan als er meer ingepland moet worden.</div>' : '') +
+    (!ml.aan ? '<div class="melding" style="background:#f3f4f6;border-color:#e5e7eb;color:#6b7280">✉️ Klantmails staan nog uit: wat je inplant krijgt "mail klaar" en gaat mee zodra het mailen aan staat. <button class="knop wit klein" type="button" id="vbKnop">Voorbeeld klantmail</button></div>' : '');
+  var vb = $("vbKnop"); if (vb) vb.onclick = svc.mailVoorbeeld;
+  var h = "";
+  for (var i = 0; i < 5; i++) {
+    var d = plus(maandag, i);
+    var routes = (data.routes||[]).filter(function(r){ return r.datum === d; });
+    h += '<div class="dag' + (d === vandaag ? " vandaag" : d < vandaag ? " voorbij" : "") + '" data-datum="' + d + '"><h3>' + esc(svc.DAGLANG[new Date(d+"T12:00:00").getDay()]) + ' <small>' + esc(svc.datumNL(d)) + '</small></h3>';
+    routes.forEach(function(r){
+      var stops = (data.afspraken||[]).filter(function(a){ return a.datum === d && a.nr === r.nr && a.status !== "vervallen"; }).sort(function(a,b){ return a.volg - b.volg; });
+      var actief = stops.filter(function(a){ return a.status !== "klaar"; });
+      var vul = Math.min(100, Math.round((terugOm(r, actief) - r.start) / Math.max(1, r.eind - r.start) * 100));
+      var afwijkend = r.start !== data.tijden.start || r.eind !== data.tijden.eind;
+      h += '<div class="route' + (r.ziek ? " ziek" : "") + '" data-nr="' + r.nr + '">' +
+        '<div class="rkop" title="Klik om de route aan te passen"><span class="rnr">' + r.nr + '</span><span class="rwie">' + esc(r.monteur || "monteur kiezen") + '</span>' +
+          (r.ziek ? '<span class="pil rood">ziek</span>' : afwijkend ? '<span class="rtijd">' + (r.start !== data.tijden.start ? "begint " + tijd(r.start) : "") + (r.start !== data.tijden.start && r.eind !== data.tijden.eind ? " · " : "") + (r.eind !== data.tijden.eind ? "terug " + tijd(r.eind) : "") + '</span>' : '') + '</div>' +
+        (actief.length ? '<div class="vul" title="Zo vol is de dag ongeveer"><span' + (vul >= 95 ? ' class="vol"' : '') + ' style="width:' + vul + '%"></span></div>' : '') +
+        (stops.length ? '<ul class="stops">' + stops.map(stopHtml).join("") + '</ul>' : '<div class="leegroute">' + (r.ziek ? "Afspraken zijn verdeeld." : "Nog leeg: Plannen vult deze route als de andere vol zijn.") + '</div>') +
+        '</div>';
+    });
+    if (d >= vandaag) h += '<button class="plus" type="button" data-plus="' + d + '">+ Route met monteur</button>';
+    h += '</div>';
+  }
+  $("week").innerHTML = h;
+  $("week").querySelectorAll(".rkop").forEach(function(el){ el.onclick = function(){ var dg = el.closest(".dag").dataset.datum, nr = Number(el.closest(".route").dataset.nr); routeVenster(data.routes.find(function(r){ return r.datum === dg && r.nr === nr; })); }; });
+  $("week").querySelectorAll("[data-plus]").forEach(function(b){ b.onclick = function(){ routeVenster(null, b.dataset.plus); }; });
+  $("week").querySelectorAll(".stop").forEach(function(el){ el.onclick = function(){ stopVenster(data.afspraken.find(function(a){ return a.id === el.dataset.id; })); }; });
+}
+function weekNr(isoD){ var d = new Date(isoD+"T12:00:00"); d.setDate(d.getDate()+3-((d.getDay()+6)%7)); var j = new Date(d.getFullYear(),0,4); return 1+Math.round(((d-j)/864e5-3+((j.getDay()+6)%7))/7); }
+
+function routeVenster(r, datum){
+  var nieuw = !r; datum = r ? r.datum : datum;
+  var heeftStops = r && (data.afspraken||[]).some(function(a){ return a.datum === r.datum && a.nr === r.nr && (a.status === "voorstel" || a.status === "akkoord"); });
+  var opties = (data.monteurs||[]).map(function(m){ return '<option>' + esc(m) + '</option>'; }).join("");
+  var v = svc.venster('<h3>' + (nieuw ? "Nieuwe route" : "Route " + r.nr) + ' · ' + esc(svc.datumLang(datum)) + '</h3>' +
+    '<div class="svc-velden">' +
+      '<label>Monteur<input id="rMonteur" list="rMonteurs" value="' + esc(r ? r.monteur : "") + '" placeholder="naam van de monteur"><datalist id="rMonteurs">' + opties + '</datalist></label>' +
+      '<label>Begint om<input id="rStart" type="time" value="' + tijd(r ? r.start : data.tijden.start).padStart(5,"0") + '"></label>' +
+      '<label>Moet terug zijn om<input id="rEind" type="time" value="' + tijd(r ? r.eind : data.tijden.eind).padStart(5,"0") + '"></label>' +
+      (nieuw ? '<label>Ook op de andere werkdagen tot en met<input id="rTot" type="date" min="' + datum + '"></label>' : '') +
+    '</div>' +
+    '<p style="font-size:12px;color:#6b7280;margin:10px 0 0">Standaard vertrekt de monteur om ' + tijd(data.tijden.start) + ' en is hij rond ' + tijd(data.tijden.eind) + ' terug. Pas het aan als hij later begint of eerder terug moet zijn.</p>' +
+    '<div class="svc-melding" id="rMeld"></div>' +
+    '<div class="svc-knoppen">' +
+      (!nieuw && !heeftStops ? '<button type="button" class="svc-knop wit" id="rWeg" style="margin-right:auto">Route weghalen</button>' : '') +
+      (!nieuw && heeftStops && !r.ziek && r.datum >= vandaag ? '<button type="button" class="svc-knop wit" id="rZiek" style="margin-right:auto;color:#b91c1c;border-color:#fca5a5">Monteur ziek</button>' : '') +
+      (!nieuw && r.ziek ? '<button type="button" class="svc-knop wit" id="rBeter" style="margin-right:auto">Weer beter gemeld</button>' : '') +
+      '<button type="button" class="svc-knop wit" id="rTerug">Terug</button><button type="button" class="svc-knop" id="rBewaar">Opslaan</button></div>');
+  var meld = function(t){ v.el.querySelector("#rMeld").textContent = t; v.el.querySelector("#rMeld").className = "svc-melding fout"; };
+  v.el.querySelector("#rTerug").onclick = v.dicht;
+  v.el.querySelector("#rBewaar").onclick = async function(){
+    var monteur = v.el.querySelector("#rMonteur").value.trim();
+    if (!monteur) { meld("Vul de naam van de monteur in; met een naam is de route beschikbaar voor Plannen."); return; }
+    var body = { datum: datum, nr: r ? r.nr : undefined, monteur: monteur, start: v.el.querySelector("#rStart").value, eind: v.el.querySelector("#rEind").value };
+    var tot = nieuw ? v.el.querySelector("#rTot").value : "";
+    var dagen = [datum];
+    if (tot && tot > datum) { for (var d = plus(datum, 1); d <= tot; d = plus(d, 1)) { var wd = new Date(d+"T12:00:00").getDay(); if (wd >= 1 && wd <= 5) dagen.push(d); } }
+    this.disabled = true; this.textContent = "Bezig…";
+    for (var i = 0; i < dagen.length; i++) {
+      var j = await svc.api("/service/route", Object.assign({}, body, { datum: dagen[i] })).catch(function(e){ return { ok:false, error:e.message }; });
+      if (!j.ok) { meld(j.error); this.disabled = false; this.textContent = "Opslaan"; return; }
+    }
+    try { if (window.fpLog) fpLog("service-route", monteur + " " + dagen.join(",")); } catch(e) {}
+    v.dicht(); laad();
+  };
+  var wb = v.el.querySelector("#rWeg");
+  if (wb) wb.onclick = async function(){ var j = await svc.api("/service/route", { datum: datum, nr: r.nr, weg: true }).catch(function(e){ return { ok:false, error:e.message }; }); if (!j.ok) { meld(j.error); return; } v.dicht(); laad(); };
+  var bb = v.el.querySelector("#rBeter");
+  if (bb) bb.onclick = async function(){ await svc.api("/service/route", { datum: datum, nr: r.nr, monteur: r.monteur, ziek: false }); v.dicht(); laad(); };
+  var zb = v.el.querySelector("#rZiek");
+  if (zb) zb.onclick = async function(){
+    v.dicht();
+    var ja = await svc.vraag("<b>" + esc(r.monteur) + "</b> is ziek op " + esc(svc.datumLang(r.datum)) + ".<br><br>De afspraken van deze route gaan zo snel mogelijk naar andere routes waar ruimte is, en de klanten krijgen een mail met de nieuwe datum. Wat nergens past komt terug in de lijst In te plannen meldingen.", "Ja, herplannen", "Terug");
+    if (!ja) return;
+    var w = svc.venster('<h3>Monteur ziek</h3><div id="zRomp"><p style="font-size:13.5px">Bezig met herplannen…</p></div>', { breed: true, vast: true });
+    var j = await svc.api("/service/ziek", { datum: r.datum, nr: r.nr }).catch(function(e){ return { ok:false, error:e.message }; });
+    try { if (window.fpLog) fpLog("service-ziek", r.monteur + " " + r.datum); } catch(e) {}
+    w.el.querySelector("#zRomp").innerHTML = !j.ok ? '<p class="svc-melding fout">' + esc(j.error) + '</p>' :
+      svc.uitslagHtml({ ok: true, gepland: j.verplaatst, over: j.over }) + '<div class="svc-knoppen"><button type="button" class="svc-knop" id="zOk">Klaar</button></div>';
+    var ok = w.el.querySelector("#zOk"); if (ok) ok.onclick = function(){ w.dicht(); laad(); }; else { w.dicht(); laad(); }
+  };
+}
+
+async function stopVenster(a){
+  var m = melding(a.its) || {}, k = m.klant || {}, j = a.json || {};
+  var dagRoutes = (data.routes||[]).filter(function(r){ return r.datum === a.datum && r.nr !== a.nr && r.monteur && !r.ziek; });
+  var andereRoutes = (data.routes||[]).filter(function(r){ return r.datum >= vandaag && r.datum !== a.datum && r.monteur && !r.ziek; });
+  var laatsteMail = (j.mails||[]).slice(-1)[0];
+  var w = j.klantWens;
+  var v = svc.venster('<h3>' + esc(k.naam || "ITS " + a.its) + '</h3>' +
+    '<p style="font-size:13px;line-height:1.55;margin:0 0 10px">' + esc(k.adres||"") + (k.tel ? '<br>📞 <a href="tel:' + esc(k.tel.replace(/[^\d+]/g,"")) + '">' + esc(k.tel) + '</a>' : '') + (k.mail ? '<br>✉️ ' + esc(k.mail) : '') + '</p>' +
+    '<p style="font-size:13px;margin:0 0 10px"><b>' + esc(svc.datumLang(a.datum)) + '</b> · route ' + a.nr + ' · ' + esc(svc.DAGDEEL[a.dagdeel]) + ' · ' + esc(svc.duurTekst(m.duur)) + '<br>' +
+      (a.status === "akkoord" ? '<span class="svc-pil groen">akkoord' + (j.akkoordDoor && j.akkoordDoor !== "klant" ? " (gezet door de planning)" : " van de klant") + '</span>'
+        : j.mailFout ? '<span class="svc-pil rood">' + esc(j.mailFout) + '</span>'
+        : j.mailWacht ? '<span class="svc-pil oranje">mail klaar, gaat mee zodra het mailen aan staat</span>'
+        : '<span class="svc-pil">wacht op de klant' + (laatsteMail ? ", gemaild " + esc(new Date(laatsteMail.ts).toLocaleDateString("nl-NL")) : "") + '</span>') + '</p>' +
+    ((m.titel || m.tekst) ? '<div class="svc-its"><b>ITS ' + esc(a.its) + (m.titel ? ": " + esc(m.titel) : "") + '</b>\n' + esc(m.tekst || m.omschrijving || "") + '</div>' : '') +
+    '<div class="svc-dagen" style="margin-bottom:8px">' +
+      '<button type="button" class="svc-dag" data-a="omhoog">↑ Eerder in de route</button><button type="button" class="svc-dag" data-a="omlaag">↓ Later in de route</button>' +
+      (a.status === "akkoord" ? '<button type="button" class="svc-dag" data-a="akkoordUit">Akkoord weghalen</button>' : '<button type="button" class="svc-dag" data-a="akkoord">Klant gaf akkoord (telefonisch)</button>') +
+      (a.status === "voorstel" ? '<button type="button" class="svc-dag" data-a="mail">Voorstel opnieuw mailen</button>' : '') +
+    '</div>' +
+    ((dagRoutes.length || andereRoutes.length) ? '<div class="svc-velden"><label class="breed">Naar een andere route<select id="sNaar"><option value="">kies een route…</option>' +
+      dagRoutes.map(function(r){ return '<option value="' + r.datum + '|' + r.nr + '">zelfde dag, route ' + r.nr + ' · ' + esc(r.monteur) + '</option>'; }).join("") +
+      andereRoutes.slice(0, 60).map(function(r){ return '<option value="' + r.datum + '|' + r.nr + '">' + esc(svc.datumLang(r.datum)) + ', route ' + r.nr + ' · ' + esc(r.monteur) + ' (nieuw voorstel aan de klant)</option>'; }).join("") +
+      '</select></label></div>' : '') +
+    '<div class="svc-melding" id="sMeld"></div>' +
+    '<div class="log" id="sLog">geschiedenis laden…</div>' +
+    '<div class="svc-knoppen"><button type="button" class="svc-knop wit" data-a="terug" style="margin-right:auto">Terug naar de lijst</button><button type="button" class="svc-knop wit" data-a="bewerk">Melding bewerken</button><button type="button" class="svc-knop" id="sDicht">Sluiten</button></div>', { breed: true });
+  v.el.querySelector("#sDicht").onclick = v.dicht;
+  async function doe(body){
+    var r = await svc.api("/service/afspraak", Object.assign({ id: a.id }, body)).catch(function(e){ return { ok:false, error:e.message }; });
+    if (!r.ok) { v.el.querySelector("#sMeld").textContent = r.error; v.el.querySelector("#sMeld").className = "svc-melding fout"; return false; }
+    try { if (window.fpLog) fpLog("service-afspraak", body.actie + " ITS " + a.its); } catch(e) {}
+    v.dicht(); laad(); return true;
+  }
+  v.el.querySelectorAll("[data-a]").forEach(function(b){
+    b.onclick = async function(){
+      var x = b.dataset.a;
+      if (x === "bewerk") { v.dicht(); svc.formulier({ melding: m, opgeslagen: laad }); return; }
+      if (x === "terug") { v.dicht(); if (await svc.vraag("De afspraak van <b>" + esc(k.naam||"") + "</b> op " + esc(svc.datumLang(a.datum)) + " gaat uit de route en de melding komt terug in de lijst. Laat het de klant zelf weten als hij al gemaild was.", "Terug naar de lijst", "Laten staan")) { await svc.api("/service/afspraak", { id: a.id, actie: "terug" }); laad(); } return; }
+      if (x === "akkoordUit") return doe({ actie: "akkoord", uit: true });
+      doe({ actie: x });
+    };
+  });
+  var sel = v.el.querySelector("#sNaar");
+  if (sel) sel.onchange = function(){ if (!sel.value) return; var d = sel.value.split("|"); doe({ actie: "naarRoute", datum: d[0], nr: Number(d[1]) }); };
+  var lg = await svc.api("/service/melding/log?its=" + encodeURIComponent(a.its)).catch(function(){ return { log: [] }; });
+  var el = v.el.querySelector("#sLog");
+  if (el) el.innerHTML = (lg.log||[]).length ? lg.log.map(function(x){ return '<div>' + esc(new Date(x.ts).toLocaleString("nl-NL", { day:"numeric", month:"numeric", hour:"2-digit", minute:"2-digit" })) + ' · ' + esc(String(x.wie||"").split("@")[0]) + ' · ' + esc(x.wat) + '</div>'; }).join("") : "Nog geen geschiedenis.";
+}
+
+async function laad(){
+  try {
+    var j = await svc.api("/service/overzicht?van=" + plus(maandag, -1) + "&tot=" + plus(maandag, 6));
+    if (!j.ok) throw new Error(j.error || "Laden lukte nog niet.");
+    data = j; $("fout").textContent = ""; teken();
+  } catch(e) { $("fout").textContent = e.message; }
+}
+function zetWeek(m){ maandag = m; try { sessionStorage.setItem("ps.week", m); } catch(e) {} laad(); }
+$("vorige").onclick = function(){ zetWeek(plus(maandag, -7)); };
+$("volgende").onclick = function(){ zetWeek(plus(maandag, 7)); };
+$("dezeWeek").onclick = function(){ zetWeek(maandagVan(vandaag)); };
+$("directKnop").onclick = function(){ svc.formulier({ its: $("directIts").value.replace(/\D/g,""), direct: true, opgeslagen: function(){ $("directIts").value = ""; laad(); } }); };
+$("directIts").addEventListener("keydown", function(e){ if (e.key === "Enter") $("directKnop").click(); });
+laad();
+setInterval(function(){ if (!document.querySelector(".svc-laag")) laad(); }, 60000);
+document.addEventListener("visibilitychange", function(){ if (!document.hidden && !document.querySelector(".svc-laag")) laad(); });
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"planning-service",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

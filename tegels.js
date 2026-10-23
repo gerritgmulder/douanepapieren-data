@@ -161,6 +161,12 @@
       uit:"Weekoverzicht van leveringen en service-afspraken",     mobiel:"goed", tile:"tilePlanning" },
     { bestand:"opleverbonnen.html",  groep:"planning-bewerk",  ic:"📋", naam:"Opleverbonnen",
       uit:"Bonnen van de monteurs nakijken, akkoord geven en mailen", mobiel:"krap", tile:"tileOpleverbonnen" },
+    /* Service planning (Kevin, document 23 okt 2026): meldingen in de lijst,
+       met één knop inplannen en de klant laten kiezen. */
+    { bestand:"service-meldingen.html", groep:"service-planning", ic:"🛠️", naam:"In te plannen meldingen",
+      uit:"ITS-meldingen klaarzetten en met één knop inplannen", mobiel:"krap", tile:"tileServiceMeldingen" },
+    { bestand:"planning-service.html", groep:"service-planning", ic:"🗓️", naam:"Planning Service",
+      uit:"Routes van de servicemonteurs, met akkoord van de klant", mobiel:"krap", tile:"tilePlanningService" },
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
       uit:"Mails aan dealers vertalen",                            mobiel:"goed", tile:"tileVertalen" },
 
