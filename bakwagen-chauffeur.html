@@ -73,10 +73,11 @@ function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0
 function plus(isoD, n){ var d = new Date(isoD+"T12:00:00"); d.setDate(d.getDate()+n); return iso(d); }
 var vandaag = iso(new Date());
 var morgen = plus(vandaag, 1); if (new Date(morgen+"T12:00:00").getDay() === 0) morgen = plus(morgen, 1);
-var wagen = "Dani", dag = vandaag;
-try { wagen = localStorage.getItem("fp.bwc.wagen") || "Dani"; } catch(e) {}
+var wagen = "Jordy", dag = vandaag;
+try { wagen = localStorage.getItem("fp.bwc.wagen") || "Jordy"; } catch(e) {}
+if (["Jordy","Flex"].indexOf(wagen) < 0) wagen = "Flex";   // Dani rijdt nu op een flexwagen (23 okt 2026)
 function teken(){
-  $("wagens").innerHTML = [["Dani","Bakwagen Dani"],["Jordy","Bakwagen Jordy"],["Flex","Flexwagen"]].map(function(w){ return '<button type="button" data-w="'+w[0]+'"'+(w[0]===wagen?' class="aan"':'')+'>'+w[1]+'</button>'; }).join("");
+  $("wagens").innerHTML = [["Jordy","Bakwagen Jordy"],["Flex","Flexwagen"]].map(function(w){ return '<button type="button" data-w="'+w[0]+'"'+(w[0]===wagen?' class="aan"':'')+'>'+w[1]+'</button>'; }).join("");
   $("dagen").innerHTML = '<button type="button" data-d="'+vandaag+'"'+(dag===vandaag?' class="aan"':'')+'>Vandaag</button>' +
     '<button type="button" data-d="'+morgen+'"'+(dag===morgen?' class="aan"':'')+'>Volgende werkdag</button>' +
     '<input type="date" id="dagKeus" value="'+dag+'">';

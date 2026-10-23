@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
+      titel: "Twee wagens: Jordy en de flexwagen",
+      wat:   "De bakwagen van Dani is nu ook een flexwagen. Bij Ritten klaarzetten staan per dag Bakwagen Jordy en de Flexwagen. Bij de flexwagen vul je bij het akkoord in wie er die dag rijdt; zonder naam gaat het akkoord nog niet door."
+    },
+    {
+      datum: "2026-10-23", bestand: "bakwagen.html", soort: "beter",
       titel: "Chauffeursinfo direct typen",
       wat:   "Bij Ritten klaarzetten is de chauffeursinfo meteen een invulveld: typ of vul aan, en het wordt bewaard zodra je ergens anders klikt. De betaling staat niet meer bij de stops, dat is al uitgezocht voordat de rit gemaakt wordt."
     },

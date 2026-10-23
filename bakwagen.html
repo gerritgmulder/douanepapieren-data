@@ -226,7 +226,7 @@ function naamVan(mail){ var m = String(mail||"").split("@")[0].replace(/^fonteyn
 /* Wie is er: de planning (Manon, Nomi) of een chauffeur (Dani, Jordy, flex,
    eigen inlog zonder Logic4). De worker controleert hetzelfde nog eens. */
 var planner = !!(window.fpToegang && fpToegang.mag("bakwagen-planning", ik));
-function chauffeurVanInlog(w){ w = String(w||"").toLowerCase(); if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Dani"; if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy"; if (/^flex([.@_ -]|$)/.test(w)) return "Flex"; return ""; }
+function chauffeurVanInlog(w){ w = String(w||"").toLowerCase(); if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Flex"; if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy"; if (/^flex([.@_ -]|$)/.test(w)) return "Flex"; return ""; }
 var ikChauffeur = chauffeurVanInlog(ik);
 /* Zo ziet de chauffeur het (Gerrit, 23 okt 2026): de planning opent
    bakwagen.html?als=Dani (in de tegel Bakwagen: chauffeursweergave) en krijgt
@@ -235,14 +235,16 @@ var ikChauffeur = chauffeurVanInlog(ik);
 var voorbeeld = false, voorbeeldDatum = null;
 (function(){
   var als = (location.search.match(/[?&]als=([^&]*)/) || [])[1], dg = (location.search.match(/[?&]datum=(\d{4}-\d{2}-\d{2})/) || [])[1];
-  if (planner && als && ["Dani","Jordy","Flex"].indexOf(decodeURIComponent(als)) >= 0) {
+  if (planner && als && ["Jordy","Flex"].indexOf(decodeURIComponent(als)) >= 0) {
     voorbeeld = true; planner = false; ikChauffeur = decodeURIComponent(als); voorbeeldDatum = dg || null;
     document.documentElement.classList.add("voorbeeld");
   }
 })();
 /* Gerrit (17 okt 2026): Dani en Jordy rijden elk een vaste bakwagen; de
    derde wagen is de flexwagen, die Manon inzet waar nodig. */
-var CHAUFFEURS = ["Dani","Jordy","Flex"];
+/* Dani gaat uit dienst (23 okt 2026): zijn wagen is nu ook een flexwagen.
+   Vast blijft alleen Jordy; bij de flexwagen vult Manon per dag in wie er rijdt. */
+var CHAUFFEURS = ["Jordy","Flex"];
 function wagenNaam(n){ return n === "Flex" ? "Flexwagen" : n ? "Bakwagen " + n : ""; }
 function chauffeurNaam(n){ return n === "Flex" ? "Flexwagen" : n; }
 
@@ -286,10 +288,12 @@ function tekenPlanning(){
     Object.keys(dagen).sort().forEach(function(dag){
       var opDag = overzicht.ritten.filter(function(r){ return r.datum === dag; });
       h += '<div class="dagtitel">'+esc(dagTekst(dag))+(dag === vandaag ? " (vandaag)" : dag === plusDagen(vandaag,1) ? " (morgen)" : "")+'</div>';
-      ["Dani","Jordy","Flex"].forEach(function(w){
+      /* Altijd Jordy en de flexwagen, ook zonder rit; kan er op één dag meer
+         dan één flexrit zijn, dan staan ze allemaal onder de flexwagen. */
+      ["Jordy","Flex"].forEach(function(w){
         var van = opDag.filter(function(r){ return r.chauffeur === w; });
-        if (!van.length && w !== "Flex") h += '<div class="ritrij" style="opacity:.75"><div class="r1"><b>'+esc(wagenNaam(w))+'</b><small>nog geen rit in Logic4</small><span class="pil">Nog te maken</span></div></div>';
-        van.forEach(function(r){ h += ritRij(r, wagenNaam(w)); });
+        if (!van.length) h += '<div class="ritrij" style="opacity:.75"><div class="r1"><b>'+esc(wagenNaam(w))+'</b><small>nog geen rit in Logic4</small><span class="pil">Nog te maken</span></div></div>';
+        van.forEach(function(r){ h += ritRij(r, wagenNaam(w) + (r.chauffeur === "Flex" && r.akkoord && r.akkoord.bestuurder ? " · " + r.akkoord.bestuurder : "")); });
       });
       opDag.filter(function(r){ return CHAUFFEURS.indexOf(r.chauffeur) < 0; }).forEach(function(r){ h += ritRij(r, "Nog aan een wagen te koppelen"); });
     });
@@ -401,6 +405,8 @@ function koppelDetail(d){
   if (ja) ja.addEventListener("click", async function(){
     var ch = $("akChauffeur").value; if (!ch) { m.className = "melding slecht"; m.textContent = "Kies eerst de chauffeur."; return; }
     var bestuurder = ch === "Flex" && naamVeld ? naamVeld.value.trim() : "";
+    // Bij de flexwagen bepaalt Manon per dag wie er rijdt (Gerrit, 23 okt 2026).
+    if (ch === "Flex" && !bestuurder) { m.className = "melding slecht"; m.textContent = "Vul de naam in van wie er vandaag op de flexwagen rijdt."; if (naamVeld) naamVeld.focus(); return; }
     ja.disabled = true;
     try { var j = await lees("/bakwagen/akkoord", { method:"POST", body: JSON.stringify({ rit: r.id, chauffeur: ch, bestuurder: bestuurder, akkoord: true }) }); if (!j.ok) throw new Error(j.error);
       r.akkoord = j.akkoord; r.chauffeur = ch; dagData = null;

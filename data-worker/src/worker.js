@@ -17171,7 +17171,10 @@ async function logic4Lees(env, request, body) {
    bakwagen_akkoord (welke rit klaarstaat voor wie), bakwagen_af (afmelden met
    handtekening, naam en opmerking). Een opmerking van de chauffeur ("er mist
    een kussen") komt als bericht bij Manon. Er gaat niets terug naar Logic4. */
-const BW_CHAUFFEURS = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex/i }];
+/* Dani gaat uit dienst (Gerrit, 23 okt 2026): zijn bakwagen wordt een
+   flexwagen. Een rit met "Dani" in de naam hoort dus bij de flexwagen, en
+   Manon vult per dag in wie er rijdt. Vaste wagen blijft alleen Jordy. */
+const BW_CHAUFFEURS = [{ naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex|\bdan[iy]\b/i }];
 const BW_RIT = /eigen ?r?oute|bakwagen/i;
 // Waar een antwoord van de klant op de bevestiging terechtkomt.
 const BW_BON_ANTWOORD = "logistiek@fonteyn.nl";   // Manon, 23 okt 2026
@@ -17209,7 +17212,7 @@ function bwChauffeur(tekst) { const c = BW_CHAUFFEURS.find(c => c.rx.test(String
    achternaam of mailadres erachter). */
 function bwChauffeurVanInlog(wie) {
   const w = String(wie || "").toLowerCase();
-  if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Dani";
+  if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Flex";   // Dani rijdt nu op een flexwagen
   if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy";
   if (/^flex([.@_ -]|$)/.test(w)) return "Flex";
   return "";
