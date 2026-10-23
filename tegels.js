@@ -167,6 +167,10 @@
       uit:"ITS-meldingen klaarzetten en met één knop inplannen", mobiel:"krap", tile:"tileServiceMeldingen" },
     { bestand:"planning-service.html", groep:"service-planning", ic:"🗓️", naam:"Planning Service",
       uit:"Routes van de servicemonteurs, met akkoord van de klant", mobiel:"krap", tile:"tilePlanningService" },
+    { telefoon:true, bestand:"mijnroute-service.html", groep:"service-monteurs", ic:"🧰", naam:"Mijn routes Service",
+      uit:"Je eigen route, met de werkbon per klant", mobiel:"goed", tile:"tileMijnRouteService" },
+    { bestand:"opleverbonnen-service.html", groep:"service-planning", ic:"🧾", naam:"Opleverbonnen Service",
+      uit:"Werkbonnen nakijken, mailen en factureren in Logic4", mobiel:"krap", tile:"tileOpleverbonnenService" },
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
       uit:"Mails aan dealers vertalen",                            mobiel:"goed", tile:"tileVertalen" },
 

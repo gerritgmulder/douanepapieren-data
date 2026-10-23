@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("service-planning", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor de planning van Service.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Opleverbonnen Service - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="service-form.js"></script>
+<!-- ═════════════════════════════════════════════════════════════════
+     OPLEVERBONNEN SERVICE
+
+     Kevin (document "Service planning", 23 okt 2026): zoals de
+     opleverbonnen van de plaatsing, maar:
+     - "Na te kijken" en "akkoord nog mailen" zijn één lijst: Te doen.
+     - Naast Akkoord een knop Factuur aanmaken: een order in Logic4 met de
+       monteur als medewerker, transporteur Fonteyn Servicemonteur,
+       betaalmethode Rekening 14 dagen, ind. lev. dtm. de dag van het
+       bezoek, alle materialen, de kilometers (8860, enkele rit vanaf
+       Fonteyn) en de uren (8861), en meteen de factuur erbij.
+     - De werkbon naar de klant: geen kosten, alleen materialen en uren;
+       ook bij garantie.
+
+     Factuur aanmaken schrijft in Logic4 en is niet terug te draaien vanuit
+     het Dashboard. Daarom eerst een overzicht van wat er op komt, en pas
+     daarna de knop.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --oranje:#c2410c; --rood:#b91c1c; --goed:#15803d; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1200px;margin:0 auto;padding:14px 14px 50px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid var(--rand);margin-bottom:12px}
+.tab{padding:10px 14px;background:transparent;border:0;border-bottom:3px solid transparent;font:inherit;font-weight:600;font-size:14px;cursor:pointer;color:var(--grijs);margin-bottom:-2px;white-space:nowrap}
+.tab.aan{color:var(--groen);border-bottom-color:var(--groen)}
+.zoek{width:100%;max-width:380px;font:inherit;font-size:14px;border:1px solid var(--rand);border-radius:9px;padding:9px 11px;margin-bottom:12px}
+.kaarten{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.kaart .kop{display:flex;gap:8px;align-items:baseline}
+.kaart .naam{font-weight:700;font-size:14.5px;flex:1;min-width:0;overflow-wrap:break-word}
+.kaart .datum{font-size:12px;color:var(--grijs);white-space:nowrap}
+.kaart .sub{font-size:12.5px;color:var(--grijs);overflow-wrap:break-word}
+.kaart .gedaan{font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:break-word;max-height:6em;overflow:hidden}
+.kaart ul{margin:0;padding-left:18px;font-size:12.5px}
+.pillen{display:flex;gap:5px;flex-wrap:wrap}
+.pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.rood{background:#fee2e2;color:var(--rood)}.pil.grijs{background:#f3f4f6;color:var(--grijs)}.pil.groen{background:#dcfce7;color:#14532d}
+.acties{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.knop{background:var(--lime);color:var(--groen);border:0;border-radius:9px;padding:7px 12px;font:inherit;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.knop:hover{background:#72a531;color:#fff}
+.knop.groen{background:var(--groen);color:#fff}
+.knop.wit{background:#fff;color:var(--groen);border:1px solid var(--rand);font-weight:600}
+.knop:disabled{opacity:.5;cursor:default}
+.leeg{background:#fff;border:1px dashed var(--rand);border-radius:12px;padding:30px;text-align:center;color:var(--grijs)}
+#fout{color:var(--rood);font-weight:600;margin-bottom:10px}
+table.fac{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+table.fac td,table.fac th{padding:5px 6px;border-bottom:1px solid #f0efe8;text-align:left;overflow-wrap:break-word}
+table.fac th{font-size:11px;color:var(--grijs);text-transform:uppercase}
+@media (max-width:600px){ main{padding:10px 8px 40px} .kaarten{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🧾 Opleverbonnen Service</h1>
+  <a class="fp-kop-knop" href="planning-service.html">Planning Service &rarr;</a>
+</header>
+<main>
+  <div id="fout"></div>
+  <div class="tabs" id="tabs">
+    <button class="tab aan" data-tab="doen" type="button">Te doen (<span id="nDoen">0</span>)</button>
+    <button class="tab" data-tab="monteur" type="button">Bij de monteur (<span id="nMonteur">0</span>)</button>
+    <button class="tab" data-tab="klaar" type="button">Afgerond (<span id="nKlaar">0</span>)</button>
+  </div>
+  <input class="zoek" id="zoek" type="search" placeholder="zoek op klant, ITS-nummer of monteur…">
+  <div id="lijst"></div>
+</main>
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var esc = svc.esc, bonnen = [], tab = "doen", zoek = "";
+try { tab = sessionStorage.getItem("obs.tab") || "doen"; } catch(e) {}
+/* Te doen: afgerond door de monteur, en nog te mailen of nog te factureren. */
+function soort(b){
+  if (b.status === "concept") return "monteur";
+  var gemaild = b.status === "gemaild", gefact = !!(b.factuur && b.factuur.orderId);
+  return gemaild && gefact ? "klaar" : "doen";
+}
+function teken(){
+  document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("aan", t.dataset.tab === tab); });
+  var tel = { doen:0, monteur:0, klaar:0 }; bonnen.forEach(function(b){ tel[soort(b)]++; });
+  $("nDoen").textContent = tel.doen; $("nMonteur").textContent = tel.monteur; $("nKlaar").textContent = tel.klaar;
+  var q = zoek.trim().toLowerCase();
+  var lijst = bonnen.filter(function(b){ return soort(b) === tab; }).filter(function(b){ return !q || ((b.klant||{}).naam + " " + b.its + " " + b.monteur).toLowerCase().indexOf(q) >= 0; });
+  if (!lijst.length) { $("lijst").innerHTML = '<div class="leeg">' + (tab === "doen" ? "Alles is nagekeken, gemaild en gefactureerd." : tab === "monteur" ? "Er staan geen werkbonnen open bij de monteurs." : "Hier komen de werkbonnen die gemaild en gefactureerd zijn.") + '</div>'; return; }
+  $("lijst").innerHTML = '<div class="kaarten">' + lijst.map(function(b){
+    var k = b.klant || {}, f = b.factuur || {};
+    return '<div class="kaart" data-id="' + esc(b.id) + '">' +
+      '<div class="kop"><span class="naam">' + esc(k.naam || "ITS " + b.its) + '</span><span class="datum">' + esc(svc.datumLang(b.datum)) + '</span></div>' +
+      '<div class="sub">ITS ' + esc(b.its) + ' · ' + esc(b.monteur || "") + ' · ' + esc(String(b.uren||0).replace(".", ",")) + ' uur · ' + (b.materialen||[]).length + ' materiaal</div>' +
+      '<div class="pillen">' +
+        (/^ja/i.test(b.garantie||"") ? '<span class="pil groen">garantie</span>' : '') +
+        (b.status === "concept" ? '<span class="pil grijs">monteur is bezig</span>' : b.status === "klaar" ? '<span class="pil oranje">na te kijken</span>' : '') +
+        (b.status === "gemaild" ? '<span class="pil groen">gemaild</span>' : b.status === "akkoord" ? '<span class="pil oranje">akkoord, nog mailen</span>' : '') +
+        (f.orderId ? '<span class="pil groen">order ' + esc(f.orderId) + (f.factuurId ? ' · factuur ' + esc(f.factuurId) : '') + '</span>' : f.bezig ? '<span class="pil oranje">factuur wordt gemaakt</span>' : '') +
+        (f.fout ? '<span class="pil rood">factuur: in Logic4 afmaken</span>' : '') +
+        (b.getekend ? '' : '<span class="pil rood">handtekening klant ontbreekt</span>') +
+      '</div>' +
+      (b.gedaan ? '<div class="gedaan">' + esc(b.gedaan) + '</div>' : '') +
+      ((b.materialen||[]).length ? '<ul>' + b.materialen.map(function(r){ return '<li>' + esc(String(r.aantal).replace(".", ",")) + 'x ' + esc(r.oms) + ' <span style="color:#6b7280">' + esc(r.code) + '</span></li>'; }).join("") + '</ul>' : '') +
+      (b.opmerking ? '<div class="sub">📝 ' + esc(b.opmerking) + '</div>' : '') +
+      '<div class="acties">' +
+        '<button class="knop wit" data-act="aanpassen" type="button">Aanpassen</button>' +
+        (b.status !== "gemaild" ? '<button class="knop" data-act="mail" type="button">Akkoord en mailen</button>' : '<button class="knop wit" data-act="mail" type="button">Opnieuw mailen</button>') +
+        (!f.orderId && b.status !== "concept" ? '<button class="knop groen" data-act="factuur" type="button"' + (f.bezig ? ' disabled' : '') + '>Factuur aanmaken</button>' : '') +
+      '</div></div>';
+  }).join("") + '</div>';
+  $("lijst").querySelectorAll("[data-act]").forEach(function(btn){
+    btn.onclick = function(){ var b = bonnen.find(function(x){ return x.id === btn.closest(".kaart").dataset.id; });
+      if (btn.dataset.act === "aanpassen") aanpassen(b);
+      if (btn.dataset.act === "mail") mailen(b);
+      if (btn.dataset.act === "factuur") factuur(b); };
+  });
+}
+function aanpassen(b){
+  var mats = JSON.parse(JSON.stringify(b.materialen||[]));
+  var v = svc.venster('<h3>Werkbon ' + esc((b.klant||{}).naam || "") + '</h3>' +
+    '<div class="svc-velden">' +
+      '<label class="breed">Wat is er gedaan<textarea id="aGedaan" rows="4">' + esc(b.gedaan||"") + '</textarea></label>' +
+      '<label>Gewerkte uren<input id="aUren" type="number" step="0.25" min="0" value="' + (b.uren||"") + '"></label>' +
+      '<label>Mailadres klant<input id="aMail" value="' + esc((b.klant||{}).mail||"") + '"></label>' +
+      '<label class="breed">Materialen (aantal aanpassen; 0 haalt de regel weg)<div id="aMats"></div></label>' +
+      '<label class="breed">Opmerking<textarea id="aOpm" rows="2">' + esc(b.opmerking||"") + '</textarea></label>' +
+    '</div><div class="svc-melding" id="aMeld"></div>' +
+    '<div class="svc-knoppen"><button type="button" class="svc-knop wit" id="aTerug">Terug</button><button type="button" class="svc-knop" id="aBewaar">Opslaan</button></div>', { breed: true });
+  v.el.querySelector("#aMats").innerHTML = mats.length ? mats.map(function(r, i){ return '<div style="display:flex;gap:8px;align-items:center;margin:4px 0;font-weight:500;color:#1f2937"><input type="number" min="0" step="1" data-i="' + i + '" value="' + r.aantal + '" style="width:80px"> <span>' + esc(r.oms) + ' <span style="color:#6b7280">' + esc(r.code) + '</span></span></div>'; }).join("") : '<span style="font-weight:500">Geen materialen.</span>';
+  v.el.querySelector("#aTerug").onclick = v.dicht;
+  v.el.querySelector("#aBewaar").onclick = async function(){
+    v.el.querySelectorAll("#aMats [data-i]").forEach(function(inp){ mats[+inp.dataset.i].aantal = Number(inp.value) || 0; });
+    var j = await svc.api("/service/bon/kantoor", { id: b.id, bon: { gedaan: v.el.querySelector("#aGedaan").value, uren: v.el.querySelector("#aUren").value, opmerking: v.el.querySelector("#aOpm").value,
+      materialen: mats.filter(function(r){ return r.aantal > 0; }), klant: { mail: v.el.querySelector("#aMail").value } } }).catch(function(e){ return { ok:false, error:e.message }; });
+    if (!j.ok) { v.el.querySelector("#aMeld").textContent = j.error; v.el.querySelector("#aMeld").className = "svc-melding fout"; return; }
+    try { if (window.fpLog) fpLog("service-bon-aangepast", "ITS " + b.its); } catch(e) {}
+    v.dicht(); laad();
+  };
+}
+async function mailen(b){
+  var v = svc.venster('<h3>Werkbon mailen naar de klant</h3><p style="font-size:13px;margin:0 0 8px">Zonder kosten: alleen materialen en uren. Met de knop zet je de werkbon ook op akkoord.</p>' +
+    '<div class="svc-velden"><label class="breed">Naar (meerdere mag, met een komma)<input id="mNaar" value="' + esc((b.klant||{}).mail||"") + '"></label></div>' +
+    '<iframe id="mFrame" title="Voorbeeld" style="width:100%;height:46vh;border:1px solid #e0e0d8;border-radius:10px;margin-top:10px"></iframe>' +
+    '<div class="svc-melding" id="mMeld"></div><div class="svc-knoppen"><button type="button" class="svc-knop wit" id="mTerug">Terug</button><button type="button" class="svc-knop" id="mStuur">Akkoord en mailen</button></div>', { breed: true });
+  v.el.querySelector("#mTerug").onclick = v.dicht;
+  var vb = await svc.api("/service/bon/mail", { id: b.id, voorbeeld: true }).catch(function(e){ return { ok:false, error:e.message }; });
+  v.el.querySelector("#mFrame").srcdoc = vb.ok ? '<body style="margin:12px;background:#f5f4ef">' + vb.html + '</body>' : esc(vb.error);
+  v.el.querySelector("#mStuur").onclick = async function(){
+    this.disabled = true; this.textContent = "Bezig…";
+    var j = await svc.api("/service/bon/mail", { id: b.id, naar: v.el.querySelector("#mNaar").value }).catch(function(e){ return { ok:false, error:e.message }; });
+    if (!j.ok) { v.el.querySelector("#mMeld").textContent = j.error; v.el.querySelector("#mMeld").className = "svc-melding fout"; this.disabled = false; this.textContent = "Akkoord en mailen"; return; }
+    try { if (window.fpLog) fpLog("service-bon-gemaild", "ITS " + b.its); } catch(e) {}
+    v.dicht(); laad();
+  };
+}
+async function factuur(b){
+  var v = svc.venster('<h3>Factuur aanmaken in Logic4</h3><div id="fRomp"><p style="font-size:13.5px">Overzicht ophalen…</p></div>', { breed: true });
+  async function toon(betaal){
+    var j = await svc.api("/service/bon/factuur", { id: b.id, voorbeeld: true, betaal: betaal }).catch(function(e){ return { ok:false, error:e.message }; });
+    var romp = v.el.querySelector("#fRomp");
+    if (!j.ok) { romp.innerHTML = '<p class="svc-melding fout">' + esc(j.error) + '</p><div class="svc-knoppen"><button type="button" class="svc-knop" id="fOk">Sluiten</button></div>'; romp.querySelector("#fOk").onclick = v.dicht; return; }
+    var p = j.plan;
+    romp.innerHTML =
+      '<table class="fac"><tr><th>Klant</th><td>' + esc(p.klant) + ' (debiteur ' + esc(p.debiteur || "?") + ')</td></tr>' +
+      '<tr><th>Medewerker</th><td>' + esc(p.monteur || "?") + '</td></tr>' +
+      '<tr><th>Transporteur</th><td>' + esc(p.verzend.naam) + '</td></tr>' +
+      '<tr><th>Betaalmethode</th><td><select id="fBetaal"><option value="6"' + (p.betaal.id === 6 ? " selected" : "") + '>Rekening 14 dagen</option><option value="30"' + (p.betaal.id === 30 ? " selected" : "") + '>Garantie</option></select></td></tr>' +
+      '<tr><th>Ind. lev. dtm.</th><td>' + esc(svc.datumNL(p.datum)) + '</td></tr></table>' +
+      (p.garantie ? '<p class="svc-melding" style="color:#c2410c">Dit is een garantiemelding. Kies hierboven de betaalmethode die past.</p>' : '') +
+      '<table class="fac"><tr><th>Artikel</th><th>Omschrijving</th><th>Aantal</th></tr>' + p.regels.map(function(r){ return '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.oms) + '</td><td>' + esc(String(r.aantal).replace(".", ",")) + '</td></tr>'; }).join("") + '</table>' +
+      (p.problemen.length ? '<p class="svc-melding fout">' + p.problemen.map(esc).join("<br>") + '</p>' : '<p style="font-size:12.5px;color:#6b7280;margin-top:10px">De prijzen zet Logic4 er zelf bij. Na de klik staan de order en de factuur in Logic4; mailen van de factuur gaat vanuit Logic4.</p>') +
+      '<div class="svc-melding" id="fMeld"></div><div class="svc-knoppen"><button type="button" class="svc-knop wit" id="fTerug">Terug</button>' +
+      (p.problemen.length ? '' : '<button type="button" class="svc-knop groen" id="fMaak">Order en factuur aanmaken</button>') + '</div>';
+    romp.querySelector("#fTerug").onclick = v.dicht;
+    romp.querySelector("#fBetaal").onchange = function(){ toon(this.value); };
+    var mk = romp.querySelector("#fMaak");
+    if (mk) mk.onclick = async function(){
+      mk.disabled = true; mk.textContent = "Bezig in Logic4…";
+      var r = await svc.api("/service/bon/factuur", { id: b.id, betaal: romp.querySelector("#fBetaal").value }).catch(function(e){ return { ok:false, error:e.message }; });
+      try { if (window.fpLog) fpLog("service-factuur", "ITS " + b.its + (r.ok ? " order " + r.orderId : " lukte nog niet")); } catch(e) {}
+      if (!r.ok) { romp.querySelector("#fMeld").textContent = r.error; romp.querySelector("#fMeld").className = "svc-melding fout"; mk.textContent = "Opnieuw proberen"; mk.disabled = false; laad(); return; }
+      romp.innerHTML = '<p class="svc-melding goed">Klaar: order ' + esc(r.orderId) + (r.factuurId ? ', factuur ' + esc(r.factuurId) : '') + ' staat in Logic4.</p><div class="svc-knoppen"><button type="button" class="svc-knop" id="fOk">Klaar</button></div>';
+      romp.querySelector("#fOk").onclick = function(){ v.dicht(); laad(); };
+    };
+  }
+  toon(6);   // Kevin: altijd Rekening 14 dagen; bij garantie kan kantoor kiezen
+}
+async function laad(){
+  try {
+    var j = await svc.api("/service/bonnen");
+    if (!j.ok) throw new Error(j.error || "Laden lukte nog niet.");
+    bonnen = j.bonnen || []; $("fout").textContent = ""; teken();
+  } catch(e) { $("fout").textContent = e.message; }
+}
+document.querySelectorAll(".tab").forEach(function(t){ t.onclick = function(){ tab = t.dataset.tab; try { sessionStorage.setItem("obs.tab", tab); } catch(e) {} teken(); }; });
+$("zoek").addEventListener("input", function(){ zoek = this.value; teken(); });
+laad();
+setInterval(function(){ if (!document.querySelector(".svc-laag")) laad(); }, 60000);
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"opleverbonnen-service",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

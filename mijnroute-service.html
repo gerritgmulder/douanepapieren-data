@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("service-monteurs", ik) && !fpToegang.mag("service-planning", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor de servicemonteurs.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mijn routes Service - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ═════════════════════════════════════════════════════════════════
+     MIJN ROUTES SERVICE
+
+     Kevin (document "Service planning", 23 okt 2026): zoals Mijn route van
+     de plaatsing, maar:
+     - "De jongens zien alleen hun eigen route. Thieme ziet dus alleen
+       Thieme, Patrick alleen Patrick en Hans alleen Hans." De worker geeft
+       een monteur ook alleen zijn eigen route terug (service.js, svcMijn).
+     - Materialen komen uit Logic4: zoeken op code of naam.
+     - Geen prijzen op de werkbon; bij arbeid alleen de uren. De voorrij-
+       kosten rekent kantoor zelf uit (enkele rit Fonteyn - klant).
+     De planning (groep service-planning) kan per monteur meekijken.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --oranje:#c2410c; --rood:#b91c1c; --goed:#15803d; }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+header{background:var(--groen);color:#fff;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:720px;margin:0 auto;padding:12px 12px calc(40px + env(safe-area-inset-bottom))}
+.dagen{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;-webkit-overflow-scrolling:touch}
+.dagen button{flex:0 0 auto;background:#fff;border:1px solid var(--rand);border-radius:10px;padding:8px 12px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink);text-align:center;line-height:1.25}
+.dagen button b{display:block;font-size:15px}
+.dagen button.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.wie{display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:13px;color:var(--grijs);flex-wrap:wrap}
+.wie select{font:inherit;font-size:14px;padding:6px 10px;border:1px solid var(--rand);border-radius:8px;background:#fff}
+.stop{background:#fff;border:1px solid var(--rand);border-left:5px solid #8b5cf6;border-radius:12px;margin-bottom:10px;overflow:hidden}
+.stop.klaar{border-left-color:var(--goed);opacity:.85}
+.klapkop{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer}
+.klapkop .nr{flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:#ede9fe;color:#5b21b6;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+.stop.klaar .nr{background:var(--goed);color:#fff}
+.klapkop .naam{font-weight:700;flex:1;min-width:0;overflow-wrap:break-word}
+.klapkop a.tel{font-size:13px;color:var(--groen);text-decoration:none;white-space:nowrap;font-weight:600}
+.blokje{padding:0 12px 10px 44px;font-size:13px;color:var(--grijs);line-height:1.45}
+.blokje a{color:var(--groen)}
+.pillen{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.paars{background:#ede9fe;color:#5b21b6}.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.groen{background:#dcfce7;color:#14532d}.pil.grijs{background:#f3f4f6;color:var(--grijs)}
+.details{border-top:1px solid #f0efe8;padding:12px}
+.melding{background:#f7f7f2;border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:break-word;margin-bottom:10px}
+h4{margin:16px 0 6px;font-size:13px;color:var(--groen);text-transform:uppercase;letter-spacing:.04em}
+textarea,input[type=text],input[type=number],input[type=search],input[type=email]{width:100%;font:inherit;font-size:15px;border:1px solid var(--rand);border-radius:9px;padding:10px;background:#fff;color:var(--ink)}
+textarea{resize:vertical}
+.matrij{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f0efe8}
+.matrij .om{flex:1;min-width:0;font-size:14px;overflow-wrap:break-word}
+.matrij .om small{display:block;color:var(--grijs);font-size:11.5px}
+.stap{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+.stap button{width:34px;height:34px;border-radius:8px;border:1px solid var(--rand);background:#fff;font-size:18px;font-weight:700;color:var(--groen);cursor:pointer}
+.stap b{min-width:30px;text-align:center}
+.weg{border:0;background:transparent;color:var(--rood);font-size:20px;cursor:pointer;padding:4px 6px}
+.zoekres{border:1px solid var(--rand);border-radius:10px;margin-top:6px;max-height:260px;overflow:auto;background:#fff}
+.zoekres button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #f0efe8;background:#fff;padding:10px 12px;font:inherit;font-size:14px;cursor:pointer;color:var(--ink)}
+.zoekres button small{display:block;color:var(--grijs);font-size:11.5px}
+.zoekres button:hover{background:#f4f9ee}
+.uren{display:flex;gap:8px;align-items:center}
+.uren input{width:110px}
+.hand{position:relative;border:1px dashed #cbd5e1;border-radius:10px;background:#fff;height:160px;touch-action:none}
+.hand canvas{width:100%;height:100%;display:block}
+.hand .wis{position:absolute;right:8px;top:8px;background:#fff;border:1px solid var(--rand);border-radius:8px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer}
+.hand .hint{position:absolute;left:12px;bottom:10px;color:#9ca3af;font-size:13px;pointer-events:none}
+.voet{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.voet button{flex:1;min-width:140px;border:0;border-radius:10px;padding:13px;font:inherit;font-weight:700;font-size:15px;cursor:pointer;background:#fff;color:var(--groen);border:1px solid var(--rand)}
+.voet button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
+.bericht{font-size:13.5px;font-weight:600;margin-top:10px;min-height:1em}.bericht.fout{color:var(--rood)}.bericht.goed{color:var(--goed)}
+.slot{background:#fef3c7;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:8px}
+.leeg{background:#fff;border:1px dashed var(--rand);border-radius:12px;padding:28px;text-align:center;color:var(--grijs)}
+#fout{color:var(--rood);font-weight:600;margin-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🧰 Mijn routes Service</h1>
+</header>
+<main>
+  <div id="fout"></div>
+  <div class="wie" id="wie"></div>
+  <div class="dagen" id="dagen"></div>
+  <div id="lijst"></div>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+async function api(pad, body){
+  var o = { headers: { "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type": "application/json" } };
+  if (body !== undefined) { o.method = "POST"; o.body = JSON.stringify(body); }
+  var r = await fetch(W + pad, o); var j = await r.json().catch(function(){ return null; });
+  if (!r.ok && !(j && j.error)) throw new Error("De verbinding lukte nog niet (" + r.status + ").");
+  return j || {};
+}
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+var DAG = ["zo","ma","di","wo","do","vr","za"], DAGDEEL = { 1:"ochtend", 2:"eind ochtend / begin middag", 3:"middag" };
+var vandaag = iso(new Date()), datum = vandaag, als = "", data = null, open = {}, bonnen = {}, timers = {};
+try { datum = sessionStorage.getItem("mrs.datum") || vandaag; als = sessionStorage.getItem("mrs.als") || ""; } catch(e) {}
+
+async function laad(){
+  try {
+    var j = await api("/service/mijn?datum=" + datum + (als ? "&als=" + encodeURIComponent(als) : ""));
+    if (!j.ok) throw new Error(j.error || "Laden lukte nog niet.");
+    data = j; $("fout").textContent = ""; teken();
+  } catch(e) { $("fout").textContent = e.message; }
+}
+function tekenKop(){
+  $("wie").innerHTML = (data.monteurs && data.monteurs.length)
+    ? 'Kijken als <select id="alsKeus">' + data.monteurs.map(function(m){ return '<option' + (m === data.monteur ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join("") + '</select>'
+    : 'Route van <b style="color:#1f2937">' + esc(data.monteur) + '</b>';
+  var k = $("alsKeus"); if (k) k.onchange = function(){ als = k.value; try { sessionStorage.setItem("mrs.als", als); } catch(e) {} laad(); };
+  var dagen = (data.dagen||[]).filter(function(d){ return d >= vandaag; });
+  if (dagen.indexOf(vandaag) < 0) dagen.unshift(vandaag);
+  if (dagen.indexOf(datum) < 0) { dagen.push(datum); dagen.sort(); }
+  $("dagen").innerHTML = dagen.slice(0, 14).map(function(d){ var x = new Date(d + "T12:00:00");
+    return '<button type="button" data-d="' + d + '"' + (d === datum ? ' class="aan"' : '') + '>' + (d === vandaag ? "vandaag" : DAG[x.getDay()]) + '<b>' + x.getDate() + '-' + (x.getMonth()+1) + '</b></button>'; }).join("");
+  $("dagen").querySelectorAll("[data-d]").forEach(function(b){ b.onclick = function(){ datum = b.dataset.d; try { sessionStorage.setItem("mrs.datum", datum); } catch(e) {} laad(); }; });
+}
+function teken(){
+  tekenKop();
+  if (!data.stops.length) { $("lijst").innerHTML = '<div class="leeg">Op deze dag staat er voor ' + esc(data.monteur) + ' nog geen route klaar.</div>'; return; }
+  $("lijst").innerHTML = data.stops.map(function(s, i){
+    var k = s.klant || {}, tel = String(k.tel||"").trim();
+    var klaar = s.bon === "klaar" || s.bon === "akkoord" || s.bon === "gemaild" || s.status === "klaar";
+    return '<div class="stop' + (klaar ? " klaar" : "") + '" data-id="' + esc(s.id) + '">' +
+      '<div class="klapkop" data-klap="' + esc(s.id) + '"><span class="nr">' + (i+1) + '</span><span class="naam">' + esc(k.naam || "ITS " + s.its) + '</span>' +
+        (tel ? '<a class="tel" href="tel:' + esc(tel.replace(/[^\d+]/g,"")) + '">📞 ' + esc(tel) + '</a>' : '') + '</div>' +
+      '<div class="blokje">' + (k.adres ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(k.adres) + '" target="_blank" rel="noopener">' + esc(k.adres) + '</a>' : '') +
+        '<div class="pillen"><span class="pil paars">ITS ' + esc(s.its) + '</span><span class="pil grijs">' + esc(DAGDEEL[s.dagdeel]||"") + '</span>' +
+        (s.status === "akkoord" ? '<span class="pil groen">klant akkoord</span>' : s.status === "voorstel" ? '<span class="pil oranje">wacht op bevestiging klant</span>' : '') +
+        (/^ja/i.test(s.garantie||"") ? '<span class="pil groen">garantie</span>' : '') +
+        (klaar ? '<span class="pil groen">werkbon klaar</span>' : s.bon === "concept" ? '<span class="pil">werkbon bezig</span>' : '') + '</div></div>' +
+      (open[s.id] ? detailsHtml(s) : '') + '</div>';
+  }).join("");
+  $("lijst").querySelectorAll("[data-klap]").forEach(function(el){ el.onclick = function(e){ if (e.target.closest("a")) return; var id = el.dataset.klap; open[id] = !open[id]; if (open[id] && !bonnen[id]) haalBon(id); else teken(); }; });
+  $("lijst").querySelectorAll(".details").forEach(koppel);
+}
+async function haalBon(id){
+  var j = await api("/service/bon?id=" + encodeURIComponent(id)).catch(function(e){ return { ok:false, error:e.message }; });
+  if (j.ok) bonnen[id] = j.bon; else { $("fout").textContent = j.error; }
+  teken();
+}
+function detailsHtml(s){
+  var bon = bonnen[s.id];
+  if (!bon) return '<div class="details">Werkbon ophalen…</div>';
+  var slot = bon.status === "akkoord" || bon.status === "gemaild";
+  var dis = slot ? " disabled" : "";
+  return '<div class="details" data-bon="' + esc(s.id) + '">' +
+    (s.titel || s.tekst ? '<div class="melding"><b>' + esc(s.titel||"") + '</b>' + (s.titel ? "\n" : "") + esc(s.tekst||"") + '</div>' : '') +
+    (s.opmerking ? '<div class="melding">📝 ' + esc(s.opmerking) + '</div>' : '') +
+    (slot ? '<div class="slot">Deze werkbon is op kantoor goedgekeurd. Aanpassen gaat nu via kantoor.</div>' : '') +
+    '<h4>Wat is er gedaan</h4><textarea data-v="gedaan" rows="4" maxlength="3000" placeholder="Wat je bij de klant hebt gedaan"' + dis + '>' + esc(bon.gedaan||"") + '</textarea>' +
+    '<h4>Gebruikte materialen</h4><div class="mats">' + (bon.materialen||[]).map(function(r, i){
+      return '<div class="matrij"><span class="om">' + esc(r.oms || "") + '<small>' + esc(r.code || "") + '</small></span>' +
+        '<span class="stap"><button type="button" data-mat="' + i + '" data-d="-1"' + dis + '>−</button><b>' + esc(String(r.aantal).replace(".", ",")) + '</b><button type="button" data-mat="' + i + '" data-d="1"' + dis + '>+</button></span>' +
+        (slot ? '' : '<button type="button" class="weg" data-matweg="' + i + '" title="Regel weg">&times;</button>') + '</div>';
+    }).join("") + '</div>' +
+    (slot ? '' : '<input type="search" data-zoek placeholder="Zoek materiaal in Logic4 (code of naam)" autocomplete="off"><div class="zoekres" data-res style="display:none"></div>') +
+    '<h4>Arbeid</h4><div class="uren"><input type="number" inputmode="decimal" step="0.25" min="0" max="24" data-v="uren" value="' + (bon.uren || "") + '"' + dis + '> <span>uur gewerkt</span></div>' +
+    '<p style="font-size:12px;color:#6b7280;margin:6px 0 0">De voorrijkosten rekent kantoor zelf uit.</p>' +
+    '<h4>Opmerking voor kantoor</h4><textarea data-v="opmerking" rows="2" maxlength="1000"' + dis + '>' + esc(bon.opmerking||"") + '</textarea>' +
+    '<h4>Akkoord klant</h4><input type="text" data-v="klantNaam" placeholder="Naam van de klant" value="' + esc(bon.klantNaam||"") + '" maxlength="80"' + dis + '>' +
+    '<div class="hand" style="margin-top:8px"><canvas></canvas><button type="button" class="wis"' + dis + '>Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>' +
+    '<div class="bericht" data-bericht></div>' +
+    (slot ? '' : '<div class="voet"><button type="button" data-bewaar>Bewaren</button><button type="button" class="doe" data-afrond>' + (bon.status === "klaar" ? "Opnieuw afronden" : "Werkbon afronden") + '</button></div>') +
+    '</div>';
+}
+function bericht(vak, t, soort){ var b = vak.querySelector("[data-bericht]"); if (b) { b.textContent = t; b.className = "bericht " + (soort||""); } }
+function bewaar(id, status, meteen){
+  var bon = bonnen[id]; if (!bon) return;
+  clearTimeout(timers[id]);
+  timers[id] = setTimeout(async function(){
+    var vak = document.querySelector('[data-bon="' + id + '"]');
+    var j = await api("/service/bon", { bon: Object.assign({}, bon, { status: status }) }).catch(function(e){ return { ok:false, error:e.message }; });
+    if (!j.ok) { if (vak) bericht(vak, j.error, "fout"); return; }
+    bon.status = j.status;
+    if (status === "klaar") {
+      try { if (window.fpLog) fpLog("service-werkbon-klaar", "ITS " + bon.its); } catch(e) {}
+      laad(); setTimeout(function(){ var v = document.querySelector('[data-bon="' + id + '"]'); if (v) bericht(v, "Werkbon afgerond. Kantoor ziet hem nu.", "goed"); }, 600);
+    } else if (meteen && vak) bericht(vak, "Bewaard.", "goed");
+  }, meteen ? 0 : 800);
+}
+var zoekTimer = null;
+function koppel(vak){
+  var id = vak.dataset.bon, bon = bonnen[id]; if (!bon) return;
+  vak.querySelectorAll("[data-v]").forEach(function(inp){ inp.addEventListener("input", function(){ bon[inp.dataset.v] = inp.dataset.v === "uren" ? (parseFloat(String(inp.value).replace(",", ".")) || 0) : inp.value; bewaar(id, "concept"); }); });
+  vak.querySelectorAll("[data-mat]").forEach(function(b){ b.onclick = function(){ var r = bon.materialen[+b.dataset.mat]; r.aantal = Math.max(1, (Number(r.aantal)||0) + Number(b.dataset.d)); bewaar(id, "concept"); teken(); }; });
+  vak.querySelectorAll("[data-matweg]").forEach(function(b){ b.onclick = function(){ bon.materialen.splice(+b.dataset.matweg, 1); bewaar(id, "concept"); teken(); }; });
+  var zoek = vak.querySelector("[data-zoek]"), res = vak.querySelector("[data-res]");
+  if (zoek) zoek.addEventListener("input", function(){
+    clearTimeout(zoekTimer);
+    var q = zoek.value.trim();
+    if (q.length < 2) { res.style.display = "none"; return; }
+    zoekTimer = setTimeout(async function(){
+      res.style.display = ""; res.innerHTML = '<div style="padding:10px 12px;color:#6b7280;font-size:13px">Zoeken in Logic4…</div>';
+      var j = await api("/service/artikel?q=" + encodeURIComponent(q)).catch(function(e){ return { ok:false, error:e.message }; });
+      if (!j.ok) { res.innerHTML = '<div style="padding:10px 12px;color:#b91c1c;font-size:13px">' + esc(j.error) + '</div>'; return; }
+      res.innerHTML = (j.artikelen||[]).length ? j.artikelen.map(function(a, i){ return '<button type="button" data-kies="' + i + '">' + esc(a.oms) + '<small>' + esc(a.code) + '</small></button>'; }).join("")
+        : '<div style="padding:10px 12px;color:#6b7280;font-size:13px">Niets gevonden op "' + esc(q) + '". Probeer een deel van de naam of de code.</div>';
+      res.querySelectorAll("[data-kies]").forEach(function(b){ b.onclick = function(){
+        var a = j.artikelen[+b.dataset.kies];
+        var al = bon.materialen.find(function(r){ return r.code === a.code; });
+        if (al) al.aantal = (Number(al.aantal)||0) + 1; else bon.materialen.push({ code: a.code, oms: a.oms, aantal: 1 });
+        bewaar(id, "concept"); teken();
+      }; });
+    }, 350);
+  });
+  koppelHand(vak.querySelector(".hand"), bon, function(){ bewaar(id, "concept"); });
+  var bw = vak.querySelector("[data-bewaar]"); if (bw) bw.onclick = function(){ bewaar(id, "concept", true); };
+  var af = vak.querySelector("[data-afrond]"); if (af) af.onclick = function(){
+    if (!String(bon.gedaan||"").trim()) { bericht(vak, "Vul in wat je bij de klant hebt gedaan.", "fout"); return; }
+    if (!(bon.uren > 0)) { bericht(vak, "Vul de gewerkte uren in.", "fout"); return; }
+    if (!bon.handtekeningKlant) { bericht(vak, "Laat de klant nog even tekenen.", "fout"); return; }
+    bewaar(id, "klaar", true);
+  };
+}
+/* Handtekening met vinger of pen, bewaard als kleine PNG (zoals in Mijn route). */
+function koppelHand(h, bon, wijzig){
+  if (!h) return;
+  var c = h.querySelector("canvas"), ctx = c.getContext("2d");
+  var breed = h.clientWidth || 320, hoog = 160, dpr = Math.min(window.devicePixelRatio||1, 2);
+  c.width = Math.round(breed*dpr); c.height = Math.round(hoog*dpr); ctx.scale(dpr,dpr);
+  ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+  var hint = h.querySelector(".hint");
+  if (bon.handtekeningKlant){ var img = new Image(); img.onload = function(){ ctx.drawImage(img, 0, 0, breed, hoog); }; img.src = bon.handtekeningKlant; if (hint) hint.style.display = "none"; }
+  if (h.querySelector(".wis").disabled) return;
+  var bezig = false, was = false;
+  function pos(e){ var r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  c.addEventListener("pointerdown", function(e){ e.preventDefault(); bezig = true; was = true; c.setPointerCapture(e.pointerId); var p = pos(e); ctx.beginPath(); ctx.moveTo(p[0],p[1]); if (hint) hint.style.display = "none"; });
+  c.addEventListener("pointermove", function(e){ if (!bezig) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p[0],p[1]); ctx.stroke(); });
+  function klaar(){ if (!bezig) return; bezig = false; if (was){ var k = document.createElement("canvas"); k.width = 600; k.height = 200; k.getContext("2d").drawImage(c, 0, 0, 600, 200); bon.handtekeningKlant = k.toDataURL("image/png"); wijzig(); } }
+  c.addEventListener("pointerup", klaar); c.addEventListener("pointercancel", klaar); c.addEventListener("pointerleave", klaar);
+  h.querySelector(".wis").onclick = function(){ ctx.clearRect(0,0,breed,hoog); bon.handtekeningKlant = ""; was = false; if (hint) hint.style.display = ""; wijzig(); };
+}
+laad();
+document.addEventListener("visibilitychange", function(){ if (!document.hidden && !Object.keys(open).some(function(k){ return open[k]; })) laad(); });
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"mijnroute-service",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

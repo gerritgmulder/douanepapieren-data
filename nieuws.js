@@ -51,6 +51,14 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-23", bestand: "mijnroute-service.html", soort: "nieuw",
+      titel: "Mijn routes Service",
+      wat: "Je eigen route per dag. Tik een klant open voor de melding en de werkbon: wat je hebt gedaan, de materialen (zoek ze op in Logic4), je gewerkte uren en de handtekening van de klant. Met Werkbon afronden ziet kantoor hem meteen." },
+    {
+      datum: "2026-10-23", bestand: "opleverbonnen-service.html", soort: "nieuw",
+      titel: "Opleverbonnen Service",
+      wat: "De werkbonnen van de servicemonteurs in één lijst Te doen. Met Akkoord en mailen krijgt de klant de werkbon, zonder prijzen. Met Factuur aanmaken zet het Dashboard de order en de factuur in Logic4, met de materialen, de kilometers en de uren; je ziet eerst wat erop komt." },
+    {
       datum: "2026-10-23", bestand: "service-meldingen.html", soort: "nieuw",
       titel: "In te plannen meldingen",
       wat: "Zet een ITS-nummer neer, vul de verwachte duur in en eventueel de voorkeursdagen, een eerste datum of een vakantie van de klant. Met de knop Plannen komt alles in de routes van Planning Service. Met Eerst bekijken zie je vooraf waar elke melding terechtkomt." },

@@ -24,7 +24,7 @@ import { ppMailVertaal, PP_MAIL_TALEN } from "./pp-mailteksten.js";
 import { svcHandle, svcRonde } from "./service.js";
 const SVC_HULP = (env) => ({ reply, l4Token, RIJ_START, rijNorm, itsTekst, ewsVerstuur,
   // DEV_OPEN bestaat alleen bij een lokale proefdraai, nooit in de uitrol.
-  toegangMag: env && env.DEV_OPEN ? async () => true : toegangMag });
+  toegangMag: env && env.DEV_OPEN ? async (e, g, w) => !(g === "service-planning" && /thieme|kroes|putten/.test(String(w))) : toegangMag });
 const ALLOWED_BUCKETS = new Set([
   "personeel",
   "koeien",
@@ -18949,7 +18949,9 @@ async function archiefVerhuis(env, prefix, max) {
    kan ook om een tweede reden niet: wat hij leest is gefilterd, en zou hij
    dat terugschrijven, dan verdwijnt voor iedereen wat voor hem verborgen was. */
 const EXTERN_LEES_GET = ["/planning/", "/herinneringen/open", "/herinneringen/log", "/vertaal/talen", "/bank/dagboeken", "/bank/grootboeken",
-                         "/bakwagen/mijn", "/bakwagen/handtekening", "/bakwagen/foto"];
+                         "/bakwagen/mijn", "/bakwagen/handtekening", "/bakwagen/foto",
+                         // De servicemonteurs (Thieme, Patrick, Hans): hun eigen route, werkbon en artikelen zoeken.
+                         "/service/mijn", "/service/bon", "/service/artikel"];
 const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                           "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo", "/extern/logic4",
                           /* De enige schrijfroutes: de bakwagenchauffeurs (Dani, Jordy, flex; eigen
@@ -18957,6 +18959,9 @@ const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                              toe voor een rit die voor die chauffeur klaarstaat (bwMagBijRit), en er
                              schrijft niets terug wat gefilterd is: het is een eigen nieuwe regel. */
                           "/bakwagen/afmelden", "/bakwagen/foto", "/bakwagen/bestuurder", "/bakwagen/pak",
+                          /* De werkbon van de servicemonteur: service.js laat dat alleen toe
+                             voor een afspraak in zijn eigen route (svcMagBijAfspraak). */
+                          "/service/bon",
                           // Rijtijd van de eigen rit: rekent alleen, schrijft niets terug.
                           "/planning/rijtijd"];
 const EXTERN_EXACT = ["/internal/teamkey"];

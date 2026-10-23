@@ -1,5 +1,5 @@
 {
-  "version": "0.35.117",
+  "version": "0.35.118",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -450,6 +450,14 @@
     {
       "name": "planning-service.html",
       "note": "Planning Service: routes van de servicemonteurs per dag, ziek, direct inplannen."
+    },
+    {
+      "name": "mijnroute-service.html",
+      "note": "Mijn routes Service: eigen route van de servicemonteur, werkbon met materialen uit Logic4, uren en handtekening."
+    },
+    {
+      "name": "opleverbonnen-service.html",
+      "note": "Opleverbonnen Service: werkbonnen nakijken, mailen zonder prijzen, factuur in Logic4."
     }
   ]
 }

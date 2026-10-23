@@ -106,6 +106,8 @@
       // De bakwagenchauffeurs: eigen inlog zonder Logic4, alleen Bakwagenroute (16 okt 2026).
       // Johny is heftruckchauffeur, geen bakwagenchauffeur; flex is de inlog voor wie op de flexwagen rijdt (17 okt 2026).
       "dani", "flex", "jordy",
+      // De servicemonteurs, alleen Mijn routes Service (Gerrit, 23 okt 2026). Accounts onder precies deze namen.
+      "hans.van.putten", "patrick.kroes", "thieme.wennink",
     ],
     /* Maandcontrole los van de rest van Administratie (proef), zodat de
        accountant alleen deze tegel uit die groep krijgt (Frank Hop,
@@ -366,6 +368,12 @@
        in Planning mogen inplannen. */
     "service-planning": [
       "bart.vdb", "bertjan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
+    ],
+    /* Mijn routes Service: elke monteur ziet alleen zijn eigen route
+       (Kevin, document "Service planning", 23 okt 2026). De planning kijkt
+       via de groep service-planning mee. */
+    "service-monteurs": [
+      "dolf", "fonteynbot", "gerrit", "hans.van.putten", "patrick.kroes", "thieme.wennink",
     ],
     "urencontrole": [
       "dolf", "fonteynbot", "gerrit", "gerwin",
