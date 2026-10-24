@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-24", bestand: "voorraadbepaling.html", soort: "beter",
+      titel: "Bestellen bij Jazzi: op tijd bestellen",
+      wat: "Het bestel-advies kijkt nu naar wanneer je de spa nodig hebt. Uit de voorraad bij Jazzi bestel je alleen wat nodig is tot de volgende bestelling binnen kan zijn; wat pas in januari nodig is, bestel je later. Bij Op voorraad Uddel zie je hoeveel weken de voorraad nog reikt, en boven de bestelkolommen wanneer de spa's binnen zijn. De levertijden en het bestelritme staan bovenaan en zijn aan te passen." },
+    {
       datum: "2026-10-24", bestand: "voorraadbepaling.html", soort: "nieuw",
       titel: "Voorraadbepaling: Bestellen bij Jazzi",
       wat: "Nieuw tabblad. Per uitvoering zie je wat we de komende periode nodig hebben, wat er in Uddel en bij Jazzi ligt, wat we uit de voorraad bij Jazzi moeten afnemen, wat er in productie moet en wat er te veel is bij Fonteyn en bij Jazzi, ook in euro's. De oranje kolommen verdwijnen vanzelf zodra er bij Jazzi niets meer klaarstaat. De groene bestelvakjes tonen de som; typ er een ander getal in om met de hand bij te stellen. Met Bestellijst voor Jazzi krijg je de lijst om te bestellen, met jullie getallen." },

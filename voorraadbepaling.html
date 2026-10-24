@@ -48,10 +48,15 @@
        uddel           vrije voorraad Fonteyn/onderweg
        productie       in productie bij Jazzi (nu 0: alles is al gemaakt)
        jazzi           klaar bij Jazzi, wacht op verschepen (crisiskolom)
-       uit voorraad Jazzi   min(jazzi, tekort na uddel en productie); 4 weken op zee
-       in productie nemen   nodig - uddel - productie - jazzi, als dat boven 0 is; 8 + 4 weken
+       uit voorraad Jazzi   verkoop tot (34 dagen levertijd + 14 dagen) - uddel
+                            - productie; nooit meer dan er klaarstaat
+       in productie nemen   verkoop tot (90 dagen levertijd + 14 dagen) - uddel
+                            - productie - jazzi
        teveel Fonteyn  uddel - nodig, als dat boven 0 is
-       teveel Jazzi    jazzi - uit voorraad Jazzi
+       teveel Jazzi    jazzi dat binnen de levertijd van productie niet nodig is
+     De verkoop per dag volgt de maanden van vorig jaar (Verkopen per maand).
+     Sinds 24 okt 2026 op tijd: eerst bestelde de som alles voor nov t/m jan
+     in één keer uit de voorraad bij Jazzi, ook wat pas in januari nodig was.
      Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad bij Jazzi
      wordt alleen afgenomen als Fonteyn zelf tekort heeft.
      Opslag: bucket voorraadbepaling-crisis. Opnieuw inladen vervangt de lijst.
@@ -100,6 +105,9 @@ table.crisis input{width:58px;border:1px solid var(--rand);border-radius:7px;pad
 table.crisis .nul{color:#c4c4c4}
 table.crisis .actie{font-weight:700;color:var(--oranje)}
 table.crisis .bestel{font-weight:700;color:var(--groen)}
+.cTijd{width:46px;border:1px solid var(--rand);border-radius:8px;padding:6px 6px;font:inherit;text-align:right}
+table.crisis small.reikt{display:block;color:var(--grijs);font-size:10.5px;white-space:nowrap}
+table.crisis small.reikt.kort{color:var(--oranje);font-weight:700}
 table.crisis input.bestelin{border-color:#bbd7a8;font-weight:700;color:var(--groen)}
 table.crisis input.bestelin::placeholder{color:var(--groen);opacity:.75;font-weight:700}
 table.crisis input.bestelin.hand{background:#fff7ed;border-color:#fdba74;color:var(--oranje)}
@@ -141,9 +149,10 @@ table.crisis small.som{display:block;color:var(--grijs);font-size:10.5px}
   </div>
   <div id="vCrisis" hidden>
     <div class="kaart">
-      <p class="lead">Per uitvoering: wat we de komende periode nodig hebben, wat er al ligt, wat we nog moeten bestellen en wat er te veel is. Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad die bij Jazzi klaarstaat nemen we alleen af als we zelf tekort hebben. De groene vakjes bij bestellen tonen de som; typ er een ander getal in om het met de hand bij te stellen (oranje), maak het leeg om terug te gaan naar de som. De bestellijst neemt jullie getallen over.</p>
+      <p class="lead">Per uitvoering: wat we de komende periode nodig hebben, wat er al ligt, wat we nog moeten bestellen en wat er te veel is. Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad die bij Jazzi klaarstaat nemen we alleen af als we zelf tekort hebben. Elke bestelling dekt alleen de verkoop tot de volgende bestelling binnen kan zijn (we bestellen elke 2 weken), op het tempo van dezelfde maanden vorig jaar. Wat later nodig is, bestel je over twee weken. De groene vakjes bij bestellen tonen de som; typ er een ander getal in om het met de hand bij te stellen (oranje), maak het leeg om terug te gaan naar de som. De bestellijst neemt jullie getallen over.</p>
       <div class="balk">
         <label style="font-size:12.5px">Verwachte verkoop komende periode: <input type="text" id="cPct" inputmode="decimal" style="width:64px;border:1px solid var(--rand);border-radius:8px;padding:6px 8px;font:inherit;text-align:right">% van de jaarverkoop <span class="min" id="cPctUitleg"></span></label>
+        <label style="font-size:12.5px">Levertijd uit voorraad Jazzi <input type="text" class="cTijd" data-t="lj" inputmode="numeric"> dagen · uit productie <input type="text" class="cTijd" data-t="lp" inputmode="numeric"> dagen · bestellen elke <input type="text" class="cTijd" data-t="r" inputmode="numeric"> dagen</label>
         <label style="font-size:12.5px"><input type="checkbox" id="cActie"> alleen regels met een actie</label>
         <input type="search" id="cZoek" placeholder="Zoek op spa of kleur">
         <button type="button" class="knop" id="cInladen">Excel inladen</button><input type="file" id="cBestand" accept=".xlsx,.xls" hidden>
@@ -266,13 +275,53 @@ async function cLaad(){
 }
 function geld(n){ return "\u20ac " + Math.round(n||0).toLocaleString("nl-NL"); }
 /* De som per uitvoering. Zie de uitleg bovenaan dit bestand. */
+/* Op tijd bestellen (Gerrit, 24 okt 2026, bij Retreat Spa Mystic Mountain:
+   "als ik er nu 9 bestel dan zijn die over 4 weken in Rotterdam en ik moet
+   die voorraad pas eind januari hebben"). Elke bestelling dekt alleen de
+   verkoop tot de volgende bestelling binnen kan zijn:
+     verkoop per dag   = verkocht 365 dagen x aandeel van die maand / dagen
+                         in die maand (de maanden uit Verkopen per maand)
+     uit voorraad Jazzi = verkoop van vandaag tot (levertijd Jazzi + 2 weken)
+                         - Uddel - in productie; nooit meer dan er klaarstaat
+     in productie nemen = verkoop van vandaag tot (levertijd productie + 2
+                         weken) - Uddel - in productie - klaar bij Jazzi
+     teveel Jazzi      = wat bij Jazzi staat en ook binnen de levertijd van
+                         productie niet nodig is
+   Over twee weken rekent dezelfde som opnieuw met de verse stand. */
+var C_STD = { lj: 34, lp: 90, r: 14 };   // 4 weken + 6 dagen; 8 + 4 weken + 6 dagen; elke 2 weken
+function cTijden(){ var t = (crisis && crisis.tijden) || {}; return { lj: Number(t.lj) || C_STD.lj, lp: Number(t.lp) || C_STD.lp, r: Number(t.r) || C_STD.r }; }
+function cVandaag(){ var d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
+function cPlus(dagen){ var d = cVandaag(); d.setUTCDate(d.getUTCDate() + dagen); return d; }
+function cDatum(d){ return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short", timeZone: "UTC" }); }
+/* Verwachte verkoop van vandaag t/m 'dagen' verder. Zonder maandcijfers: elke maand even zwaar. */
+function cVerkoop(V, dagen){
+  var a = (crisis && Array.isArray(crisis.maand) && crisis.maand.length === 12) ? crisis.maand : null, s = 0, d = cVandaag();
+  for (var i = 0; i < dagen; i++) {
+    var mo = d.getUTCMonth(), dim = new Date(Date.UTC(d.getUTCFullYear(), mo + 1, 0)).getUTCDate();
+    s += V * (a ? a[mo] : 1 / 12) / dim;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return s;
+}
+function cReikt(V, U){
+  if (!(V > 0)) return null;
+  var s = 0, d = cVandaag(), a = (crisis && Array.isArray(crisis.maand) && crisis.maand.length === 12) ? crisis.maand : null;
+  for (var i = 0; i < 365; i++) {
+    var mo = d.getUTCMonth(), dim = new Date(Date.UTC(d.getUTCFullYear(), mo + 1, 0)).getUTCDate();
+    s += V * (a ? a[mo] : 1 / 12) / dim;
+    if (s > U) return i;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return 365;
+}
 function cReken(x, pct){
-  var V = Number(x.verkocht)||0, U = Number(x.uddel)||0, P = Number(x.productie)||0, J = Number(x.jazzi)||0;
+  var V = Number(x.verkocht)||0, U = Number(x.uddel)||0, P = Number(x.productie)||0, J = Number(x.jazzi)||0, t = cTijden();
   var verwacht = V * pct / 100;
   var N = V > 0 ? Math.ceil(verwacht - 1e-9) : 0;
-  var tekort = Math.max(0, N - U - P);
-  var uitJazziSom = Math.min(J, tekort);
-  var inProductieSom = Math.max(0, N - U - P - J);
+  var nodigJ = cVerkoop(V, t.lj + t.r), nodigP = cVerkoop(V, t.lp + t.r);
+  var omhoog = function(n){ return Math.max(0, Math.ceil(n - 1e-9)); };
+  var uitJazziSom = Math.min(J, omhoog(nodigJ - U - P));
+  var inProductieSom = omhoog(nodigP - U - P - J);
   /* Met de hand bijgesteld (Gerrit, 24 okt 2026: "we gaan het nog handmatig
      doen nadat jij het overzicht geeft"). Leeg = weer de som. Uit Jazzi kan
      nooit meer zijn dan er klaarstaat. */
@@ -280,7 +329,7 @@ function cReken(x, pct){
   var uitJazzi = handJ ? Math.min(J, Math.max(0, Number(x.handUitJazzi)||0)) : uitJazziSom;
   var inProductie = handP ? Math.max(0, Number(x.handInProductie)||0) : inProductieSom;
   return { verwacht: verwacht, nodig: N, uitJazzi: uitJazzi, inProductie: inProductie, uitJazziSom: uitJazziSom, inProductieSom: inProductieSom, handJ: handJ, handP: handP,
-    teveelF: Math.max(0, U - N), teveelJ: J - uitJazzi };
+    reikt: cReikt(V, U), teveelF: Math.max(0, U - N), teveelJ: Math.max(0, J - omhoog(nodigP - U - P)) };
 }
 function cRijen(){
   var pct = Number(crisis.pct)||0, z = ($("cZoek").value||"").trim().toLowerCase(), actie = $("cActie").checked;
@@ -293,22 +342,25 @@ function cRijen(){
    alleen nog: nodig, Uddel, in productie en één kolom Bestellen. */
 function cCrisisActief(){ return crisis.rijen.some(function(x){ return (Number(x.jazzi)||0) > 0; }); }
 function cKolommen(){
-  var c = cCrisisActief();
+  var c = cCrisisActief(), t = cTijden();
+  var subJ = "binnen ±" + cDatum(cPlus(t.lj)) + ", dekt tot " + cDatum(cPlus(t.lj + t.r));
+  var subP = "binnen ±" + cDatum(cPlus(t.lp)) + ", dekt tot " + cDatum(cPlus(t.lp + t.r));
   return [
-    { k: "uitvoering", t: "Spa uitvoering" }, { k: "verkocht", t: "Verkocht 365 dagen", n: 1 }, { k: "verwacht", t: "Verwacht (" + String(crisis.pct).replace(".", ",") + "%)", n: 1, d: 1 },
-    { k: "nodig", t: "Nodig (afgerond)", n: 1, vet: 1 }, { k: "uddel", t: "Op voorraad Uddel", n: 1, in: 1, euro: 1 }, { k: "productie", t: "In productie Jazzi", n: 1, in: 1, euro: 1 },
+    { k: "uitvoering", t: "Spa uitvoering" }, { k: "verkocht", t: "Verkocht 365 dagen", n: 1 },
+    { k: "nodig", t: "Nodig nov t/m jan (" + String(crisis.pct).replace(".", ",") + "%)", n: 1, vet: 1 }, { k: "uddel", t: "Op voorraad Uddel", sub: "en hoe lang dat reikt", n: 1, in: 1, euro: 1 }, { k: "productie", t: "In productie Jazzi", n: 1, in: 1, euro: 1 },
   ].concat(c ? [
     { k: "jazzi", t: "Klaar bij Jazzi", n: 1, in: 1, euro: 1, crisis: 1 },
-    { k: "uitJazzi", t: "Bestellen uit voorraad Jazzi", sub: "0 + 4 weken", n: 1, hand: "handUitJazzi", som: "uitJazziSom", euro: 1, crisis: 1 },
-    { k: "inProductie", t: "In productie nemen", sub: "8 + 4 weken", n: 1, hand: "handInProductie", som: "inProductieSom", euro: 1, crisis: 1 },
+    { k: "uitJazzi", t: "Bestellen uit voorraad Jazzi", sub: subJ, n: 1, hand: "handUitJazzi", som: "uitJazziSom", euro: 1, crisis: 1 },
+    { k: "inProductie", t: "In productie nemen", sub: subP, n: 1, hand: "handInProductie", som: "inProductieSom", euro: 1, crisis: 1 },
     { k: "teveelF", t: "Teveel Fonteyn", n: 1, cls: "actie", euro: 1, crisis: 1 },
     { k: "teveelJ", t: "Teveel Jazzi", n: 1, cls: "actie", euro: 1, crisis: 1 },
   ] : [
-    { k: "inProductie", t: "Bestellen", sub: "8 + 4 weken", n: 1, hand: "handInProductie", som: "inProductieSom", euro: 1 },
+    { k: "inProductie", t: "Bestellen", sub: subP, n: 1, hand: "handInProductie", som: "inProductieSom", euro: 1 },
   ]);
 }
 function cTeken(){
   $("cPct").value = String(crisis.pct).replace(".", ",");
+  var tt = cTijden(); document.querySelectorAll(".cTijd").forEach(function(inp){ if (document.activeElement !== inp) inp.value = tt[inp.dataset.t]; });
   $("cPctUitleg").textContent = crisis.pctUitleg ? "(" + crisis.pctUitleg + ")" : "";
   var b = crisis.bron;
   $("cStand").textContent = b ? "Ingeladen: " + b.bestand + " (" + b.blad + "), " + new Date(b.ts).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) + " door " + String(b.door||"").split("@")[0] : "";
@@ -329,7 +381,9 @@ function cTeken(){
   var cel = function(x, c){
     var v = x[c.k];
     if (c.k === "uitvoering") return '<td data-k="">' + esc(v) + '</td>';
-    if (c.in) return '<td class="n" data-k="' + esc(c.t) + '"><input type="text" inputmode="numeric" data-i="' + x.i + '" data-veld="' + c.k + '" value="' + (Number(v)||0) + '"></td>';
+    if (c.in) return '<td class="n" data-k="' + esc(c.t) + '"><input type="text" inputmode="numeric" data-i="' + x.i + '" data-veld="' + c.k + '" value="' + (Number(v)||0) + '">' +
+      (c.k === "uddel" && x.reikt != null ? '<small class="reikt' + (x.reikt < cTijden().lj ? ' kort' : '') + '">reikt ±' + (x.reikt >= 365 ? "1 jaar+" : Math.round(x.reikt / 7) + " wkn") + '</small>' : '') + '</td>';
+    if (c.k === "nodig") return '<td class="n" data-k="' + esc(c.t) + '"><b>' + nl(v, 0) + '</b><small class="reikt">' + nl(x.verwacht, 1) + '</small></td>';
     if (c.hand) {
       var met = x[c.hand] != null && x[c.hand] !== "";
       return '<td class="n" data-k="' + esc(c.t) + '"><input type="text" inputmode="numeric" class="bestelin' + (met ? " hand" : "") + '" data-i="' + x.i + '" data-hand="' + c.hand + '" value="' + (met ? (Number(v)||0) : "") + '" placeholder="' + (Number(x[c.som])||0) + '" title="Som: ' + (Number(x[c.som])||0) + '. Leeg laten = de som aanhouden.">' +
@@ -418,7 +472,12 @@ async function cInlezen(bestand){
     var maand = function(re){ var r = m.find(function(x){ return re.test(String(x[0])); }); return r && typeof r[1] === "number" ? r[1] : null; };
     var tot = rijen.reduce(function(n, x){ return n + x.verkocht; }, 0), nov = maand(/^nov /), dec = maand(/^dec /), jan = maand(/^jan /);
     if (nov != null && dec != null && jan != null && tot) { pct = Math.round((nov + dec + jan) / tot * 10000) / 100; pctUitleg = "nov t/m jan, uit Verkopen per maand"; }
-    crisis = { rijen: rijen, pct: pct, pctUitleg: pctUitleg, bron: { bestand: bestand.name, blad: naam, ts: new Date().toISOString(), door: ik } };
+    /* Het aandeel van elke maand in de jaarverkoop, voor de verkoop per dag. */
+    var MN = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"], per = [0,0,0,0,0,0,0,0,0,0,0,0];
+    for (var mi = 2; mi < m.length; mi++) { if (String(m[mi][0]) === "Totaal") break; var mt = String(m[mi][0]).match(/^(\w{3}) \d{4}$/); if (mt && typeof m[mi][1] === "number" && MN.indexOf(mt[1]) >= 0) per[MN.indexOf(mt[1])] += m[mi][1]; }
+    var perTot = per.reduce(function(n, x){ return n + x; }, 0);
+    var maandAandeel = perTot ? per.map(function(x){ return x / perTot; }) : (crisis && crisis.maand) || null;
+    crisis = { rijen: rijen, pct: pct, pctUitleg: pctUitleg, maand: maandAandeel, tijden: (crisis && crisis.tijden) || null, bron: { bestand: bestand.name, blad: naam, ts: new Date().toISOString(), door: ik } };
     cTeken(); cBewaar();
     try { if (window.fpLog) fpLog("crisis-ingeladen", bestand.name + ", " + rijen.length + " regels"); } catch(e) {}
   } catch(e) { $("cStand").textContent = e.message; }
@@ -478,6 +537,12 @@ $("hWeek").addEventListener("click", function(){ zetHoofd("week"); });
 $("hCrisis").addEventListener("click", function(){ zetHoofd("crisis"); });
 $("cZoek").addEventListener("input", function(){ if (crisis) cTeken(); });
 $("cActie").addEventListener("change", function(){ if (crisis) cTeken(); });
+document.querySelectorAll(".cTijd").forEach(function(inp){ inp.addEventListener("change", function(){
+  var v = Math.round(Number(String(this.value).replace(",", ".")));
+  if (!(v > 0 && v < 400)) { cTeken(); return; }
+  crisis.tijden = Object.assign({}, cTijden(), (function(o){ o[inp.dataset.t] = v; return o; })({}));
+  cTeken(); cBewaar();
+}); });
 $("cPct").addEventListener("change", function(){ var v = Number(String(this.value).replace(",", ".")); if (!(v > 0 && v <= 100)) { this.value = String(crisis.pct).replace(".", ","); return; } crisis.pct = v; crisis.pctUitleg = "met de hand"; cTeken(); cBewaar(); });
 $("cInladen").addEventListener("click", async function(){
   if (crisis && crisis.rijen.length && !(await fpBevestig("Een nieuw overzicht inladen? De lijst en de aanpassingen die er nu staan worden vervangen.", { knop: "Inladen" }))) return;
