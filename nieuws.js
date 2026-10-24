@@ -53,7 +53,7 @@
     {
       datum: "2026-10-24", bestand: "voorraadbepaling.html", soort: "nieuw",
       titel: "Voorraadbepaling: Bestellen bij Jazzi",
-      wat: "Nieuw tabblad. Per uitvoering zie je wat we de komende periode nodig hebben, wat er in Uddel en bij Jazzi ligt, wat we uit de voorraad bij Jazzi moeten afnemen, wat er in productie moet en wat er te veel is bij Fonteyn en bij Jazzi, ook in euro's. De oranje kolommen verdwijnen vanzelf zodra er bij Jazzi niets meer klaarstaat. Met Bestellijst voor Jazzi krijg je de lijst om te bestellen." },
+      wat: "Nieuw tabblad. Per uitvoering zie je wat we de komende periode nodig hebben, wat er in Uddel en bij Jazzi ligt, wat we uit de voorraad bij Jazzi moeten afnemen, wat er in productie moet en wat er te veel is bij Fonteyn en bij Jazzi, ook in euro's. De oranje kolommen verdwijnen vanzelf zodra er bij Jazzi niets meer klaarstaat. De groene bestelvakjes tonen de som; typ er een ander getal in om met de hand bij te stellen. Met Bestellijst voor Jazzi krijg je de lijst om te bestellen, met jullie getallen." },
     {
       datum: "2026-10-23", bestand: "mijnroute-service.html", soort: "nieuw",
       titel: "Mijn routes Service",

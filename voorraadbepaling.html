@@ -100,6 +100,10 @@ table.crisis input{width:58px;border:1px solid var(--rand);border-radius:7px;pad
 table.crisis .nul{color:#c4c4c4}
 table.crisis .actie{font-weight:700;color:var(--oranje)}
 table.crisis .bestel{font-weight:700;color:var(--groen)}
+table.crisis input.bestelin{border-color:#bbd7a8;font-weight:700;color:var(--groen)}
+table.crisis input.bestelin::placeholder{color:var(--groen);opacity:.75;font-weight:700}
+table.crisis input.bestelin.hand{background:#fff7ed;border-color:#fdba74;color:var(--oranje)}
+table.crisis small.som{display:block;color:var(--grijs);font-size:10.5px}
 @media (max-width:900px){
   table.crisis thead{display:none}
   table.crisis, table.crisis tbody, table.crisis tr, table.crisis td{display:block;width:100%}
@@ -137,7 +141,7 @@ table.crisis .bestel{font-weight:700;color:var(--groen)}
   </div>
   <div id="vCrisis" hidden>
     <div class="kaart">
-      <p class="lead">Per uitvoering: wat we de komende periode nodig hebben, wat er al ligt, wat we nog moeten bestellen en wat er te veel is. Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad die bij Jazzi klaarstaat nemen we alleen af als we zelf tekort hebben.</p>
+      <p class="lead">Per uitvoering: wat we de komende periode nodig hebben, wat er al ligt, wat we nog moeten bestellen en wat er te veel is. Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad die bij Jazzi klaarstaat nemen we alleen af als we zelf tekort hebben. De groene vakjes bij bestellen tonen de som; typ er een ander getal in om het met de hand bij te stellen (oranje), maak het leeg om terug te gaan naar de som. De bestellijst neemt jullie getallen over.</p>
       <div class="balk">
         <label style="font-size:12.5px">Verwachte verkoop komende periode: <input type="text" id="cPct" inputmode="decimal" style="width:64px;border:1px solid var(--rand);border-radius:8px;padding:6px 8px;font:inherit;text-align:right">% van de jaarverkoop <span class="min" id="cPctUitleg"></span></label>
         <label style="font-size:12.5px"><input type="checkbox" id="cActie"> alleen regels met een actie</label>
@@ -267,9 +271,16 @@ function cReken(x, pct){
   var verwacht = V * pct / 100;
   var N = V > 0 ? Math.ceil(verwacht - 1e-9) : 0;
   var tekort = Math.max(0, N - U - P);
-  var uitJazzi = Math.min(J, tekort);
-  var inProductie = Math.max(0, N - U - P - J);
-  return { verwacht: verwacht, nodig: N, uitJazzi: uitJazzi, inProductie: inProductie, teveelF: Math.max(0, U - N), teveelJ: J - uitJazzi };
+  var uitJazziSom = Math.min(J, tekort);
+  var inProductieSom = Math.max(0, N - U - P - J);
+  /* Met de hand bijgesteld (Gerrit, 24 okt 2026: "we gaan het nog handmatig
+     doen nadat jij het overzicht geeft"). Leeg = weer de som. Uit Jazzi kan
+     nooit meer zijn dan er klaarstaat. */
+  var handJ = x.handUitJazzi != null && x.handUitJazzi !== "", handP = x.handInProductie != null && x.handInProductie !== "";
+  var uitJazzi = handJ ? Math.min(J, Math.max(0, Number(x.handUitJazzi)||0)) : uitJazziSom;
+  var inProductie = handP ? Math.max(0, Number(x.handInProductie)||0) : inProductieSom;
+  return { verwacht: verwacht, nodig: N, uitJazzi: uitJazzi, inProductie: inProductie, uitJazziSom: uitJazziSom, inProductieSom: inProductieSom, handJ: handJ, handP: handP,
+    teveelF: Math.max(0, U - N), teveelJ: J - uitJazzi };
 }
 function cRijen(){
   var pct = Number(crisis.pct)||0, z = ($("cZoek").value||"").trim().toLowerCase(), actie = $("cActie").checked;
@@ -288,12 +299,12 @@ function cKolommen(){
     { k: "nodig", t: "Nodig (afgerond)", n: 1, vet: 1 }, { k: "uddel", t: "Op voorraad Uddel", n: 1, in: 1, euro: 1 }, { k: "productie", t: "In productie Jazzi", n: 1, in: 1, euro: 1 },
   ].concat(c ? [
     { k: "jazzi", t: "Klaar bij Jazzi", n: 1, in: 1, euro: 1, crisis: 1 },
-    { k: "uitJazzi", t: "Bestellen uit voorraad Jazzi", sub: "0 + 4 weken", n: 1, cls: "bestel", euro: 1, crisis: 1 },
-    { k: "inProductie", t: "In productie nemen", sub: "8 + 4 weken", n: 1, cls: "bestel", euro: 1, crisis: 1 },
+    { k: "uitJazzi", t: "Bestellen uit voorraad Jazzi", sub: "0 + 4 weken", n: 1, hand: "handUitJazzi", som: "uitJazziSom", euro: 1, crisis: 1 },
+    { k: "inProductie", t: "In productie nemen", sub: "8 + 4 weken", n: 1, hand: "handInProductie", som: "inProductieSom", euro: 1, crisis: 1 },
     { k: "teveelF", t: "Teveel Fonteyn", n: 1, cls: "actie", euro: 1, crisis: 1 },
     { k: "teveelJ", t: "Teveel Jazzi", n: 1, cls: "actie", euro: 1, crisis: 1 },
   ] : [
-    { k: "inProductie", t: "Bestellen", sub: "8 + 4 weken", n: 1, cls: "bestel", euro: 1 },
+    { k: "inProductie", t: "Bestellen", sub: "8 + 4 weken", n: 1, hand: "handInProductie", som: "inProductieSom", euro: 1 },
   ]);
 }
 function cTeken(){
@@ -319,6 +330,11 @@ function cTeken(){
     var v = x[c.k];
     if (c.k === "uitvoering") return '<td data-k="">' + esc(v) + '</td>';
     if (c.in) return '<td class="n" data-k="' + esc(c.t) + '"><input type="text" inputmode="numeric" data-i="' + x.i + '" data-veld="' + c.k + '" value="' + (Number(v)||0) + '"></td>';
+    if (c.hand) {
+      var met = x[c.hand] != null && x[c.hand] !== "";
+      return '<td class="n" data-k="' + esc(c.t) + '"><input type="text" inputmode="numeric" class="bestelin' + (met ? " hand" : "") + '" data-i="' + x.i + '" data-hand="' + c.hand + '" value="' + (met ? (Number(v)||0) : "") + '" placeholder="' + (Number(x[c.som])||0) + '" title="Som: ' + (Number(x[c.som])||0) + '. Leeg laten = de som aanhouden.">' +
+        (met ? '<small class="som">som ' + (Number(x[c.som])||0) + '</small>' : '') + '</td>';
+    }
     var t = nl(v, c.d ? 1 : 0);
     return '<td class="n" data-k="' + esc(c.t) + '">' + (c.vet ? '<b>' + t + '</b>' : '<span class="' + (Number(v) ? (c.cls||"") : (c.cls ? "nul" : "")) + '">' + t + '</span>') + '</td>';
   };
@@ -333,6 +349,16 @@ function cTeken(){
     return '<td class="n" data-k="' + esc(c.t) + '">' + nl(t(c.k), 0) + (c.euro ? '<small>' + geld(te(c.k)) + '</small>' : '') + '</td>';
   }).join("") + '</tr>';
   $("cLijst").innerHTML = l.length ? h : '<tr><td colspan="' + nk + '" class="lead">Geen regels met deze keuze.</td></tr>';
+  $("cLijst").querySelectorAll("input[data-hand]").forEach(function(inp){
+    inp.addEventListener("change", function(){
+      var x = crisis.rijen[+inp.dataset.i]; if (!x) return;
+      var v = String(inp.value).trim();
+      if (v === "") delete x[inp.dataset.hand];
+      else x[inp.dataset.hand] = Math.max(0, Math.round(Number(v.replace(",", ".")) || 0));
+      x.aangepast = Object.assign({}, x.aangepast || {}, (function(o){ o[inp.dataset.hand] = { door: ik, ts: new Date().toISOString() }; return o; })({}));
+      cBewaar(); cTeken();
+    });
+  });
   $("cLijst").querySelectorAll("input[data-veld]").forEach(function(inp){
     inp.addEventListener("change", function(){
       var x = crisis.rijen[+inp.dataset.i]; if (!x) return;
