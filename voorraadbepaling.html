@@ -38,6 +38,24 @@
      Wat er na de berekening besteld moet worden, bestelt Chantal.
      De berekening staat in de worker (vb2Lijst).
 
+     TABBLAD CRISISOVERZICHT (Gerrit, 24 okt 2026)
+     Er staat voor ongeveer 600.000 euro verkeerde voorraad in Uddel en voor
+     400.000 euro bij Jazzi (klaar, maar nog niet verscheept). Per uitvoering:
+       verkocht        laatste 365 dagen (uit het ingeladen overzicht)
+       verwacht        verkocht x het aandeel van de komende periode
+                       (nov t/m jan = 23,2% van de jaarverkoop)
+       nodig           verwacht, altijd naar boven afgerond
+       uddel           vrije voorraad Fonteyn/onderweg
+       productie       in productie bij Jazzi (nu 0: alles is al gemaakt)
+       jazzi           klaar bij Jazzi, wacht op verschepen (crisiskolom)
+       uit voorraad Jazzi   min(jazzi, tekort na uddel en productie); 4 weken op zee
+       in productie nemen   nodig - uddel - productie - jazzi, als dat boven 0 is; 8 + 4 weken
+       teveel Fonteyn  uddel - nodig, als dat boven 0 is
+       teveel Jazzi    jazzi - uit voorraad Jazzi
+     Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad bij Jazzi
+     wordt alleen afgenomen als Fonteyn zelf tekort heeft.
+     Opslag: bucket voorraadbepaling-crisis. Opnieuw inladen vervangt de lijst.
+
      OTA: staat in manifest.json. Nooit opnieuw installeren.
      ═════════════════════════════════════════════════════════════════ -->
 <style>
@@ -68,6 +86,29 @@ td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-w
 .pil.bij{background:#ffedd5;color:var(--oranje)}.pil.goed{background:#eef2e6;color:var(--groen)}
 .min{color:var(--grijs)}
 .melding{font-size:12.5px;color:var(--groen)}
+.hoofdtabs{display:flex;gap:4px;border-bottom:2px solid var(--rand);margin-bottom:12px;flex-wrap:wrap}
+.hoofdtabs button{background:transparent;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:9px 14px;font:inherit;font-weight:600;font-size:14px;color:var(--grijs);cursor:pointer;white-space:nowrap}
+.hoofdtabs button.aan{color:var(--groen);border-bottom-color:var(--groen)}
+table.crisis th{white-space:normal;line-height:1.25;vertical-align:bottom}
+table.crisis th small{display:block;text-transform:none;letter-spacing:0;font-weight:500}
+table.crisis th.crisiskol{background:#fff7ed}
+table.crisis td{padding:5px 6px}
+table.crisis td.groep{background:#f8faf5;font-weight:700;color:var(--groen);padding:8px 6px}
+table.crisis tr.totaal td{border-top:2px solid var(--ink);font-weight:700}
+table.crisis tr.totaal td small{display:block;font-weight:500;color:var(--grijs)}
+table.crisis input{width:58px;border:1px solid var(--rand);border-radius:7px;padding:4px 6px;font:inherit;font-size:12.5px;text-align:right}
+table.crisis .nul{color:#c4c4c4}
+table.crisis .actie{font-weight:700;color:var(--oranje)}
+table.crisis .bestel{font-weight:700;color:var(--groen)}
+@media (max-width:900px){
+  table.crisis thead{display:none}
+  table.crisis, table.crisis tbody, table.crisis tr, table.crisis td{display:block;width:100%}
+  table.crisis tr{border:1px solid var(--rand);border-radius:10px;margin-bottom:8px;padding:6px 8px}
+  table.crisis td{border:0;display:flex;justify-content:space-between;gap:10px;text-align:right}
+  table.crisis td::before{content:attr(data-k);color:var(--grijs);text-align:left;font-size:12px}
+  table.crisis td:first-child{font-weight:700;text-align:left}
+  table.crisis td:first-child::before{content:none}
+}
 </style>
 </head>
 <body>
@@ -76,6 +117,8 @@ td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-w
   <h1>📊 Voorraadbepaling</h1>
 </header>
 <main>
+  <div class="hoofdtabs"><button type="button" id="hWeek" class="aan">Wekelijkse lijst</button><button type="button" id="hCrisis">Bestellen bij Jazzi</button></div>
+  <div id="vWeek">
   <div class="kaart">
     <p class="lead" id="uitleg">De lijst zoals Chantal hem maakt met de Rapportage Wizard in Logic4. Elke week: wat bij <b>Advies</b> boven nul staat, bestelt Chantal.</p>
     <div class="kop3" id="kop"></div>
@@ -91,6 +134,25 @@ td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-w
     <div class="balk" id="weken" style="font-size:12px;color:var(--grijs)"></div>
   </div>
   <div class="kaart"><table><thead><tr><th id="kolNaam">Spa uitvoering</th><th class="n">Verkocht</th><th class="n">Vrije voorraad Fonteyn/onderweg</th><th class="n">In productie</th><th class="n">Spas te produceren</th><th class="n">Advies te produceren</th><th></th></tr></thead><tbody id="lijst"><tr><td colspan="7" class="lead">Lijst ophalen…</td></tr></tbody></table></div>
+  </div>
+  <div id="vCrisis" hidden>
+    <div class="kaart">
+      <p class="lead">Per uitvoering: wat we de komende periode nodig hebben, wat er al ligt, wat we nog moeten bestellen en wat er te veel is. Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad die bij Jazzi klaarstaat nemen we alleen af als we zelf tekort hebben.</p>
+      <div class="balk">
+        <label style="font-size:12.5px">Verwachte verkoop komende periode: <input type="text" id="cPct" inputmode="decimal" style="width:64px;border:1px solid var(--rand);border-radius:8px;padding:6px 8px;font:inherit;text-align:right">% van de jaarverkoop <span class="min" id="cPctUitleg"></span></label>
+        <label style="font-size:12.5px"><input type="checkbox" id="cActie"> alleen regels met een actie</label>
+        <input type="search" id="cZoek" placeholder="Zoek op spa of kleur">
+        <button type="button" class="knop" id="cInladen">Excel inladen</button><input type="file" id="cBestand" accept=".xlsx,.xls" hidden>
+        <button type="button" class="knop" id="cExcel">Download Excel</button>
+        <button type="button" class="knop vol" id="cBestel">Bestellijst voor Jazzi</button>
+        <span id="cStand" class="melding"></span>
+      </div>
+      <div class="kop3" id="cKop" style="margin-top:12px"></div>
+    </div>
+    <div class="kaart" id="cCrisisMelding" hidden></div>
+    <div class="kaart"><table class="crisis"><thead id="cKop2"></thead>
+      <tbody id="cLijst"><tr><td colspan="11" class="lead">Overzicht ophalen…</td></tr></tbody></table></div>
+  </div>
 </main>
 <script>
 var W = "https://fonteyn-data-store.g-mulder.workers.dev";
@@ -180,6 +242,225 @@ $("vers").addEventListener("click", function(){ laad(true); });
 $("excel").addEventListener("click", excel);
 $("vast").addEventListener("click", vastleggen);
 (async function(){ for (var i=0;i<20&&!teamKey();i++) await new Promise(function(r){ setTimeout(r,500); }); laad(false); })();
+
+/* ── Crisisoverzicht ─────────────────────────────────────────────────── */
+var crisis = null, cBewaarTimer = null, hoofd = "week";
+try { hoofd = localStorage.getItem("fp.vb.hoofd") || "week"; } catch(e) {}
+function zetHoofd(h){
+  hoofd = h; try { localStorage.setItem("fp.vb.hoofd", h); } catch(e) {}
+  $("hWeek").classList.toggle("aan", h === "week"); $("hCrisis").classList.toggle("aan", h === "crisis");
+  $("vWeek").hidden = h !== "week"; $("vCrisis").hidden = h !== "crisis";
+  if (h === "crisis" && !crisis) cLaad();
+}
+async function cLaad(){
+  try {
+    var r = await fetch(W+"/data/voorraadbepaling-crisis", { headers: kop() });
+    var j = r.ok ? await r.json() : null;
+    crisis = (j && j.rijen) ? j : { rijen: [], pct: 23.2 };
+    cTeken();
+  } catch(e) { $("cLijst").innerHTML = '<tr><td colspan="11" class="lead">'+esc(e.message)+'</td></tr>'; }
+}
+function geld(n){ return "\u20ac " + Math.round(n||0).toLocaleString("nl-NL"); }
+/* De som per uitvoering. Zie de uitleg bovenaan dit bestand. */
+function cReken(x, pct){
+  var V = Number(x.verkocht)||0, U = Number(x.uddel)||0, P = Number(x.productie)||0, J = Number(x.jazzi)||0;
+  var verwacht = V * pct / 100;
+  var N = V > 0 ? Math.ceil(verwacht - 1e-9) : 0;
+  var tekort = Math.max(0, N - U - P);
+  var uitJazzi = Math.min(J, tekort);
+  var inProductie = Math.max(0, N - U - P - J);
+  return { verwacht: verwacht, nodig: N, uitJazzi: uitJazzi, inProductie: inProductie, teveelF: Math.max(0, U - N), teveelJ: J - uitJazzi };
+}
+function cRijen(){
+  var pct = Number(crisis.pct)||0, z = ($("cZoek").value||"").trim().toLowerCase(), actie = $("cActie").checked;
+  return crisis.rijen.map(function(x, i){ return Object.assign({ i: i }, x, cReken(x, pct)); })
+    .filter(function(x){ return !z || String(x.uitvoering).toLowerCase().indexOf(z) >= 0; })
+    .filter(function(x){ return !actie || x.uitJazzi || x.inProductie || x.teveelF || x.teveelJ; });
+}
+/* Crisis zolang er bij Jazzi nog voorraad klaarstaat (Gerrit, 24 okt 2026:
+   "die crisiskolommen moeten eruit nadat de crisis voorbij is"). Daarna
+   alleen nog: nodig, Uddel, in productie en één kolom Bestellen. */
+function cCrisisActief(){ return crisis.rijen.some(function(x){ return (Number(x.jazzi)||0) > 0; }); }
+function cKolommen(){
+  var c = cCrisisActief();
+  return [
+    { k: "uitvoering", t: "Spa uitvoering" }, { k: "verkocht", t: "Verkocht 365 dagen", n: 1 }, { k: "verwacht", t: "Verwacht (" + String(crisis.pct).replace(".", ",") + "%)", n: 1, d: 1 },
+    { k: "nodig", t: "Nodig (afgerond)", n: 1, vet: 1 }, { k: "uddel", t: "Op voorraad Uddel", n: 1, in: 1, euro: 1 }, { k: "productie", t: "In productie Jazzi", n: 1, in: 1, euro: 1 },
+  ].concat(c ? [
+    { k: "jazzi", t: "Klaar bij Jazzi", n: 1, in: 1, euro: 1, crisis: 1 },
+    { k: "uitJazzi", t: "Bestellen uit voorraad Jazzi", sub: "0 + 4 weken", n: 1, cls: "bestel", euro: 1, crisis: 1 },
+    { k: "inProductie", t: "In productie nemen", sub: "8 + 4 weken", n: 1, cls: "bestel", euro: 1, crisis: 1 },
+    { k: "teveelF", t: "Teveel Fonteyn", n: 1, cls: "actie", euro: 1, crisis: 1 },
+    { k: "teveelJ", t: "Teveel Jazzi", n: 1, cls: "actie", euro: 1, crisis: 1 },
+  ] : [
+    { k: "inProductie", t: "Bestellen", sub: "8 + 4 weken", n: 1, cls: "bestel", euro: 1 },
+  ]);
+}
+function cTeken(){
+  $("cPct").value = String(crisis.pct).replace(".", ",");
+  $("cPctUitleg").textContent = crisis.pctUitleg ? "(" + crisis.pctUitleg + ")" : "";
+  var b = crisis.bron;
+  $("cStand").textContent = b ? "Ingeladen: " + b.bestand + " (" + b.blad + "), " + new Date(b.ts).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) + " door " + String(b.door||"").split("@")[0] : "";
+  if (!crisis.rijen.length) { $("cKop").innerHTML = ""; $("cKop2").innerHTML = ""; $("cCrisisMelding").hidden = true; $("cLijst").innerHTML = '<tr><td colspan="11" class="lead">Nog niets ingeladen. Kies Excel inladen en kies het overzicht Verkoop spas samengevoegd.</td></tr>'; return; }
+  var alle = crisis.rijen.map(function(x){ return Object.assign({}, x, cReken(x, Number(crisis.pct)||0)); });
+  var som = function(k, euro){ return alle.reduce(function(n, x){ return n + (Number(x[k])||0) * (euro ? (Number(x.prijs)||0) : 1); }, 0); };
+  var actief = cCrisisActief(), kols = cKolommen();
+  $("cCrisisMelding").hidden = !actief;
+  $("cCrisisMelding").innerHTML = actief ? '<b style="color:#c2410c">Crisis:</b> bij Jazzi staan nog <b>' + nl(som("jazzi"),0) + '</b> spa\'s klaar (' + geld(som("jazzi",1)) + '). Die nemen we eerst af waar we zelf tekort hebben. De oranje kolommen verdwijnen vanzelf zodra Klaar bij Jazzi overal 0 is.' : '';
+  $("cKop").innerHTML =
+    '<div><b>'+nl(som("nodig"),0)+'</b><span>spa\'s nodig de komende periode</span></div>'+
+    (actief ? '<div><b>'+nl(som("uitJazzi"),0)+'</b><span>bestellen uit voorraad Jazzi · '+geld(som("uitJazzi",1))+'</span></div>' : '')+
+    '<div><b>'+nl(som("inProductie"),0)+'</b><span>'+(actief ? 'in productie nemen' : 'bestellen')+' · '+geld(som("inProductie",1))+'</span></div>'+
+    (actief ? '<div><b>'+nl(som("teveelF"),0)+'</b><span>teveel Fonteyn · '+geld(som("teveelF",1))+'</span></div>'+
+              '<div><b>'+nl(som("teveelJ"),0)+'</b><span>teveel Jazzi · '+geld(som("teveelJ",1))+'</span></div>' : '');
+  $("cKop2").innerHTML = '<tr>' + kols.map(function(c){ return '<th class="' + (c.n ? "n" : "") + (c.crisis ? " crisiskol" : "") + '">' + esc(c.t) + (c.sub ? '<small>' + esc(c.sub) + '</small>' : '') + '</th>'; }).join("") + '</tr>';
+  var l = cRijen(), groep = null, h = "", nk = kols.length;
+  var cel = function(x, c){
+    var v = x[c.k];
+    if (c.k === "uitvoering") return '<td data-k="">' + esc(v) + '</td>';
+    if (c.in) return '<td class="n" data-k="' + esc(c.t) + '"><input type="text" inputmode="numeric" data-i="' + x.i + '" data-veld="' + c.k + '" value="' + (Number(v)||0) + '"></td>';
+    var t = nl(v, c.d ? 1 : 0);
+    return '<td class="n" data-k="' + esc(c.t) + '">' + (c.vet ? '<b>' + t + '</b>' : '<span class="' + (Number(v) ? (c.cls||"") : (c.cls ? "nul" : "")) + '">' + t + '</span>') + '</td>';
+  };
+  l.forEach(function(x){
+    if (x.groep !== groep) { groep = x.groep; h += '<tr><td class="groep" colspan="' + nk + '">'+(groep === "zwem" ? "Zwemspa's" : "Spa's")+'</td></tr>'; }
+    h += '<tr>' + kols.map(function(c){ return cel(x, c); }).join("") + '</tr>';
+  });
+  var t = function(k){ return l.reduce(function(n, x){ return n + (Number(x[k])||0); }, 0); };
+  var te = function(k){ return l.reduce(function(n, x){ return n + (Number(x[k])||0) * (Number(x.prijs)||0); }, 0); };
+  h += '<tr class="totaal">' + kols.map(function(c){
+    if (c.k === "uitvoering") return '<td data-k="">Totaal' + (l.length !== alle.length ? " (selectie)" : "") + '</td>';
+    return '<td class="n" data-k="' + esc(c.t) + '">' + nl(t(c.k), 0) + (c.euro ? '<small>' + geld(te(c.k)) + '</small>' : '') + '</td>';
+  }).join("") + '</tr>';
+  $("cLijst").innerHTML = l.length ? h : '<tr><td colspan="' + nk + '" class="lead">Geen regels met deze keuze.</td></tr>';
+  $("cLijst").querySelectorAll("input[data-veld]").forEach(function(inp){
+    inp.addEventListener("change", function(){
+      var x = crisis.rijen[+inp.dataset.i]; if (!x) return;
+      x[inp.dataset.veld] = Math.max(0, Math.round(Number(String(inp.value).replace(",", ".")) || 0));
+      x.aangepast = Object.assign({}, x.aangepast || {}, (function(o){ o[inp.dataset.veld] = { door: ik, ts: new Date().toISOString() }; return o; })({}));
+      cBewaar(); cTeken();
+    });
+  });
+}
+/* Bewaren: de hele lijst, met de verse stand ernaast zodat een collega die
+   tegelijk werkt alleen zijn eigen aanpassing kwijt kan raken als hij exact
+   dezelfde regel aanpast. */
+function cBewaar(){
+  clearTimeout(cBewaarTimer);
+  cBewaarTimer = setTimeout(async function(){
+    try {
+      crisis.updated = new Date().toISOString(); crisis.door = ik;
+      var r = await fetch(W+"/data/voorraadbepaling-crisis", { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, kop()), body: JSON.stringify(crisis) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      $("cStand").textContent = "Bewaard.";
+      try { if (window.fpLog) fpLog("crisis-aangepast", ""); } catch(e) {}
+    } catch(e) { $("cStand").textContent = "Bewaren vraagt nog een poging: " + e.message; }
+  }, 600);
+}
+function laadSheetJs(){
+  if (window.XLSX) return Promise.resolve();
+  return new Promise(function(ok, nee){ var s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload = ok; s.onerror = function(){ nee(new Error("Het Excel-hulpmiddel laden lukte nog niet.")); }; document.head.appendChild(s); });
+}
+/* Het overzicht "Verkoop spas samengevoegd" van Chantal: het blad
+   "Berekening 7 weken" (of het eerste blad met dezelfde koppen).
+   Kolommen: Spa uitvoering, Aantal, Gem. per stuk (inkoop),
+   Vrije voorraad Fonteyn/onderweg, In productie fabriek. In productie
+   fabriek is nu de voorraad die klaar bij Jazzi staat (crisis), dus die
+   komt in Klaar bij Jazzi; In productie Jazzi begint op 0. Het aandeel van
+   nov t/m jan komt uit het blad Verkopen per maand. */
+async function cInlezen(bestand){
+  $("cStand").textContent = "Inlezen…";
+  try {
+    await laadSheetJs();
+    var wb = XLSX.read(await bestand.arrayBuffer(), { type: "array" });
+    var naam = wb.SheetNames.indexOf("Berekening 7 weken") >= 0 ? "Berekening 7 weken" : wb.SheetNames.find(function(n){
+      var a = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "" }); return a[0] && a[0].indexOf("Spa uitvoering") >= 0; });
+    if (!naam) throw new Error("In dit bestand staat geen blad met de kolom Spa uitvoering.");
+    var a = XLSX.utils.sheet_to_json(wb.Sheets[naam], { header: 1, defval: "" });
+    var k = a[0], kol = function(t){ var i = k.findIndex(function(x){ return String(x).trim().toLowerCase() === t.toLowerCase(); }); if (i < 0) throw new Error("Kolom " + t + " ontbreekt in " + naam + "."); return i; };
+    var iU = kol("Spa uitvoering"), iA = kol("Aantal"), iP = kol("Gem. per stuk"), iV = kol("Vrije voorraad Fonteyn/onderweg"), iF = kol("In productie fabriek");
+    var groep = "spa", rijen = [];
+    a.slice(1).forEach(function(r){
+      var n = String(r[iU]||"").trim();
+      if (/^zwemspa/i.test(n) && r[iA] === "") { groep = "zwem"; return; }
+      if (!n || typeof r[iA] !== "number" || /totaal/i.test(n)) return;
+      rijen.push({ uitvoering: n, groep: groep, verkocht: r[iA], prijs: Number(r[iP])||0, uddel: Number(r[iV])||0, productie: 0, jazzi: Number(r[iF])||0 });
+    });
+    if (!rijen.length) throw new Error("Geen spa-regels gevonden in " + naam + ".");
+    var pct = crisis && crisis.pct || 23.2, pctUitleg = crisis && crisis.pctUitleg || "";
+    var m = wb.Sheets["Verkopen per maand"] ? XLSX.utils.sheet_to_json(wb.Sheets["Verkopen per maand"], { header: 1, defval: "" }) : [];
+    var maand = function(re){ var r = m.find(function(x){ return re.test(String(x[0])); }); return r && typeof r[1] === "number" ? r[1] : null; };
+    var tot = rijen.reduce(function(n, x){ return n + x.verkocht; }, 0), nov = maand(/^nov /), dec = maand(/^dec /), jan = maand(/^jan /);
+    if (nov != null && dec != null && jan != null && tot) { pct = Math.round((nov + dec + jan) / tot * 10000) / 100; pctUitleg = "nov t/m jan, uit Verkopen per maand"; }
+    crisis = { rijen: rijen, pct: pct, pctUitleg: pctUitleg, bron: { bestand: bestand.name, blad: naam, ts: new Date().toISOString(), door: ik } };
+    cTeken(); cBewaar();
+    try { if (window.fpLog) fpLog("crisis-ingeladen", bestand.name + ", " + rijen.length + " regels"); } catch(e) {}
+  } catch(e) { $("cStand").textContent = e.message; }
+}
+function csvDownload(naam, kopRij, rijen){
+  var sep = ";", cel = function(v){ return typeof v === "number" ? String(Math.round(v * 100) / 100).replace(".", ",") : '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
+  var regels = [kopRij.map(cel).join(sep)].concat(rijen.map(function(r){ return r.map(cel).join(sep); }));
+  var blob = new Blob(["\ufeff" + regels.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  var el = document.createElement("a"); el.href = URL.createObjectURL(blob); el.download = naam;
+  document.body.appendChild(el); el.click(); el.remove();
+}
+function cExcel(){
+  if (!crisis || !crisis.rijen.length) return;
+  var kols = cKolommen();
+  csvDownload("Bestellen bij Jazzi " + new Date().toISOString().slice(0,10) + ".csv",
+    ["Groep"].concat(kols.map(function(c){ return c.t + (c.sub ? " (" + c.sub + ")" : ""); })).concat(["Inkoopprijs per stuk"]),
+    cRijen().map(function(x){ return [x.groep === "zwem" ? "Zwemspa" : "Spa"].concat(kols.map(function(c){ return c.k === "verwacht" ? Math.round(x.verwacht * 10) / 10 : x[c.k]; })).concat([x.prijs]); }));
+}
+/* De bestellijst voor Jazzi: alleen wat besteld moet worden, per uitvoering.
+   Tijdens de crisis in twee delen: eerst wat Jazzi al klaar heeft staan
+   (meteen verschepen), dan wat in productie moet. */
+function cBestellijst(){
+  if (!crisis || !crisis.rijen.length) return;
+  var actief = cCrisisActief(), pct = Number(crisis.pct)||0;
+  var l = crisis.rijen.map(function(x){ return Object.assign({}, x, cReken(x, pct)); }).filter(function(x){ return x.uitJazzi || x.inProductie; });
+  var stuks = function(k){ return l.reduce(function(n, x){ return n + (x[k]||0); }, 0); };
+  var euro = function(k){ return l.reduce(function(n, x){ return n + (x[k]||0) * (Number(x.prijs)||0); }, 0); };
+  var tabel = function(k, titel){
+    var r = l.filter(function(x){ return x[k] > 0; });
+    if (!r.length) return "";
+    return '<h4 style="margin:14px 0 6px;color:#144734">' + esc(titel) + ' <span style="font-weight:500;color:#6b7280">' + nl(stuks(k),0) + ' spa\'s · ' + geld(euro(k)) + '</span></h4>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">' + r.map(function(x){ return '<tr><td style="padding:4px 6px;border-bottom:1px solid #f0efe8">' + esc(x.uitvoering) + '</td><td style="padding:4px 6px;border-bottom:1px solid #f0efe8;text-align:right"><b>' + x[k] + '</b></td></tr>'; }).join("") + '</table>';
+  };
+  var inhoud = actief
+    ? tabel("uitJazzi", "Uit de voorraad bij Jazzi, meteen verschepen") + tabel("inProductie", "In productie nemen")
+    : tabel("inProductie", "Bestellen");
+  var laag = document.createElement("div");
+  laag.style.cssText = "position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 14px;overflow:auto";
+  laag.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;padding:18px 20px;box-shadow:0 18px 50px rgba(0,0,0,.25)">' +
+    '<h3 style="margin:0 0 4px;color:#144734">Bestellijst voor Jazzi</h3><p class="lead" style="margin:0">Stand ' + new Date().toLocaleDateString("nl-NL") + ', verwachte verkoop ' + String(pct).replace(".", ",") + '% van de jaarverkoop.</p>' +
+    (inhoud || '<p>Er hoeft nu niets besteld te worden.</p>') +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap"><button type="button" class="knop" data-x="dicht">Sluiten</button>' +
+    (l.length ? '<button type="button" class="knop vol" data-x="excel">Download als Excel</button>' : '') + '</div></div>';
+  document.body.appendChild(laag);
+  var dicht = function(){ laag.remove(); };
+  laag.addEventListener("mousedown", function(e){ if (e.target === laag) dicht(); });
+  laag.querySelector('[data-x="dicht"]').onclick = dicht;
+  var ex = laag.querySelector('[data-x="excel"]');
+  if (ex) ex.onclick = function(){
+    csvDownload("Bestellijst Jazzi " + new Date().toISOString().slice(0,10) + ".csv",
+      actief ? ["Spa uitvoering", "Uit voorraad Jazzi (verschepen)", "In productie nemen", "Inkoopprijs per stuk"] : ["Spa uitvoering", "Bestellen", "Inkoopprijs per stuk"],
+      l.map(function(x){ return actief ? [x.uitvoering, x.uitJazzi, x.inProductie, x.prijs] : [x.uitvoering, x.inProductie, x.prijs]; }));
+    try { if (window.fpLog) fpLog("bestellijst-jazzi", stuks("uitJazzi") + " uit voorraad, " + stuks("inProductie") + " productie"); } catch(e) {}
+  };
+}
+$("hWeek").addEventListener("click", function(){ zetHoofd("week"); });
+$("hCrisis").addEventListener("click", function(){ zetHoofd("crisis"); });
+$("cZoek").addEventListener("input", function(){ if (crisis) cTeken(); });
+$("cActie").addEventListener("change", function(){ if (crisis) cTeken(); });
+$("cPct").addEventListener("change", function(){ var v = Number(String(this.value).replace(",", ".")); if (!(v > 0 && v <= 100)) { this.value = String(crisis.pct).replace(".", ","); return; } crisis.pct = v; crisis.pctUitleg = "met de hand"; cTeken(); cBewaar(); });
+$("cInladen").addEventListener("click", async function(){
+  if (crisis && crisis.rijen.length && !(await fpBevestig("Een nieuw overzicht inladen? De lijst en de aanpassingen die er nu staan worden vervangen.", { knop: "Inladen" }))) return;
+  $("cBestand").click();
+});
+$("cBestand").addEventListener("change", function(){ if (this.files[0]) cInlezen(this.files[0]); this.value = ""; });
+$("cExcel").addEventListener("click", cExcel);
+$("cBestel").addEventListener("click", cBestellijst);
+zetHoofd(hoofd);
 </script>
 <script>
 (function(){

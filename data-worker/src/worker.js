@@ -158,6 +158,7 @@ const ALLOWED_BUCKETS = new Set([
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
   "herinneringen-log",
   "voorraadbepaling",    // Voorraadbepaling: verkoop per model (12 mnd) naast de open inkooporders, zes uur geldig
+  "voorraadbepaling-crisis", // Voorraadbepaling, tabblad Crisisoverzicht: ingeladen Excel per uitvoering + handmatige aanpassingen (Gerrit, 24 okt 2026)
   "maand-werk",          // Maandcontrole (proef): per maand en rekening wie wat heeft nagekeken en wat de verklaring is
   "maand-cache",         // Maandcontrole (proef): de saldi per rekening per maand uit Logic4, een uur geldig
   "maand-instellingen",  // Maandcontrole (proef): welke rekeningen tussenrekeningen zijn, intern, bank
