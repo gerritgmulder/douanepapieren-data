@@ -149,7 +149,7 @@ table.crisis small.som{display:block;color:var(--grijs);font-size:10.5px}
   </div>
   <div id="vCrisis" hidden>
     <div class="kaart">
-      <p class="lead">Per uitvoering: wat we de komende periode nodig hebben, wat er al ligt, wat we nog moeten bestellen en wat er te veel is. Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad die bij Jazzi klaarstaat nemen we alleen af als we zelf tekort hebben. Elke bestelling dekt alleen de verkoop tot de volgende bestelling binnen kan zijn (we bestellen elke 2 weken), op het tempo van dezelfde maanden vorig jaar. Wat later nodig is, bestel je over twee weken. De groene vakjes bij bestellen tonen de som; typ er een ander getal in om het met de hand bij te stellen (oranje), maak het leeg om terug te gaan naar de som. De bestellijst neemt jullie getallen over.</p>
+      <p class="lead">Per uitvoering: wat we de komende periode nodig hebben, wat er al ligt, wat we nog moeten bestellen en wat er te veel is. Eerst het probleem van Fonteyn, dan dat van Jazzi: voorraad die bij Jazzi klaarstaat nemen we alleen af als we zelf tekort hebben. Elke bestelling dekt alleen de verkoop tot de volgende bestelling binnen kan zijn (Chantal bestelt elke week), op het tempo van dezelfde maanden vorig jaar. Wat later nodig is, bestel je een volgende week. De groene vakjes bij bestellen tonen de som; typ er een ander getal in om het met de hand bij te stellen (oranje), maak het leeg om terug te gaan naar de som. De bestellijst neemt jullie getallen over.</p>
       <div class="balk">
         <label style="font-size:12.5px">Verwachte verkoop komende periode: <input type="text" id="cPct" inputmode="decimal" style="width:64px;border:1px solid var(--rand);border-radius:8px;padding:6px 8px;font:inherit;text-align:right">% van de jaarverkoop <span class="min" id="cPctUitleg"></span></label>
         <label style="font-size:12.5px">Levertijd uit voorraad Jazzi <input type="text" class="cTijd" data-t="lj" inputmode="numeric"> dagen · uit productie <input type="text" class="cTijd" data-t="lp" inputmode="numeric"> dagen · bestellen elke <input type="text" class="cTijd" data-t="r" inputmode="numeric"> dagen</label>
@@ -288,7 +288,7 @@ function geld(n){ return "\u20ac " + Math.round(n||0).toLocaleString("nl-NL"); }
      teveel Jazzi      = wat bij Jazzi staat en ook binnen de levertijd van
                          productie niet nodig is
    Over twee weken rekent dezelfde som opnieuw met de verse stand. */
-var C_STD = { lj: 34, lp: 90, r: 14 };   // 4 weken + 6 dagen; 8 + 4 weken + 6 dagen; elke 2 weken
+var C_STD = { lj: 34, lp: 90, r: 7 };    // 4 weken + 6 dagen; 8 + 4 weken + 6 dagen; Chantal bestelt elke week (24 okt 2026)
 function cTijden(){ var t = (crisis && crisis.tijden) || {}; return { lj: Number(t.lj) || C_STD.lj, lp: Number(t.lp) || C_STD.lp, r: Number(t.r) || C_STD.r }; }
 function cVandaag(){ var d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
 function cPlus(dagen){ var d = cVandaag(); d.setUTCDate(d.getUTCDate() + dagen); return d; }
