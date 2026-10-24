@@ -364,11 +364,13 @@ function dpMailShell(env, url, binnen) {
   return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f2" style="background:#f4f4f2;">' +
     '<tr><td align="center" style="padding:28px 12px;">' +
     '<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:560px;max-width:100%;background:#ffffff;border:1px solid #e6e6e3;border-radius:14px;">' +
-    // Het logo als tekst: in Outlook wordt een plaatje standaard geblokkeerd.
-    '<tr><td align="center" style="padding:24px 30px 18px;border-bottom:3px solid #c8102e;' + lettertype + '">' +
-    '<span style="font-size:30px;font-weight:bold;letter-spacing:3px;color:#111111;">passion</span>' +
-    '<br><span style="font-size:13px;color:#c8102e;font-weight:bold;letter-spacing:2px;">SPAS</span>' +
-    '<span style="font-size:13px;color:#9ca3af;"> &nbsp;|&nbsp; love your senses</span></td></tr>' +
+    /* Het echte Passion-logo (Gerrit, 16 okt 2026: "Gebruik ons eigen Passion
+       logo! Bij alle emails die verzonden worden!"; voorbeelden goedgekeurd
+       23 okt 2026). Hij reist mee als ingebedde afbeelding (cid), zodat hij er
+       meteen staat, ook in Outlook, zonder eerst op "afbeeldingen downloaden"
+       te klikken. dpSendEmail hangt het bestand eraan zodra het in de mail staat. */
+    '<tr><td align="center" style="padding:26px 30px 20px;border-bottom:3px solid #c8102e;' + lettertype + '">' +
+    PP_LOGO_IMG + '</td></tr>' +
     '<tr><td style="padding:26px 30px;color:#1f2937;font-size:15px;line-height:24px;' + lettertype + '"><!--pp-binnen-->' + dpMailKnoppen(binnen) + '<!--/pp-binnen--></td></tr>' +
     '<tr><td align="center" style="padding:16px 30px 24px;border-top:1px solid #eeeeec;color:#9ca3af;font-size:12px;line-height:20px;' + lettertype + '">' +
     'Passion Partners<br><a href="' + dpPad(env, url) + '" style="color:#c8102e;text-decoration:none;">' + site + '</a>' +
@@ -444,6 +446,14 @@ async function dpCcAdviseur(env, email) {
   try { return dpAdviseurVan(await dpGetAccounts(env), email); } catch (e) { return null; }
 }
 
+const PP_LOGO_CID = "passion-logo";
+const PP_LOGO_IMG = '<img src="cid:' + PP_LOGO_CID + '" width="230" height="72" alt="Passion Spas - love your senses" ' +
+  'style="display:block;width:230px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:bold;color:#111111">';
+// Hangt het logo als ingebedde afbeelding aan een Resend-bericht als de mail ernaar verwijst.
+function ppLogoBijlage(html, bijlagen) {
+  if (!String(html || "").includes("cid:" + PP_LOGO_CID)) return bijlagen;
+  return (bijlagen || []).concat([{ filename: "passion-logo.png", content: DP_LOGO_B64, content_id: PP_LOGO_CID }]);
+}
 const PP_ENGELS_KOP = '<div style="margin:30px 0 16px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;letter-spacing:1px;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif">English version</div>';
 async function dpSendEmail(env, to, subject, html, replyTo, cc, vanNaam) {
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) {
@@ -472,6 +482,8 @@ async function dpSendEmail(env, to, subject, html, replyTo, cc, vanNaam) {
      niet van "Passion Partners" te komen; dat is het portaal voor dealers. */
   const vanAdres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
   const body = { from: vanNaam ? vanNaam + " <" + vanAdres + ">" : env.MAIL_FROM, to: [String(to).toLowerCase()], subject, html };
+  const logo = ppLogoBijlage(html, []);
+  if (logo.length) body.attachments = logo;
   if (replyTo) body.reply_to = [replyTo];
   /* De adviseur in cc. Meerdere adressen mogen, dubbele en het eigen adres
      gaan eruit - Resend weigert een cc die gelijk is aan de ontvanger. */
@@ -9550,6 +9562,17 @@ async function pcOrderLive(env, nr) {
   } catch (e) { return null; }
 }
 function pcVul(s, w) { return String(s || "").replace(/\{(\w+)\}/g, (m, k) => (w[k] != null ? String(w[k]) : m)); }
+/* De Passion-kaart om een containermail aan een dealer: hetzelfde kader, logo
+   en rode streep als de mails van Passion Partners (goedgekeurd 23 okt 2026).
+   De mails aan Jazzi blijven zonder. */
+function pcMailKaart(binnen) {
+  const lt = "font-family:Arial,Helvetica,sans-serif;";
+  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f2" style="background:#f4f4f2;">' +
+    '<tr><td align="center" style="padding:28px 12px;">' +
+    '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:600px;max-width:100%;background:#ffffff;border:1px solid #e6e6e3;border-radius:14px;">' +
+    '<tr><td align="center" style="padding:26px 30px 20px;border-bottom:3px solid #c8102e;' + lt + '">' + PP_LOGO_IMG + '</td></tr>' +
+    '<tr><td style="padding:24px 30px 28px;color:#1f2937;' + lt + '">' + binnen + '</td></tr></table></td></tr></table>';
+}
 function pcMailHtml(tekst, groet) {
   const e = (x) => String(x == null ? "" : x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   /* Witregel = nieuwe alinea, enter = <br>. Outlook negeert white-space:pre-line
@@ -9682,6 +9705,8 @@ async function pcHandle(request, env, url) {
       const en = teksten()[soort].en;
       html += PP_ENGELS_KOP + pcMailHtml(pcVul(en.tekst, vulWaarden("en")), PC_GROET.en);
     }
+    // Dealers krijgen de Passion-kaart met het logo; de mails aan Jazzi blijven kaal.
+    if (!naarJazzi) html = pcMailKaart(html);
     if (b.proef) return reply(200, { ok: true, proef: true, naar, cc: ontv.cc, taal, onderwerp, tekst, html, standaardNaar: ontv.naar, bedragUsd });
     /* Een bijlage (de orderbevestiging van Fonteyn) mag mee. Base64, zoals
        Resend hem wil; maximaal ongeveer 10 MB. */
@@ -9704,7 +9729,7 @@ async function pcHandle(request, env, url) {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: naarLijst, cc: cc.length ? cc : undefined,
                              reply_to: /@/.test(wie) ? [wie] : undefined, subject: onderwerp, html,
-                             attachments: bijlage ? [bijlage] : undefined }),
+                             attachments: (() => { const a = ppLogoBijlage(html, bijlage ? [bijlage] : []); return a.length ? a : undefined; })() }),
     });
     const antw = await rr.text();
     if (!rr.ok) return reply(502, { ok: false, error: "Resend: HTTP " + rr.status + " " + antw.slice(0, 160) });
