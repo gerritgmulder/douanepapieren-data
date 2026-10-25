@@ -375,6 +375,11 @@
     "service-monteurs": [
       "dolf", "fonteynbot", "gerrit", "hans.van.putten", "patrick.kroes", "thieme.wennink",
     ],
+    /* Beurs: de uitnodigingscampagne voor Piscine Global Lyon 2026, voor Dolf
+       en Gerrit (25 okt 2026). */
+    "beurs": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
     "urencontrole": [
       "dolf", "fonteynbot", "gerrit", "gerwin",
     ],

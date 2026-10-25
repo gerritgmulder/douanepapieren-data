@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-25", bestand: "beurs.html", soort: "nieuw",
+      titel: "Beurs",
+      wat: "Alles voor Piscine Global Europe in Lyon (17 t/m 20 november, stand 6G16): de punten die nog bevestigd moeten worden om af te vinken, per taal wie nakijkt en hoe ver het is, en Dolfs pitch met de zes koopmotieven." },
+    {
       datum: "2026-10-24", bestand: "voorraadbepaling.html", soort: "beter",
       titel: "Bestellen bij Jazzi: op tijd bestellen",
       wat: "Het bestel-advies kijkt nu naar wanneer je de spa nodig hebt. Uit de voorraad bij Jazzi bestel je alleen wat nodig is tot de volgende bestelling binnen kan zijn; wat pas in januari nodig is, bestel je later. Bij Op voorraad Uddel zie je hoeveel weken de voorraad nog reikt, en boven de bestelkolommen wanneer de spa's binnen zijn. De levertijden en het bestelritme staan bovenaan en zijn aan te passen." },

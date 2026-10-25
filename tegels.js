@@ -66,6 +66,9 @@
       uit:"Productfoto's naar de juiste maat",                     mobiel:"krap", tile:"tileAfbeeldingen" },
     { bestand:"prijslijsten-fabrikanten.html", groep:"prijslijsten", ic:"🗂️", naam:"Leveranciersinformatie",
       uit:"Prijslijsten en afspraken per leverancier",                   mobiel:"krap", tile:"tilePrijslijstenFab" },
+    /* Beurs: Piscine Global Lyon 2026, voor Dolf en Gerrit (25 okt 2026). */
+    { bestand:"beurs.html",          groep:"beurs",            ic:"🎪",  naam:"Beurs",
+      uit:"Piscine Global Lyon: wat nog moet, en de 17 talen",     mobiel:"goed", tile:"tileBeurs" },
     { bestand:"partneractiviteit.html", groep:"partneractiviteit", ic:"📡", naam:"Partner-activiteit",
       uit:"Wat dealers in het portaal doen",                       mobiel:"krap", tile:"tilePartnerActiviteit" },
     { bestand:"koeien.html",         groep:"koeien",           ic:"🐄",  naam:"Koeien bij Dolf",

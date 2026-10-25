@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("beurs", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor Dolf en Gerrit.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beurs - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ═════════════════════════════════════════════════════════════════
+     BEURS - de uitnodigingscampagne voor Piscine Global Europe 2026
+
+     Gerrit (25 okt 2026): "Maak een nieuwe tegel voor Dolf en mij: Beurs.
+     En maak hem aan de hand van bijgaand document." Het document is de
+     README van de campagne (Formulemap maken/Passion/README.md): de beurs
+     in Lyon, Dolfs elevator pitch, de zes koopmotieven, 17 talen met kop en
+     onderwerpregels, en negen punten die vóór verzending of druk bevestigd
+     moeten worden.
+
+     De vaste inhoud staat hieronder in BEURS. Wat Dolf en Gerrit bijhouden
+     (afvinken, status per taal, wie heeft nagelezen, notities) staat in de
+     bucket "beurs", voor allebei hetzelfde.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --rood:#c8102e; --rood-d:#9d0c24; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f6f5f2; --groen:#15803d; --oranje:#c2410c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:#111;color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:3px solid var(--rood)}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1180px;margin:0 auto;padding:16px 16px 60px}
+.held{background:#fff;border:1px solid var(--rand);border-radius:14px;padding:18px 20px;margin-bottom:14px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center}
+.held h2{margin:0 0 4px;font-size:20px}
+.held .waar{color:var(--grijs);font-size:13.5px;line-height:1.5}
+.held .stand{display:inline-block;background:var(--rood);color:#fff;font-weight:700;border-radius:8px;padding:3px 10px;margin-top:6px}
+.aftel{text-align:center;background:#fff5f5;border:1px solid #fecaca;border-radius:12px;padding:12px 18px;min-width:150px}
+.aftel b{display:block;font-size:34px;color:var(--rood);line-height:1}
+.aftel span{font-size:12px;color:var(--grijs)}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--rand);margin-bottom:14px;flex-wrap:wrap}
+.tab{background:transparent;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:9px 14px;font:inherit;font-weight:600;font-size:14px;color:var(--grijs);cursor:pointer;white-space:nowrap}
+.tab.aan{color:var(--rood);border-bottom-color:var(--rood)}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:16px 18px;margin-bottom:12px}
+.kaart h3{margin:0 0 10px;font-size:15px}
+.lead{color:var(--grijs);font-size:13px;line-height:1.55;margin:0 0 10px}
+.pitch{font-size:22px;font-weight:700;line-height:1.25;margin:0 0 8px}
+.citaat{border-left:4px solid var(--rood);padding:4px 0 4px 14px;margin:10px 0;font-size:14.5px;line-height:1.55}
+.motieven{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.motief{border:1px solid var(--rand);border-radius:10px;padding:12px 14px}
+.motief b{display:block;margin-bottom:4px}
+.motief span{font-size:13px;color:var(--grijs);line-height:1.5}
+.punt{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #f0efe8;align-items:flex-start}
+.punt:last-child{border-bottom:0}
+.punt input[type=checkbox]{width:22px;height:22px;flex:0 0 auto;margin-top:2px;accent-color:var(--groen);cursor:pointer}
+.punt .tekst{flex:1;min-width:0}
+.punt .tekst b{display:block;margin-bottom:3px}
+.punt .tekst span{font-size:13px;color:var(--grijs);line-height:1.5;display:block}
+.punt.af .tekst b{color:var(--groen)}
+.punt textarea{width:100%;margin-top:6px;font:inherit;font-size:13px;border:1px solid var(--rand);border-radius:8px;padding:7px 9px;min-height:36px;resize:vertical}
+.punt .wie{font-size:11.5px;color:var(--groen);margin-top:4px}
+.voortgang{height:8px;background:#eee;border-radius:999px;overflow:hidden;margin:6px 0 2px}
+.voortgang span{display:block;height:100%;background:var(--groen)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--rand)}
+td{padding:8px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+td.taal{font-weight:700;white-space:nowrap}
+td small{display:block;color:var(--grijs);font-size:11.5px;margin-top:2px}
+select,input[type=text]{font:inherit;font-size:13px;border:1px solid var(--rand);border-radius:8px;padding:6px 8px;background:#fff;max-width:100%}
+.st-concept{color:var(--grijs)}.st-nalezen{color:var(--oranje);font-weight:700}.st-klaar{color:var(--groen);font-weight:700}.st-verzonden{color:#1d4ed8;font-weight:700}
+.tellers{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.teller{border:1px solid var(--rand);border-radius:999px;padding:4px 12px;font-size:12.5px;background:#fff}
+.melding{font-size:12.5px;color:var(--groen);min-height:1em}
+#fout{color:var(--rood);font-weight:600;margin-bottom:10px}
+@media (max-width:760px){
+  .held{grid-template-columns:1fr}
+  table.talen thead{display:none}
+  table.talen, table.talen tbody, table.talen tr, table.talen td{display:block;width:100%}
+  table.talen tr{border:1px solid var(--rand);border-radius:10px;margin-bottom:8px;padding:6px 8px}
+  table.talen td{border:0;padding:4px 2px}
+}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🎪 Beurs</h1>
+</header>
+<main>
+  <div id="fout"></div>
+  <div class="held">
+    <div>
+      <h2>Piscine Global Europe 2026</h2>
+      <div class="waar">Eurexpo Lyon (Chassieu, Frankrijk) · dinsdag 17 t/m vrijdag 20 november 2026<br>
+        Gratis badge voor bezoekers: <a href="https://pass.piscine-global.com/" target="_blank" rel="noopener">pass.piscine-global.com</a><br>
+        Uitnodiging aan ca. 6.500 zakelijke contacten in Europa, in 17 talen</div>
+      <span class="stand">Hal 6 · stand 6G16</span>
+    </div>
+    <div class="aftel"><b id="dagen">-</b><span id="dagenTekst">dagen tot de beurs</span></div>
+  </div>
+  <div class="tabs" id="tabs">
+    <button class="tab aan" type="button" data-tab="lijst">Nog te bevestigen</button>
+    <button class="tab" type="button" data-tab="talen">17 talen</button>
+    <button class="tab" type="button" data-tab="pitch">Pitch en koopmotieven</button>
+  </div>
+  <section id="t-lijst"></section>
+  <section id="t-talen" hidden></section>
+  <section id="t-pitch" hidden></section>
+  <p class="melding" id="stand"></p>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+function kop(){ return { "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }; }
+
+/* De vaste inhoud, uit de README van de campagne (stand 23-25 okt 2026). */
+var BEURS = {
+  pitchKop: "The easiest spas to sell. At the best margin.",
+  pitchNl: "De makkelijkst verkopende spa's. Met de beste marge.",
+  pitchIntro: "We believe Passion Spas has the finest sales system in the world for selling spas: easier, with a better margin. 50 spa models and a presentation full of unique features speak to every buying motive. Whatever brings a customer into your store, you always have the right story.",
+  slogan: "Sell the most spas, at the best margin, the easiest way.",
+  motieven: [
+    ["Status", "De kubische Modern-collectie, Exclusive Mighty Wave, LED, watervallen, Bluetooth."],
+    ["Energie-efficiëntie", "Hybrid Heating, All-Weather-warmtepomp (tot −20 °C, kan ook koelen), drievoudige isolatie, dikke beloopbare cover."],
+    ["Gemak", "Synergy met 100% filtratie, ozon, UV-C (alleen Signature/Exclusive), programmeerbare filtertijden, onderhoudsvrije ombouw."],
+    ["Massageprestaties", "Met fysiotherapeuten ontwikkeld: Soft Tissue, Lumbar Support, Aqua Rolling, Neck Relief en het Levitation Bed; River Swim System in zwemspa's."],
+    ["Bouwkwaliteit en levensduur", "Acryl kuip met handgelamineerde vinylester, kunststof of geïmpregneerd frame, Everlast-bodemondersteuning, Balboa-besturing."],
+    ["Service", "1000+ spa's op voorraad in Uddel, originele onderdelen, productsupport zolang de klant de spa heeft, 35+ jaar retailervaring."],
+  ],
+  regels: [
+    "\"50 spa-modellen\" is Dolfs eigen getal en staat in elke taal.",
+    "Er worden geen margepercentages, prijzen, kortingen of garanties genoemd.",
+    "\"De beste verkoopsystematiek ter wereld\" en \"betere marge\" staan als overtuiging (\"We believe…\").",
+    "De merknaam is overal \"Passion Spas\".",
+  ],
+  punten: [
+    { k: "stand", t: "Standnummer 6G16, hal 6", d: "Komt uit het exposantenportaal Piscine Connect (23-10-2026). Controleer het in het exposantencontract. \"Passion Ice Baths\" en een tweede vermelding van \"Passion Spas\" staan zonder standnummer in de lijst." },
+    { k: "tijden", t: "Sluitingstijd donderdag 19 november: 21.00 of 18.00 uur?", d: "De beurssite noemt 21.00 uur, GL Events noemt 18.00 uur. Alle versies tonen nu 21.00 uur. Wordt het 18.00 uur, dan moeten alle 17 talen opnieuw gebouwd worden." },
+    { k: "aanbieding", t: "Beursaanbieding", d: "In elke flyer en e-mail staat een gemarkeerd blok voor een beursaanbieding. Invullen of weghalen. Garanties, prijzen en kortingen staan bewust nergens." },
+    { k: "beeld", t: "Beeldrechten", d: "Alleen eigen beelden van de sites van Passion Spas en Fonteyn. Bevestig de rechten op de lifestylefoto's met herkenbare personen en op de foto's van de showroom." },
+    { k: "avg", t: "AVG en afmelden", d: "Alleen versturen naar contacten met een geldige grondslag. De afmeldtag van het verzendprogramma invullen, per taal een segment op land of taal, en 6.500 adressen in batches." },
+    { k: "contact", t: "Contact voor afspraken", d: "De e-mail zegt \"reply to this email\": het antwoordadres moet gelezen worden. De flyer noemt +31 577 456 040 en passionspas.com. Een aparte dealer-e-mail of boekingslink volgt eventueel nog." },
+    { k: "claims", t: "Claims", d: "\"'s Werelds grootste spashowroom\" als trots, 1000+ spa's op voorraad, UV-C alleen bij Signature en Exclusive, 35+ jaar ervaring (sinds 1989), \"een groeiend internationaal dealernetwerk\": bevestig \"groeiend\". Eventueel juridisch laten toetsen." },
+    { k: "vertaling", t: "Vertalingen laten nalezen", d: "Behalve Engels en Nederlands zijn alle talen machinevertalingen. Per taal laten nalezen door een moedertaalspreker: onderwerpregels, aanhef en vakwoorden. De stand per taal staat in het tabblad 17 talen." },
+    { k: "test", t: "Testmails", d: "Per taal een testmail in Outlook, Gmail en Apple Mail, en nakijken of de afbeeldingen goed zijn geüpload." },
+  ],
+  talen: [
+    ["en", "Engels", "The easiest spas to sell. At the best margin.", "The easiest spas to sell – see why in Lyon (stand 6G16)", "Better margin, easier sales: meet Passion Spas in Lyon", "Masterversie, in het Engels geschreven op basis van Dolfs pitch."],
+    ["fr", "Frans", "Les spas les plus faciles à vendre. Avec la meilleure marge.", "Les spas les plus faciles à vendre : rendez-vous à Lyon (stand 6G16)", "Meilleure marge, vente plus simple : Passion Spas à Lyon", "Vertaald. Laten nalezen door een moedertaalspreker."],
+    ["de", "Duits", "Spas, die sich am leichtesten verkaufen. Mit der besten Marge.", "Spas, die sich am leichtesten verkaufen – in Lyon, Stand 6G16", "Bessere Marge, einfacher verkaufen: Passion Spas in Lyon", "Machinevertaling. Formeel 'Sie'; 'Ticket' voor badge."],
+    ["es", "Spaans", "Los spas más fáciles de vender. Con el mejor margen.", "Los spas más fáciles de vender: descúbralo en Lyon (stand 6G16)", "Mejor margen, venta más fácil: Passion Spas en Lyon", "Machinevertaling."],
+    ["it", "Italiaans", "Le spa più facili da vendere. Con il margine migliore.", "Le spa più facili da vendere: scoprite perché a Lione (stand 6G16)", "Margine migliore, vendita più semplice: Passion Spas a Lione", "Machinevertaling."],
+    ["nl", "Nederlands", "De makkelijkst verkopende spa’s. Met de beste marge.", "De makkelijkst verkopende spa’s: zie het in Lyon (stand 6G16)", "Betere marge, makkelijker verkopen: Passion Spas in Lyon", "In het Nederlands geschreven. Kort laten nalezen."],
+    ["pl", "Pools", "Spa, które sprzedają się najłatwiej. Z najlepszą marżą.", "Spa, które sprzedają się najłatwiej: Lyon, stoisko 6G16", "Lepsza marża, łatwiejsza sprzedaż: Passion Spas w Lyonie", "Machinevertaling. Formeel 'Państwo'."],
+    ["cs", "Tsjechisch", "Vířivky, které se prodávají nejsnáz. S nejlepší marží.", "Vířivky, které se prodávají nejsnáz: Lyon, stánek 6G16", "Lepší marže, snazší prodej: Passion Spas v Lyonu", "Machinevertaling. 'Vířivky' voor spa's, 'plavecké spa' voor zwemspa's."],
+    ["hu", "Hongaars", "A legkönnyebben eladható spák. A legjobb árréssel.", "A legkönnyebben eladható spák – Lyon, 6G16-os stand", "Jobb árrés, könnyebb eladás: Passion Spas Lyonban", "Machinevertaling. Formeel 'Ön'."],
+    ["ro", "Roemeens", "Spa-urile cel mai ușor de vândut. Cu cea mai bună marjă.", "Spa-urile cel mai ușor de vândut: Lyon, standul 6G16", "Marjă mai bună, vânzare mai ușoară: Passion Spas la Lyon", "Machinevertaling."],
+    ["bg", "Bulgaars", "Най-лесните за продажба спа вани. С най-добрия марж.", "Най-лесните за продажба спа вани: Лион, щанд 6G16", "По-добър марж, по-лесни продажби: Passion Spas в Лион", "Machinevertaling. Cyrillisch."],
+    ["el", "Grieks", "Τα πιο εύκολα spa στην πώληση. Με το καλύτερο περιθώριο.", "Τα πιο εύκολα spa στην πώληση: Λυών, περίπτερο 6G16", "Καλύτερο περιθώριο, ευκολότερες πωλήσεις: Passion Spas στη Λυών", "Machinevertaling. Eigen Grieks lettertype."],
+    ["pt", "Portugees (PT)", "Os spas mais fáceis de vender. Com a melhor margem.", "Os spas mais fáceis de vender: veja porquê em Lyon (stand 6G16)", "Melhor margem, venda mais fácil: Passion Spas em Lyon", "Machinevertaling (Europees Portugees); voor Brazilië aanpassen."],
+    ["sv", "Zweeds", "De enklaste spabaden att sälja. Med bäst marginal.", "De enklaste spabaden att sälja – se varför i Lyon (monter 6G16)", "Bättre marginal, enklare försäljning: Passion Spas i Lyon", "Machinevertaling."],
+    ["no", "Noors (bokmål)", "De enkleste spabadene å selge. Med best margin.", "De enkleste spabadene å selge – se hvorfor i Lyon (stand 6G16)", "Bedre margin, enklere salg: Passion Spas i Lyon", "Machinevertaling (bokmål)."],
+    ["da", "Deens", "De nemmeste spabade at sælge. Med den bedste avance.", "De nemmeste spabade at sælge – se hvorfor i Lyon (stand 6G16)", "Bedre avance, nemmere salg: Passion Spas i Lyon", "Machinevertaling. 'Holland' voor Nederland."],
+    ["fi", "Fins", "Helpoimmin myytävät porealtaat. Parhaalla katteella.", "Helpoimmin myytävät porealtaat – katso miksi Lyonissa (osasto 6G16)", "Parempi kate, helpompi myynti: Passion Spas Lyonissa", "Machinevertaling. 'Poreallas' voor spa."],
+  ],
+};
+var STATUS = [["concept", "Concept"], ["nalezen", "Bij de nalezer"], ["klaar", "Nagelezen, klaar"], ["verzonden", "Verzonden"]];
+var data = { punten: {}, talen: {} }, tab = "lijst", bewaarTimer = null;
+try { tab = sessionStorage.getItem("beurs.tab") || "lijst"; } catch(e) {}
+
+function aftellen(){
+  var nu = new Date(); nu.setHours(0,0,0,0);
+  var d = Math.round((new Date(2026, 10, 17) - nu) / 864e5);
+  $("dagen").textContent = d > 0 ? d : (d > -4 ? "nu" : "-");
+  $("dagenTekst").textContent = d > 0 ? (d === 1 ? "dag tot de beurs" : "dagen tot de beurs") : (d > -4 ? "de beurs loopt" : "de beurs is geweest");
+}
+function wieTekst(o){ return o && o.door ? String(o.door).split("@")[0] + ", " + new Date(o.ts).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : ""; }
+function tekenLijst(){
+  var af = BEURS.punten.filter(function(p){ return (data.punten[p.k]||{}).af; }).length;
+  $("t-lijst").innerHTML = '<div class="kaart"><h3>Nog te bevestigen vóór verzending of druk</h3>' +
+    '<p class="lead">' + af + ' van de ' + BEURS.punten.length + ' punten afgevinkt. Vink af wat geregeld is; zet erbij wat er is afgesproken.</p>' +
+    '<div class="voortgang"><span style="width:' + Math.round(af / BEURS.punten.length * 100) + '%"></span></div>' +
+    BEURS.punten.map(function(p, i){
+      var s = data.punten[p.k] || {};
+      return '<div class="punt' + (s.af ? " af" : "") + '"><input type="checkbox" data-punt="' + p.k + '"' + (s.af ? " checked" : "") + ' aria-label="' + esc(p.t) + '">' +
+        '<div class="tekst"><b>' + (i + 1) + '. ' + esc(p.t) + '</b><span>' + esc(p.d) + '</span>' +
+        '<textarea data-notitie="' + p.k + '" placeholder="Wat is er afgesproken?">' + esc(s.notitie || "") + '</textarea>' +
+        (s.af ? '<div class="wie">Afgevinkt door ' + esc(wieTekst(s)) + '</div>' : '') + '</div></div>';
+    }).join("") + '</div>';
+  $("t-lijst").querySelectorAll("[data-punt]").forEach(function(c){ c.onchange = function(){ var s = data.punten[c.dataset.punt] = data.punten[c.dataset.punt] || {}; s.af = c.checked; s.door = ik; s.ts = new Date().toISOString(); bewaar(true); tekenLijst(); }; });
+  $("t-lijst").querySelectorAll("[data-notitie]").forEach(function(t){ t.oninput = function(){ var s = data.punten[t.dataset.notitie] = data.punten[t.dataset.notitie] || {}; s.notitie = t.value; bewaar(false); }; });
+}
+function tekenTalen(){
+  var tel = {}; STATUS.forEach(function(s){ tel[s[0]] = 0; });
+  BEURS.talen.forEach(function(t){ tel[(data.talen[t[0]]||{}).status || "concept"]++; });
+  $("t-talen").innerHTML = '<div class="kaart"><h3>Stand per taal</h3>' +
+    '<div class="tellers">' + STATUS.map(function(s){ return '<span class="teller"><b>' + tel[s[0]] + '</b> ' + esc(s[1].toLowerCase()) + '</span>'; }).join("") + '</div>' +
+    '<p class="lead">Per taal: de kop van de flyer, de twee onderwerpregels voor de e-mail, wie nakijkt en hoe ver het is.</p>' +
+    '<table class="talen"><thead><tr><th>Taal</th><th>Kop en onderwerpregels</th><th>Nalezer</th><th>Stand</th></tr></thead><tbody>' +
+    BEURS.talen.map(function(t){
+      var s = data.talen[t[0]] || {}, st = s.status || "concept";
+      return '<tr><td class="taal">' + esc(t[1]) + '<small>' + esc(t[0]) + '</small></td>' +
+        '<td><b>' + esc(t[2]) + '</b><small>A: ' + esc(t[3]) + '</small><small>B: ' + esc(t[4]) + '</small><small style="color:#9ca3af">' + esc(t[5]) + '</small></td>' +
+        '<td><input type="text" data-nalezer="' + t[0] + '" value="' + esc(s.nalezer || "") + '" placeholder="naam"></td>' +
+        '<td><select data-status="' + t[0] + '" class="st-' + st + '">' + STATUS.map(function(x){ return '<option value="' + x[0] + '"' + (x[0] === st ? " selected" : "") + '>' + esc(x[1]) + '</option>'; }).join("") + '</select>' +
+        (s.door ? '<small>' + esc(wieTekst(s)) + '</small>' : '') + '</td></tr>';
+    }).join("") + '</tbody></table></div>';
+  $("t-talen").querySelectorAll("[data-status]").forEach(function(sel){ sel.onchange = function(){ var s = data.talen[sel.dataset.status] = data.talen[sel.dataset.status] || {}; s.status = sel.value; s.door = ik; s.ts = new Date().toISOString(); bewaar(true); tekenTalen(); }; });
+  $("t-talen").querySelectorAll("[data-nalezer]").forEach(function(inp){ inp.oninput = function(){ var s = data.talen[inp.dataset.nalezer] = data.talen[inp.dataset.nalezer] || {}; s.nalezer = inp.value; bewaar(false); }; });
+}
+function tekenPitch(){
+  $("t-pitch").innerHTML = '<div class="kaart"><h3>Dolfs elevator pitch</h3>' +
+    '<p class="pitch">' + esc(BEURS.pitchKop) + '</p><p class="lead">' + esc(BEURS.pitchNl) + '</p>' +
+    '<div class="citaat">' + esc(BEURS.pitchIntro) + '</div>' +
+    '<p class="lead" style="margin-top:12px"><b>Slogan:</b> ' + esc(BEURS.slogan) + '</p>' +
+    '<ul class="lead" style="padding-left:18px">' + BEURS.regels.map(function(r){ return '<li>' + esc(r) + '</li>'; }).join("") + '</ul></div>' +
+    '<div class="kaart"><h3>De zes koopmotieven</h3><p class="lead">Elk motief met de echte features waarop het steunt.</p><div class="motieven">' +
+    BEURS.motieven.map(function(m, i){ return '<div class="motief"><b>' + (i + 1) + '. ' + esc(m[0]) + '</b><span>' + esc(m[1]) + '</span></div>'; }).join("") + '</div></div>';
+}
+function teken(){
+  document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
+  ["lijst", "talen", "pitch"].forEach(function(t){ $("t-" + t).hidden = t !== tab; });
+  tekenLijst(); tekenTalen(); tekenPitch();
+}
+function bewaar(meteen){
+  clearTimeout(bewaarTimer);
+  bewaarTimer = setTimeout(async function(){
+    try {
+      /* Eerst de verse stand: wat de ander net aanpaste blijft staan. */
+      var r0 = await fetch(W + "/data/beurs", { headers: kop() });
+      var vers = r0.ok ? await r0.json() : {};
+      var uit = { punten: Object.assign({}, (vers && vers.punten) || {}, data.punten), talen: Object.assign({}, (vers && vers.talen) || {}, data.talen), updated: new Date().toISOString(), door: ik };
+      var r = await fetch(W + "/data/beurs", { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, kop()), body: JSON.stringify(uit) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      $("stand").textContent = "Bewaard " + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+      try { if (window.fpLog) fpLog("beurs-bijgewerkt", ""); } catch(e) {}
+    } catch(e) { $("stand").textContent = "Bewaren vraagt nog een poging: " + e.message; }
+  }, meteen ? 0 : 700);
+}
+async function laad(){
+  try {
+    var r = await fetch(W + "/data/beurs", { headers: kop() });
+    var j = r.ok ? await r.json() : {};
+    data = { punten: (j && j.punten) || {}, talen: (j && j.talen) || {} };
+    $("fout").textContent = "";
+  } catch(e) { $("fout").textContent = "Ophalen lukte nog niet: " + e.message; }
+  teken();
+}
+document.querySelectorAll(".tab").forEach(function(b){ b.onclick = function(){ tab = b.dataset.tab; try { sessionStorage.setItem("beurs.tab", tab); } catch(e) {} teken(); }; });
+aftellen();
+(async function(){ for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); }); laad(); })();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"beurs",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>
