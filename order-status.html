@@ -328,8 +328,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <p class="sub">
         Logic4 markeert een order pas als "officieel" zodra de status handmatig is aangepast
         nadat er een betaling is binnengekomen. Deze tegel zoekt orders die nog op
-        <b>Voorstel</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald,
-        en orders die op <b>30% aanbetaald</b> of <b>Volledig betaald</b> staan terwijl er nog niets is betaald (die gaan terug naar <b>Voorstel</b>).
+        <b>Verkooporder</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald,
+        en orders die op <b>30% aanbetaald</b> of <b>Volledig betaald</b> staan terwijl er nog niets is betaald.
         De lijst staat er meteen bij het openen; Logic4 verandert pas als je op Doorvoeren klikt.
       </p>
 
@@ -355,7 +355,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <div class="stat accent"><div class="lbl">Wijzigingen nodig</div><div class="val" id="statChanges">—</div></div>
         <div class="stat"><div class="lbl">→ 30% aanbetaald</div><div class="val" id="statTo25">—</div></div>
         <div class="stat ok"><div class="lbl">→ Volledig betaald</div><div class="val" id="statTo30">—</div></div>
-        <div class="stat"><div class="lbl">→ Voorstel</div><div class="val" id="statTo15">—</div></div>
+        <div class="stat"><div class="lbl">→ Terug</div><div class="val" id="statTo15">—</div></div>
         <div class="stat"><div class="lbl">Totaal "verstopt"</div><div class="val" id="statHiddenAmount">—</div></div>
       </div>
 
@@ -420,7 +420,7 @@ const STATUS_VOLLEDIG_BETAALD = 30;
    op die dag stonden er 67 orders met een betaling op, 19 al helemaal betaald.
    Zij zetten de status daardoor nog elke dag met de hand om. */
 const SOURCE_STATUSES = [
-  { id: STATUS_VERKOOPORDER,   label: "Voorstel" },
+  { id: STATUS_VERKOOPORDER,   label: "Verkooporder" },
   { id: STATUS_WACHT_AANBETALING, label: "Wachten op aanbetaling" },
   { id: STATUS_30_AANBETAALD,  label: "30% aanbetaald" },
   /* Ook volledig betaald: een order die daar staat terwijl er niets of te
@@ -518,9 +518,10 @@ function decideTargetStatus(order) {
      factuur staat, controleert runDryRun hierna nog. */
   if (paid <= 0) {
     // Een order van 0 euro of minder (garantie, retour) is terecht volledig betaald.
-    // Sinds 26 okt 2026 terug naar Voorstel, zoals het Dashboard elk uur doet; nooit bij rekening, Bol.com of garantie.
+    // Terugzetten is gestopt (26 okt 2026, avond); bw blijft voor als er een nieuwe regel komt.
     const bw = String(order.PaymentMethod?.Description || order.PaymentMethod?.Value || "");
-    if (total > epsilon && (currentId === STATUS_30_AANBETAALD || currentId === STATUS_VOLLEDIG_BETAALD) && !/rekening|bol\.com|garantie/i.test(bw)) return STATUS_VERKOOPORDER;
+    // Sinds 26 okt 2026 (avond) gaat niets meer terug: Verkooporder verdwijnt uit Logic4.
+    void bw; return null;
     return null;
   }
   if (paid >= total - epsilon) {
@@ -536,7 +537,7 @@ function decideTargetStatus(order) {
 
 function statusName(id) {
   switch (id) {
-    case STATUS_VERKOOPORDER:       return "Voorstel";
+    case STATUS_VERKOOPORDER:       return "Verkooporder";
     case STATUS_WACHT_AANBETALING:  return "Wachten op aanbetaling";
     case STATUS_30_AANBETAALD:      return "30% aanbetaald";
     case STATUS_VOLLEDIG_BETAALD:   return "Volledig betaald, vrijgeven leveren";
@@ -673,7 +674,7 @@ function renderResults(checked, candidates, hiddenAmount) {
     const tr = document.createElement("tr");
     tr.dataset.orderId = String(c.id);
     tr.innerHTML = `
-      <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}"${c.targetStatusId === STATUS_VERKOOPORDER ? ' title="Er is nog niets betaald op deze order. Vink aan om hem nu al terug te zetten naar Voorstel; anders doet het Dashboard dat binnen het uur."' : ' checked title="Vink uit om deze order over te slaan bij Doorvoeren"'}></td>
+      <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}"${c.targetStatusId === STATUS_VERKOOPORDER ? ' title="Er is nog niets betaald op deze order. Vink aan om hem terug te zetten."' : ' checked title="Vink uit om deze order over te slaan bij Doorvoeren"'}></td>
       <td class="col-num" data-kolom="Order">${c.id}</td>
       <td data-kolom="Datum">${fmtDate(c.date)}</td>
       <td class="col-customer" data-kolom="Klant" title="${escapeHtml(c.customer)}">${escapeHtml(c.customer)}</td>
@@ -810,7 +811,7 @@ async function laadAutomaat(email) {
     const t = j.toestand || {};
     const log = (t.log || []).slice(0, 25);
     const wanneer = t.laatste ? formatDateNL(new Date(t.laatste)) + " (" + formatRelative(Date.now() - Date.parse(t.laatste)) + ")" : "nog niet";
-    let h = `<div><span class="clock">⏱</span> <b>Elk uur zet het Dashboard zelf</b> een voorstel met een betaling op <b>30% aanbetaald</b> of <b>Volledig betaald</b>, en een order zonder betaling terug op <b>Voorstel</b>. `
+    let h = `<div><span class="clock">⏱</span> <b>Elk uur zet het Dashboard zelf</b> een voorstel met een betaling op <b>30% aanbetaald</b> of <b>Volledig betaald</b>. `
       + (t.aan === false ? "<b>Dit staat nu uit.</b>" : "Laatste ronde: <b>" + escapeHtml(wanneer) + "</b>.") + `</div>`;
     if (log.length) {
       h += `<table style="width:100%;margin-top:8px;border-collapse:collapse;font-size:12px"><tr style="text-align:left"><th>Wanneer</th><th>Order</th><th>Van</th><th>Naar</th><th style="text-align:right">Betaald</th></tr>`
@@ -1002,12 +1003,12 @@ function loadOrderstatusDemo(){
     ({ id: id++, date: daysAgo(dAgo), customer, total, paid,
        currentStatusId: curId, currentStatusLabel: curLbl, targetStatusId: tgtId, targetStatusLabel: tgtLbl });
   const candidates = [
-    mk(1, "Spahuis Nederland",  8450,  8450,  1,  "Voorstel",        30, "Volledig betaald, vrijgeven leveren"),
+    mk(1, "Spahuis Nederland",  8450,  8450,  1,  "Verkooporder",    30, "Volledig betaald, vrijgeven leveren"),
     mk(2, "Fam. Bakker",        3999,  3999,  25, "30% aanbetaald",  30, "Volledig betaald, vrijgeven leveren"),
-    mk(2, "Aqua Pools & Spas",  12600, 12600, 1,  "Voorstel",        30, "Volledig betaald, vrijgeven leveren"),
-    mk(3, "R. Jansen",          5499,  1650,  1,  "Voorstel",        25, "30% aanbetaald"),
+    mk(2, "Aqua Pools & Spas",  12600, 12600, 1,  "Verkooporder",    30, "Volledig betaald, vrijgeven leveren"),
+    mk(3, "R. Jansen",          5499,  1650,  1,  "Verkooporder",    25, "30% aanbetaald"),
     mk(4, "Wellness Wereld",    2299,  2299,  25, "30% aanbetaald",  30, "Volledig betaald, vrijgeven leveren"),
-    mk(5, "M. Peeters",         6799,  2040,  1,  "Voorstel",        25, "30% aanbetaald"),
+    mk(5, "M. Peeters",         6799,  2040,  1,  "Verkooporder",    25, "30% aanbetaald"),
   ];
   renderResults(1247, candidates, 41646);
   // Doorvoeren blokkeren (guard zit ook in runApply zelf)

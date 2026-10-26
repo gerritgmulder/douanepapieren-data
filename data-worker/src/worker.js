@@ -14927,17 +14927,23 @@ async function autoFactuurRijErbij(env, lijst) {
    activiteitenlogboek en in KV orderstatus-automaat (de laatste 300). */
 const OS_AUTO_SLEUTEL = "orderstatus-automaat";
 const OS_BRON = [1, 15, 25, 30, 4];
-const OS_NAAM = { 1: "Voorstel", 4: "Oud voorstel", 15: "Wachten op aanbetaling", 25: "30% aanbetaald", 30: "Volledig betaald, vrijgeven leveren" };
+const OS_NAAM = { 1: "Verkooporder", 4: "Offerte", 15: "Wachten op aanbetaling", 25: "30% aanbetaald", 30: "Volledig betaald, vrijgeven leveren" };
 const OS_MAX = 8;
 /* Volledig betaald gaat nooit terug naar 30% aanbetaald: daar staan dealers op
    rekening en Amerika tussen die vrijgegeven zijn om te leveren (proef 26 okt:
    64 zulke orders). Op rekening, Bol.com en garantie gaan nooit terug naar
    Voorstel: daar komt het geld later of via een ander. */
 const OS_NOOIT_TERUG = /rekening|bol\.com|garantie/i;
+const OS_TERUG = false;
 function osDoelStatus(o) {
   const t = o.Totals || {}, totaal = Number(t.AmountIncl || 0), betaald = Number(t.Calc_TotalPayed || 0), nu = o.OrderStatus && Number(o.OrderStatus.Id);
   if (!(totaal > 0.005)) return null;
   if (!(betaald > 0)) {
+    /* Nieuw besluit Dolf en Gerrit (26 okt 2026, avond): de offerte blijft (intern
+       "voorstel"), Verkooporder en Wachten op aanbetaling verdwijnen. Terugzetten
+       naar Verkooporder kan dus niet meer; tot er een nieuwe regel is gaat het
+       Dashboard alleen omhoog. */
+    if (!OS_TERUG) return null;
     const bw = String((o.PaymentMethod && (o.PaymentMethod.Description || o.PaymentMethod.Value)) || "");
     return ((nu === 25 || nu === 30) && !OS_NOOIT_TERUG.test(bw)) ? 1 : null;
   }
