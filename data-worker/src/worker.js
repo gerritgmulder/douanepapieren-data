@@ -14536,6 +14536,14 @@ async function wireRonde(env, opties) {
    Een worker mag per keer vijftig keer naar buiten. Elke stap telt mee; is
    het op, dan gaat het volgende uur verder waar hij was. */
 const AUTO_SLEUTEL = "qb-automaat";
+/* Losse betalingen boeken: UIT sinds 26 okt 2026 (Gerrit, voor Osman). De
+   automaat boekte elke QuickBooks-betaling meteen los op dagboek 45, op de
+   dag dat Audrey hem in QuickBooks zette. Osman zag daardoor losse boekingen
+   op losse dagen die hij in geen batch terugvond. Nu boekt alleen nog de
+   batch: met de knop "Boek op 1160", of vanzelf zodra een batch helemaal
+   groen staat (autoBatchRonde), op de datum van de batch. Orders aanmaken,
+   de berichten aan Chantal en het afboeken na volledige betaling gaan door. */
+const AUTO_BOEKT_BETALINGEN = false;
 const AUTO_BUDGET = 42;
 const AUTO_OSMAN = "osman@fonteyn.nl";
 const AUTO_KOSTENREGEL = /^(credit card|houston|freight|shipping|sales tax)/i;
@@ -14812,6 +14820,14 @@ async function autoRonde(env, opties) {
       }
     }
     // Boeken.
+    if (!AUTO_BOEKT_BETALINGEN) {
+      /* Niet los boeken: deze betaling gaat mee met de batch van Audrey.
+         Onthouden met 0 dollar, zodat hij niet elk uur opnieuw langskomt en
+         de batch hem gewoon als "klaar om te boeken" ziet. */
+      if (!proef) st.geboekt[t.sleutel] = { factuur: nr, orderId: koppeling.orderId, usd: 0, wachtOpBatch: t.usd, betaling: String(t.pay.Id), datum: t.pay.TxnDate || null, ts: nu.toISOString() };
+      log({ soort: "wacht-op-batch", factuur: nr, orderId: koppeling.orderId, usd: t.usd });
+      continue;
+    }
     if (proef) { log({ soort: "boeken", factuur: nr, orderId: koppeling.orderId, usd: t.usd, eur: amerikaNaarEuro(t.usd) }); continue; }
     const o = await autoOrder(env, token, koppeling.orderId, budget);
     if (!o) { log({ soort: "boek-fout", factuur: nr, uitleg: "order " + koppeling.orderId + " vraagt Logic4 nog een keer" }); continue; }
@@ -14874,6 +14890,72 @@ async function autoRonde(env, opties) {
     if (JSON.stringify(st) !== voor) await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
   }
   return { ok: true, proef, acties, berichten: berichtenNieuw, budget: budget.n };
+}
+
+/* Orders die met een batch helemaal betaald zijn: in de rij om af te boeken
+   (uitlevering, te factureren), dezelfde rij als bij de automaat. */
+async function autoFactuurRijErbij(env, lijst) {
+  const st = await autoLees(env);
+  if (!st) return;
+  st.factuurRij = st.factuurRij || {};
+  let bij = false;
+  for (const x of lijst) {
+    const k = String(Number(x.orderId));
+    if (!k || k === "NaN" || st.factuurRij[k]) continue;
+    st.factuurRij[k] = { factuur: x.factuur || null, klant: x.klant || null, sinds: new Date().toISOString(), pogingen: 0, bron: "batch" };
+    bij = true;
+  }
+  if (bij) await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
+}
+
+/* ═══ Groene batches vanzelf boeken ═════════════════════════════════════
+   Gerrit (26 okt 2026), voor Osman: "als een batch helemaal op groen staat
+   (dus geen afwijking meer) dan wordt hij geboekt; batch 09-10 wordt geboekt
+   op 1160 op datum 09-10". Precies wat de knop "Boek op 1160" doet, met
+   dezelfde controles: klopt er iets niet, dan gaat er van die batch niets
+   weg. Eén batch per ronde (een worker mag vijftig keer naar buiten per
+   keer), om het uur afwisselend met de automaat.
+
+   Eerst een voorselectie zonder Logic4 of QuickBooks (alleen wat al in het
+   Dashboard staat); het echte boeken kijkt daarna alles opnieuw na, ook het
+   open bedrag per order in Logic4. Wat Osman al met de hand verwerkte, staat
+   in Logic4 als betaald en houdt de batch dus tegen. Een batch die werd
+   tegengehouden, komt pas na een dag weer aan de beurt. */
+const BATCH_AUTO_SLEUTEL = "qb-batch-automaat";
+const BATCH_AUTO_VANAF = "2026-09-01";   // oudere batches heeft Osman al afgehandeld
+async function autoBatchRonde(env, opties) {
+  const proef = !!(opties && opties.proef);
+  const st = (await env.FONTEYN_DATA.get(BATCH_AUTO_SLEUTEL, { type: "json" })) || { tegen: {}, log: [] };
+  // Pas aan na een eerste controle samen (POST /amerika/automaat/instellen { batchBoeken: true }).
+  if (!st.aan && !proef) return { ok: true, uit: true };
+  st.tegen = st.tegen || {};
+  const lees = async (k) => (await env.FONTEYN_DATA.get(k, { type: "json" })) || {};
+  const [wires, approved, geboekt] = await Promise.all([lees("qb-wires"), lees("qb-approved"), lees("qb-geboekt")]);
+  geboekt.ids = geboekt.ids || {};
+  const perFactuur = qbOrdersPerFactuur(approved);
+  const auto = await qbAutoPerFactuur(env).catch(() => ({}));
+  const nu = Date.now();
+  const kandidaten = (wires.wires || []).filter(w => String(w.datum || "") >= BATCH_AUTO_VANAF)
+    .sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")))
+    .filter(w => { let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}, Object.assign({}, auto)); } catch (e) { return false; }
+                   return !b.afwijking && b.teBoeken > 0; })
+    .filter(w => { const t = st.tegen[String(w.id)]; return !t || nu - Date.parse(t.ts) > 24 * 3600000; });
+  if (proef) return { ok: true, proef: true, kandidaten: kandidaten.map(w => ({ id: String(w.id), datum: w.datum })), tegen: st.tegen, log: (st.log || []).slice(0, 20) };
+  if (!kandidaten.length) { st.laatste = new Date().toISOString(); await env.FONTEYN_DATA.put(BATCH_AUTO_SLEUTEL, JSON.stringify(st)); return { ok: true, niets: true }; }
+  const w = kandidaten[0];
+  const res = await qbHandleBoeken(new Request("https://intern/amerika/qb/boeken", { method: "POST",
+    headers: { "X-Fonteyn-Auth": env.SHARED_SECRET, "Content-Type": "application/json" },
+    body: JSON.stringify({ wireId: String(w.id), bevestigd: true, user: "automaat (batch groen)" }) }), env);
+  const j = await res.json().catch(() => ({}));
+  const b = (j.batches || [])[0] || {};
+  const regel = { ts: new Date().toISOString(), batch: w.datum, id: String(w.id), geboekt: b.geboekt || 0, fout: b.fout || 0, klaar: !!b.klaar,
+                  tegen: b.afwijking ? (b.redenen || []).slice(0, 3) : null };
+  if (b.afwijking || b.fout) st.tegen[String(w.id)] = { ts: regel.ts, redenen: regel.tegen || ["fout bij boeken"] };
+  else delete st.tegen[String(w.id)];
+  st.log = [regel, ...(st.log || [])].slice(0, 100);
+  st.laatste = regel.ts;
+  await env.FONTEYN_DATA.put(BATCH_AUTO_SLEUTEL, JSON.stringify(st));
+  return { ok: true, ...regel };
 }
 
 async function qbHandleNaarChantal(request, env) {
@@ -15089,6 +15171,7 @@ async function qbHandleBoeken(request, env) {
   };
 
   const auto = await qbAutoPerFactuur(env).catch(() => ({}));
+  const volBetaald = [];
   for (let wi = 0; wi < partij.length; wi++) {
     const w = partij[wi];
     const b = qbBatchLezen(w, perFactuur, geboekt, raad, tweelingen, auto);
@@ -15240,7 +15323,10 @@ async function qbHandleBoeken(request, env) {
           r.status = "fout"; r.uitleg = "HTTP " + rr.status + " - " + tekst.slice(0, 160);
           stuk = true; break;
         }
-        if (c && !c.fout) { c.open = Math.round((Number(c.open) - eur) * 100) / 100; voorafGewijzigd = true; }
+        if (c && !c.fout) { c.open = Math.round((Number(c.open) - eur) * 100) / 100; voorafGewijzigd = true;
+          /* Helemaal betaald? Dan afboeken zoals de automaat dat al deed
+             (uitlevering, te factureren); dat liep eerst via de losse boekingen. */
+          if (r.bedrag > 0 && c.open <= 0.10) volBetaald.push({ orderId: r.order, factuur: r.factuur, klant: r.naam || null }); }
         geboekt.ids[r.sleutel] = { orderId: r.order, factuur: r.factuur, bedrag: r.bedrag, bedragEur: eur,
                                    batch: wid, ts: new Date().toISOString(),
                                    door: String(body.user || "").slice(0, 80) };
@@ -15324,6 +15410,7 @@ async function qbHandleBoeken(request, env) {
     for (const k of Object.keys(voorafOpslag)) if (Date.now() - Number((voorafOpslag[k] || {}).ts || 0) > 10 * 60000) delete voorafOpslag[k];
     await env.FONTEYN_DATA.put("qb-vooraf", JSON.stringify(voorafOpslag));
   }
+  if (echt && volBetaald.length) await autoFactuurRijErbij(env, volBetaald).catch(e => console.log("[boeken] afboekrij: " + String(e.message || e)));
 
   const som = uit.reduce((n, b) => n + (b.afwijking ? 0 : b.bruto), 0);
   return reply(200, { ok: true, proef: !echt, alle,
@@ -19668,6 +19755,14 @@ const FP_WORKER = {
         const cron = String(event && event.cron || "");
         const PRODUCTIE_UREN = [1, 7, 13, 19], CATALOGUS_UREN = [5, 11, 17, 23];
         const automaat = async () => {
+          /* Om het uur: de automaat (orders, berichten, afboeken) en het
+             vanzelf boeken van groene batches (26 okt 2026). Elk heeft zo zijn
+             eigen budget van vijftig aanroepen naar buiten. */
+          if (uur % 2 === 1) {
+            const br = await autoBatchRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+            console.log("[cron] amerika-batch: " + JSON.stringify(br));
+            return;
+          }
           const ar = await autoRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] amerika-automaat: " + JSON.stringify({ ok: ar.ok, acties: (ar.acties || []).length, berichten: ar.berichten || 0, budget: ar.budget, fout: ar.error || null }));
         };
@@ -21096,6 +21191,8 @@ const FP_WORKER = {
       if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
       if (url.pathname === "/amerika/automaat" && request.method === "GET") return reply(200, { ok: true, toestand: await autoLees(env) });
+      // Welke batches staan groen en zou hij vanzelf boeken? Boekt niets.
+      if (url.pathname === "/amerika/automaat/batches" && request.method === "GET") return reply(200, await autoBatchRonde(env, { proef: true }));
       if (url.pathname === "/amerika/automaat/proef" && request.method === "POST")
         return autoRonde(env, { proef: true }).then(r => reply(200, r)).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
       if (!BERICHT_BEHEER.includes(wie) && wie !== AUTO_OSMAN) return reply(403, { ok: false, error: "alleen voor de beheerders en Osman" });
@@ -21106,6 +21203,11 @@ const FP_WORKER = {
         if (typeof b.aan === "boolean") st.aan = b.aan;
         if (typeof b.factureren === "boolean") st.factureren = b.factureren;
         if (typeof b.afboeken === "boolean") st.afboeken = b.afboeken;
+        if (typeof b.batchBoeken === "boolean") {
+          const bs = (await env.FONTEYN_DATA.get(BATCH_AUTO_SLEUTEL, { type: "json" })) || { tegen: {}, log: [] };
+          bs.aan = b.batchBoeken; bs.ingesteld = { ts: new Date().toISOString(), door: wie, aan: b.batchBoeken };
+          await env.FONTEYN_DATA.put(BATCH_AUTO_SLEUTEL, JSON.stringify(bs));
+        }
         st.ingesteld = { ts: new Date().toISOString(), door: wie, aan: st.aan, factureren: st.factureren, afboeken: !!st.afboeken };
         await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
         return reply(200, { ok: true, aan: st.aan, factureren: st.factureren, afboeken: !!st.afboeken });
