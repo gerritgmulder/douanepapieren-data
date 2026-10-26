@@ -14927,7 +14927,7 @@ async function autoFactuurRijErbij(env, lijst) {
    activiteitenlogboek en in KV orderstatus-automaat (de laatste 300). */
 const OS_AUTO_SLEUTEL = "orderstatus-automaat";
 const OS_BRON = [1, 15, 25, 30, 4];
-const OS_NAAM = { 1: "Voorstel", 4: "Offerte", 15: "Wachten op aanbetaling", 25: "30% aanbetaald", 30: "Volledig betaald, vrijgeven leveren" };
+const OS_NAAM = { 1: "Voorstel", 4: "Oud voorstel", 15: "Wachten op aanbetaling", 25: "30% aanbetaald", 30: "Volledig betaald, vrijgeven leveren" };
 const OS_MAX = 8;
 /* Volledig betaald gaat nooit terug naar 30% aanbetaald: daar staan dealers op
    rekening en Amerika tussen die vrijgegeven zijn om te leveren (proef 26 okt:
@@ -14991,7 +14991,7 @@ async function orderstatusRonde(env, opties) {
       } catch (e) { overgeslagen++; continue; }
     }
     const regel = { ts: nu.toISOString(), order: Number(o.Id), van: Number(o.OrderStatus && o.OrderStatus.Id), naar: doel,
-      vanNaam: OS_NAAM[o.OrderStatus && o.OrderStatus.Id] || (o.OrderStatus && o.OrderStatus.Value) || "", naarNaam: OS_NAAM[doel],
+      vanNaam: OS_NAAM[o.OrderStatus && o.OrderStatus.Id] || "status " + (o.OrderStatus && o.OrderStatus.Id), naarNaam: OS_NAAM[doel],
       totaal: Math.round(Number(o.Totals.AmountIncl) * 100) / 100, betaald: Math.round(Number(o.Totals.Calc_TotalPayed || 0) * 100) / 100 };
     if (proef) { gedaan.push(regel); continue; }
     try { await post("/v3/Orders/UpdateOrderStatus", { OrderId: Number(o.Id), StatusId: doel }); regel.ok = true; }
