@@ -14908,6 +14908,80 @@ async function autoFactuurRijErbij(env, lijst) {
   if (bij) await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
 }
 
+/* ═══ Orderstatus vanzelf (voorstel wordt order) ══════════════════════════
+   Gerrit, Dolf en Gretha (26 okt 2026): vanaf 27 oktober maakt een adviseur
+   in Logic4 meteen een order; offertes maken kan niet meer. De status
+   "Verkooporder" (1) heet voortaan "Voorstel". Een voorstel wordt pas een
+   order als er is aanbetaald, en dat zet het Dashboard elk uur zelf:
+     iets betaald, niet alles   -> 30% aanbetaald (25)
+     alles betaald              -> Volledig betaald, vrijgeven leveren (30)
+   Precies de regels van de tegel Orderstatus (decideTargetStatus), alleen
+   omhoog. Terugzetten (aanbetaald zonder betaling) doet het Dashboard niet
+   vanzelf; dat blijft in de tegel Orderstatus.
+
+   Elk uur alleen de orders die de laatste twee dagen zijn veranderd
+   (LastActionFrom); één keer per nacht alles. Hooguit 12 wijzigingen per
+   ronde, de rest volgt het uur erna. Elke wijziging komt in het
+   activiteitenlogboek en in KV orderstatus-automaat (de laatste 300). */
+const OS_AUTO_SLEUTEL = "orderstatus-automaat";
+const OS_BRON = [1, 15, 25];          // voorstel (was verkooporder), wachten op aanbetaling, 30% aanbetaald
+const OS_NAAM = { 1: "Voorstel", 4: "Offerte", 15: "Wachten op aanbetaling", 25: "30% aanbetaald", 30: "Volledig betaald, vrijgeven leveren" };
+function osDoelStatus(o) {
+  const t = o.Totals || {}, totaal = Number(t.AmountIncl || 0), betaald = Number(t.Calc_TotalPayed || 0), nu = o.OrderStatus && Number(o.OrderStatus.Id);
+  if (!(betaald > 0) || !(totaal > 0)) return null;
+  if (betaald >= totaal - 0.005) return nu === 30 ? null : 30;
+  return nu === 25 ? null : 25;
+}
+async function orderstatusRonde(env, opties) {
+  const proef = !!(opties && opties.proef);
+  const st = (await env.FONTEYN_DATA.get(OS_AUTO_SLEUTEL, { type: "json" })) || { aan: true, log: [] };
+  if (st.aan === false && !proef) return { ok: true, uit: true };
+  const nu = new Date();
+  // Start: de nacht naar 27 oktober (02:15 UTC is meteen de volledige ronde).
+  if (!proef && nu.getTime() < Date.parse("2026-10-27T02:00:00Z")) return { ok: true, wachtOpStart: true };
+  const vol = !!(opties && opties.vol);
+  const token = await l4Token(env);
+  let vragen = 1;
+  const post = async (pad, body) => {
+    vragen++;
+    const r = await fetch("https://api.logic4server.nl" + pad, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(pad.split("/").pop() + " HTTP " + r.status);
+    return r.json().catch(() => null);
+  };
+  const sinds = new Date(nu.getTime() - 2 * 86400000).toISOString().slice(0, 19);
+  const kandidaten = [];
+  for (const sid of OS_BRON) {
+    for (let p = 0; p < (vol ? 8 : 2); p++) {
+      if (vragen > 14) break;
+      const filter = { StatusId: sid, TakeRecords: 500, SkipRecords: p * 500 };
+      if (!vol) filter.LastActionFrom = sinds;
+      const d = await post("/v3/Orders/GetOrders", filter);
+      const l = Array.isArray(d) ? d : ((d && (d.Records || d.Orders)) || []);
+      for (const o of l) { const doel = osDoelStatus(o); if (doel) kandidaten.push({ o, doel }); }
+      if (l.length < 500) break;
+    }
+  }
+  const gedaan = [];
+  for (const { o, doel } of kandidaten) {
+    if (gedaan.length >= 12 || vragen > 30) break;
+    const regel = { ts: nu.toISOString(), order: Number(o.Id), van: Number(o.OrderStatus && o.OrderStatus.Id), naar: doel,
+      vanNaam: (o.OrderStatus && o.OrderStatus.Value) || OS_NAAM[o.OrderStatus && o.OrderStatus.Id] || "", naarNaam: OS_NAAM[doel],
+      totaal: Math.round(Number(o.Totals.AmountIncl) * 100) / 100, betaald: Math.round(Number(o.Totals.Calc_TotalPayed) * 100) / 100 };
+    if (proef) { gedaan.push(regel); continue; }
+    try { await post("/v3/Orders/UpdateOrderStatus", { OrderId: Number(o.Id), StatusId: doel }); regel.ok = true; }
+    catch (e) { regel.ok = false; regel.fout = String(e.message || e).slice(0, 160); }
+    gedaan.push(regel);
+    if (regel.ok) { try { await actSchrijf(env, "dashboard", regel.ts.slice(0, 7), { ts: regel.ts, user: "het Dashboard", tile: "orderstatus", action: "status-automatisch",
+      detail: "order " + regel.order + ": " + regel.vanNaam + " -> " + regel.naarNaam + " (betaald " + regel.betaald + " van " + regel.totaal + ")", wijziging: true }); } catch (e) {} }
+  }
+  if (!proef) {
+    st.laatste = nu.toISOString(); st.laatsteVol = vol ? nu.toISOString() : st.laatsteVol;
+    if (gedaan.length) st.log = [...gedaan, ...(st.log || [])].slice(0, 300);
+    await env.FONTEYN_DATA.put(OS_AUTO_SLEUTEL, JSON.stringify(st));
+  }
+  return { ok: true, proef, vol, kandidaten: kandidaten.length, gedaan: gedaan.length, wijzigingen: gedaan, vragen };
+}
+
 /* ═══ Losse boekingen herboeken op de batch ═══════════════════════════════
    Gerrit (26 okt 2026), voor Osman: de automaat boekte tussen 7 en 24
    oktober elke QuickBooks-betaling los op dagboek 45, op de dag dat Audrey
@@ -19829,6 +19903,11 @@ const FP_WORKER = {
           // Na een dichte D1 (19 okt 2026): de noodopslag terug in D1.
           // Alleen melden; terugzetten gebeurt met de hand na controle per sleutel.
           try { if (!d1Dicht()) { const nt = await kvNoodTerug(env, 2000, false); if (!nt.niets) console.log("[cron] kv-nood (alleen lijst): " + nt.lijst.length + " sleutels"); } } catch (e) { console.log("[cron] kv-nood: " + (e.message || e)); }
+          /* Orderstatus vanzelf (26 okt 2026), als eerste en met een eigen grens
+             van hooguit dertig vragen aan Logic4. Om 02:15 UTC alles, de rest van
+             de uren alleen wat de laatste twee dagen is veranderd. */
+          const os = await orderstatusRonde(env, { vol: uur === 2 }).catch(e => ({ ok: false, error: String(e.message || e) }));
+          if (os.gedaan || os.error) console.log("[cron] orderstatus: " + JSON.stringify({ gedaan: os.gedaan, kandidaten: os.kandidaten, fout: os.error || null }));
           // Eerst de welkomstmails (licht: 8 per ronde), dan de wire-bewaking.
           const wq = await ppWachtrijRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           /* De berichten (Chantal, Manon): licht, vooral KV, een enkele mail. */
@@ -21289,6 +21368,23 @@ const FP_WORKER = {
     }
     /* De Amerika-automaat. Stand, proefronde (doet niets, zegt wat hij zou doen),
        aan/uit en factureren aan/uit, en één order met de hand factureren. */
+    /* Orderstatus vanzelf: stand en een proef (zegt wat hij zou doen). */
+    if (url.pathname === "/orderstatus/automaat") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+      if (!(await toegangMag(env, "orderstatus", wie))) return reply(403, { ok: false, error: "geen toegang" });
+      if (request.method === "GET") return reply(200, { ok: true, toestand: (await env.FONTEYN_DATA.get(OS_AUTO_SLEUTEL, { type: "json" })) || { aan: true, log: [] } });
+      if (request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        if (typeof b.aan === "boolean") {
+          const st = (await env.FONTEYN_DATA.get(OS_AUTO_SLEUTEL, { type: "json" })) || { log: [] };
+          st.aan = b.aan; st.ingesteld = { ts: new Date().toISOString(), door: wie, aan: b.aan };
+          await env.FONTEYN_DATA.put(OS_AUTO_SLEUTEL, JSON.stringify(st));
+          return reply(200, { ok: true, aan: st.aan });
+        }
+        return reply(200, await orderstatusRonde(env, { proef: b.proef !== false, vol: !!b.vol }));
+      }
+    }
     if (url.pathname.startsWith("/amerika/automaat")) {
       if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();

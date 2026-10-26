@@ -328,12 +328,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <p class="sub">
         Logic4 markeert een order pas als "officieel" zodra de status handmatig is aangepast
         nadat er een betaling is binnengekomen. Deze tegel zoekt orders die nog op
-        <b>Verkooporder</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald,
+        <b>Voorstel</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald,
         en orders die op <b>30% aanbetaald</b> of <b>Volledig betaald</b> staan terwijl er nog niets is betaald.
         De lijst staat er meteen bij het openen; Logic4 verandert pas als je op Doorvoeren klikt.
       </p>
 
       <div id="lastDoorvoer" class="last-doorvoer">Laatste doorvoer wordt geladen…</div>
+      <div id="autoBlok" class="last-doorvoer" style="display:block">Wat het Dashboard elk uur zelf doet, wordt geladen…</div>
 
       <div class="actions">
         <button id="btnApply" type="button" disabled
@@ -403,8 +404,6 @@ const EMAIL_KEY   = "fp.email";
 // zodat de pagina werkt ongeacht hoe Logic4 die gebruiker laat inloggen.
 const ALLOWED_USERS = [
   "gerrit@fonteyn.nl",     "gerrit",
-  "don@fonteyn.nl",        "fonteyn.don",
-  "arno@fonteyn.nl",       "fonteyn.arno",
   "dolf@fonteyn.nl",       "fonteyn.dolf",
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ];
@@ -421,7 +420,7 @@ const STATUS_VOLLEDIG_BETAALD = 30;
    op die dag stonden er 67 orders met een betaling op, 19 al helemaal betaald.
    Zij zetten de status daardoor nog elke dag met de hand om. */
 const SOURCE_STATUSES = [
-  { id: STATUS_VERKOOPORDER,   label: "Verkooporder" },
+  { id: STATUS_VERKOOPORDER,   label: "Voorstel" },
   { id: STATUS_WACHT_AANBETALING, label: "Wachten op aanbetaling" },
   { id: STATUS_30_AANBETAALD,  label: "30% aanbetaald" },
   /* Ook volledig betaald: een order die daar staat terwijl er niets of te
@@ -534,7 +533,7 @@ function decideTargetStatus(order) {
 
 function statusName(id) {
   switch (id) {
-    case STATUS_VERKOOPORDER:       return "Verkooporder";
+    case STATUS_VERKOOPORDER:       return "Voorstel";
     case STATUS_WACHT_AANBETALING:  return "Wachten op aanbetaling";
     case STATUS_30_AANBETAALD:      return "30% aanbetaald";
     case STATUS_VOLLEDIG_BETAALD:   return "Volledig betaald, vrijgeven leveren";
@@ -761,6 +760,7 @@ async function boot() {
   }
   el("mainView").classList.remove("hidden");
   refreshLastDoorvoer();
+  laadAutomaat(email);
   runDryRun();   // meteen de lijst (Gerrit, 26 okt 2026: geen knop Dry-run meer)
 }
 
@@ -793,6 +793,35 @@ function formatDateNL(d) {
 // (worker-bucket activiteit-YYYY-MM). Zo zie je direct op de tegel wanneer en
 // door wie de statussen voor het laatst zijn doorgevoerd — dezelfde bron als
 // het Activiteitenlogboek zelf.
+/* Sinds 27 okt 2026 zet het Dashboard elk uur zelf de status van voorstellen
+   met een betaling (30% aanbetaald of Volledig betaald). Hier staat wat het
+   de laatste keren deed. */
+async function laadAutomaat(email) {
+  const box = el("autoBlok");
+  if (!box) return;
+  try {
+    const key = localStorage.getItem("fp.teamkey") || "";
+    const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/orderstatus/automaat", { headers: { "X-Fonteyn-Auth": key, "X-Fonteyn-User": String(email || "").toLowerCase() } });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || !j.ok) throw new Error("HTTP " + r.status);
+    const t = j.toestand || {};
+    const log = (t.log || []).slice(0, 25);
+    const wanneer = t.laatste ? formatDateNL(new Date(t.laatste)) + " (" + formatRelative(Date.now() - Date.parse(t.laatste)) + ")" : "nog niet";
+    let h = `<div><span class="clock">⏱</span> <b>Elk uur zet het Dashboard zelf</b> een voorstel met een betaling op <b>30% aanbetaald</b> of <b>Volledig betaald</b>. `
+      + (t.aan === false ? "<b>Dit staat nu uit.</b>" : "Laatste ronde: <b>" + escapeHtml(wanneer) + "</b>.") + `</div>`;
+    if (log.length) {
+      h += `<table style="width:100%;margin-top:8px;border-collapse:collapse;font-size:12px"><tr style="text-align:left"><th>Wanneer</th><th>Order</th><th>Van</th><th>Naar</th><th style="text-align:right">Betaald</th></tr>`
+        + log.map(x => `<tr><td>${escapeHtml(formatDateNL(new Date(x.ts)))}</td><td>${x.order}</td><td>${escapeHtml(x.vanNaam || "")}</td><td>${escapeHtml(x.naarNaam || "")}${x.ok === false ? " <b>(volgt het volgende uur)</b>" : ""}</td>`
+          + `<td style="text-align:right">€ ${Number(x.betaald || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2 })} van € ${Number(x.totaal || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2 })}</td></tr>`).join("") + `</table>`;
+    } else {
+      h += `<div style="margin-top:6px">Nog geen orders automatisch bijgewerkt.</div>`;
+    }
+    box.innerHTML = h;
+  } catch (e) {
+    box.innerHTML = `<span class="clock">⏱</span><span>Wat het Dashboard elk uur doet, is nu even onbekend (${escapeHtml(e.message)}).</span>`;
+  }
+}
+
 async function refreshLastDoorvoer() {
   const box = el("lastDoorvoer");
   if (!box) return;
@@ -970,12 +999,12 @@ function loadOrderstatusDemo(){
     ({ id: id++, date: daysAgo(dAgo), customer, total, paid,
        currentStatusId: curId, currentStatusLabel: curLbl, targetStatusId: tgtId, targetStatusLabel: tgtLbl });
   const candidates = [
-    mk(1, "Spahuis Nederland",  8450,  8450,  1,  "Verkooporder",    30, "Volledig betaald, vrijgeven leveren"),
+    mk(1, "Spahuis Nederland",  8450,  8450,  1,  "Voorstel",        30, "Volledig betaald, vrijgeven leveren"),
     mk(2, "Fam. Bakker",        3999,  3999,  25, "30% aanbetaald",  30, "Volledig betaald, vrijgeven leveren"),
-    mk(2, "Aqua Pools & Spas",  12600, 12600, 1,  "Verkooporder",    30, "Volledig betaald, vrijgeven leveren"),
-    mk(3, "R. Jansen",          5499,  1650,  1,  "Verkooporder",    25, "30% aanbetaald"),
+    mk(2, "Aqua Pools & Spas",  12600, 12600, 1,  "Voorstel",        30, "Volledig betaald, vrijgeven leveren"),
+    mk(3, "R. Jansen",          5499,  1650,  1,  "Voorstel",        25, "30% aanbetaald"),
     mk(4, "Wellness Wereld",    2299,  2299,  25, "30% aanbetaald",  30, "Volledig betaald, vrijgeven leveren"),
-    mk(5, "M. Peeters",         6799,  2040,  1,  "Verkooporder",    25, "30% aanbetaald"),
+    mk(5, "M. Peeters",         6799,  2040,  1,  "Voorstel",        25, "30% aanbetaald"),
   ];
   renderResults(1247, candidates, 41646);
   // Doorvoeren blokkeren (guard zit ook in runApply zelf)

@@ -252,9 +252,10 @@
       "christiaan", "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k",
       "rico", "rowan",
     ],
-    // Orderstatus
+    /* Orderstatus. Sinds 27 okt 2026 zet het Dashboard de statussen elk uur
+       zelf; de tegel blijft alleen voor Fonteynbot (Gerrit, 26 okt 2026). */
     "orderstatus": [
-      "accountant", "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
+      "dolf", "fonteynbot", "gerrit",
     ],
     // Douanepapieren en Inkomende goederen
     "papieren": [

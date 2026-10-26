@@ -52,6 +52,10 @@
   var NIEUWS = [
     {
       datum: "2026-10-26", bestand: "order-status.html", soort: "beter",
+      titel: "Orderstatus gaat vanzelf",
+      wat: "Vanaf 27 oktober kijkt het Dashboard elk uur welke voorstellen een betaling hebben gekregen en zet ze zelf op 30% aanbetaald of Volledig betaald. In de tegel staat wat het Dashboard de laatste keren heeft aangepast." },
+    {
+      datum: "2026-10-26", bestand: "order-status.html", soort: "beter",
       titel: "Orderstatus: lijst meteen bij het openen",
       wat: "De lijst met statussen die aangepast kunnen worden staat er nu meteen; de knop om eerst te controleren is weg. Nieuw in de lijst: orders die op 30% aanbetaald of Volledig betaald staan terwijl er nog niets is betaald. Die gaan terug naar Wachten op aanbetaling en staan standaard uitgevinkt, zodat je ze eerst kunt bekijken." },
     {
