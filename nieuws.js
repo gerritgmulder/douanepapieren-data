@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-26", bestand: "amerika.html", soort: "beter",
+      titel: "Ontvangen Audrey: naar historie in plaats van verwijderen",
+      wat: "Een batch gaat nooit meer weg. Met naar historie zet je hem onderaan bij de historie, bijvoorbeeld als de laatste regel met de hand in Logic4 is geboekt. Met terug naar wire-overzicht haal je hem weer terug. Ga met de muis op een knop staan en je ziet wat hij doet." },
+    {
       datum: "2026-10-25", bestand: "beurs.html", soort: "nieuw",
       titel: "Beurs",
       wat: "Alles voor Piscine Global Europe in Lyon (17 t/m 20 november, stand 6G16): de punten die nog bevestigd moeten worden om af te vinken, per taal wie nakijkt en hoe ver het is, en Dolfs pitch met de zes koopmotieven." },

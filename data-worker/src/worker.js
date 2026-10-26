@@ -13723,7 +13723,7 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen, auto) {
   const tweeling = tweelingen && tweelingen[String(wire.id)];
   if (tweeling)
     redenen.push("Deze batch staat er meer dan een keer in (dezelfde datum en dezelfde bedragen als batch " +
-      tweeling.join(" en ") + "). Gooi de dubbele weg; anders wordt alles twee keer geboekt.");
+      tweeling.join(" en ") + "). Zet de dubbele met de knop naar historie; anders wordt alles twee keer geboekt.");
   const uit = geld.map((r, i) => {
     let factuur = qbFactuurVanRegel(r), geraden = null;
     if (!factuur && raad) {
@@ -14944,8 +14944,9 @@ async function autoHerboekPlan(env) {
   const plan = [];
   for (const w of (wires.wires || []).slice().sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")))) {
     let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}, auto); } catch (e) { continue; }
+    // Met de hand naar de historie: niet herboeken (de batch telt wel mee voor de toewijzing).
     for (const r of (b.regels || [])) {
-      if (!r.auto) continue;
+      if (!r.auto || w.plek === "historie") continue;
       let som = 0;
       for (const [k, g] of vrij) {
         if (bezet.has(k) || String(g.factuur) !== String(r.factuur) || som >= r.bedrag - 0.02) continue;
@@ -15033,7 +15034,7 @@ async function autoBatchRonde(env, opties) {
   const perFactuur = qbOrdersPerFactuur(approved);
   const auto = await qbAutoPerFactuur(env).catch(() => ({}));
   const nu = Date.now();
-  const kandidaten = (wires.wires || []).filter(w => String(w.datum || "") >= BATCH_AUTO_VANAF)
+  const kandidaten = (wires.wires || []).filter(w => String(w.datum || "") >= BATCH_AUTO_VANAF && w.plek !== "historie")
     .sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")))
     .filter(w => { let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}, Object.assign({}, auto)); } catch (e) { return false; }
                    return !b.afwijking && b.teBoeken > 0; })
@@ -15185,7 +15186,9 @@ async function qbHandleBoeken(request, env) {
      in behandeling is: de tweeling van een batch kan best in een ander blokje
      zitten. */
   const perVinger = {};
-  for (const w of (wires.wires || [])) {
+  /* Een batch die met de hand naar de historie is gezet (bijvoorbeeld een dubbel
+     ingelezen mail) telt niet mee; weggooien kan sinds 26 okt 2026 niet meer. */
+  for (const w of (wires.wires || []).filter(x => x.plek !== "historie")) {
     const v = qbBatchVingerafdruk(w);
     (perVinger[v] = perVinger[v] || []).push(w);
   }

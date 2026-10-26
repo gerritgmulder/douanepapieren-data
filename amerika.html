@@ -106,7 +106,7 @@
   <h1>Amerika 🇺🇸 — Passion Spas USA (Houston, Texas)</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
-  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+  <button class="logout" id="logoutBtn" type="button" title="Uitloggen uit het Dashboard">Uitloggen</button>
 </header>
 
 <main>
@@ -116,12 +116,12 @@
     komen in Logic4 op magazijn <b>Warehouse Texas</b> te staan. Hieronder beide kanten bij elkaar.</p>
 
   <div class="tabs">
-    <button class="tab active" data-tab="containers" type="button">Containers (Logic4 · Warehouse Texas)</button>
-    <button class="tab" data-tab="quickbooks" type="button">Verkoop &amp; dealers (QuickBooks)</button>
-    <button class="tab" data-tab="audrey" type="button">Ontvangen Audrey</button>
-    <button class="tab" data-tab="voorraad" type="button">Voorraad Houston</button>
-    <button class="tab" data-tab="maand" type="button">Maandfactuur</button>
-    <button class="tab" data-tab="t1160" type="button">Tussenrekening 1160</button>
+    <button class="tab active" data-tab="containers" type="button" title="De containers naar Houston, uit Logic4">Containers (Logic4 · Warehouse Texas)</button>
+    <button class="tab" data-tab="quickbooks" type="button" title="De facturen uit QuickBooks en de orders die het Dashboard daarvan maakt">Verkoop &amp; dealers (QuickBooks)</button>
+    <button class="tab" data-tab="audrey" type="button" title="De wires van Audrey inlezen en per batch boeken op 1160">Ontvangen Audrey</button>
+    <button class="tab" data-tab="voorraad" type="button" title="De voorraad in Houston en de telling">Voorraad Houston</button>
+    <button class="tab" data-tab="maand" type="button" title="De maandfactuur van Audrey controleren">Maandfactuur</button>
+    <button class="tab" data-tab="t1160" type="button" title="Wat er op tussenrekening 1160 staat, per uitbetaling van Audrey">Tussenrekening 1160</button>
   </div>
 
   <!-- ===== Tussenrekening 1160 per uitbetaling =====
@@ -136,8 +136,8 @@
       <p class="lead" style="font-size:13px;margin-bottom:10px">Betaalt een klant in Amerika, dan boekt het Dashboard die betaling meteen op de order in Logic4, op 1160. Het geld staat dan in Amerika en komt met de volgende uitbetaling van Audrey naar Fonteyn. Boek je die uitbetaling (netto op 1160, bankkosten op 4630, koersverschil op 9075), dan komt 1160 voor die uitbetaling weer op nul.</p>
       <div class="t1Kpi" id="t1Kpi"></div>
       <div class="actions" style="gap:10px;align-items:center;margin-top:10px">
-        <button class="btn" type="button" id="t1Vers">Opnieuw ophalen</button>
-        <button class="btn" type="button" id="t1Excel">Download Excel</button>
+        <button class="btn" type="button" id="t1Vers" title="Haal de stand van 1160 opnieuw op">Opnieuw ophalen</button>
+        <button class="btn" type="button" id="t1Excel" title="Download dit overzicht als Excel">Download Excel</button>
         <span id="t1Stand" style="font-size:12.5px;color:var(--muted)"></span>
       </div>
     </div>
@@ -167,8 +167,8 @@
         Een <span style="color:#15803d;font-weight:700">✓</span> is ja, een <span style="color:#b91c1c;font-weight:700">✗</span> is nee. Klopt een ordernummer of bedrag in de lijst niet, pas het dan aan en klik opnieuw op Controleren.</p>
       <div class="actions" style="gap:10px;align-items:center;flex-wrap:wrap">
         <input type="file" id="mfBestand" accept=".pdf">
-        <button class="btn" type="button" id="mfRegel">+ regel</button>
-        <button class="btn solid" type="button" id="mfCheck">Controleren</button>
+        <button class="btn" type="button" id="mfRegel" title="Voeg met de hand een regel toe aan de maandfactuur">+ regel</button>
+        <button class="btn solid" type="button" id="mfCheck" title="Het Dashboard controleert per regel of het bedrag op de order staat en of die betaald is">Controleren</button>
         <span id="mfStatus" style="font-size:12.5px;color:var(--muted)"></span>
       </div>
     </div>
@@ -213,7 +213,7 @@
         <h3 style="margin:0">Voorraad Houston — live uit Logic4</h3>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <span id="vlOpgehaald" style="font-size:12px;color:var(--muted)"></span>
-          <button class="btn" id="vlVervers" type="button">Opnieuw ophalen</button>
+          <button class="btn" id="vlVervers" type="button" title="Haal de voorraad opnieuw op uit Logic4">Opnieuw ophalen</button>
         </div>
       </div>
       <p class="lead" style="font-size:12.5px;margin:8px 0 12px">Alles wat in Logic4 op magazijn <b>Warehouse Texas USA</b> staat. Boekt Osman een order af, dan zie je dat hier terug.</p>
@@ -246,8 +246,8 @@
       <p class="lead" style="font-size:12.5px;margin-bottom:10px">Dit maakt van de telling een <b>voorraadcontrole</b> in Logic4 op de locatie Warehouse Texas USA: per artikel het getelde aantal naast wat Logic4 er nu heeft. Daarna verwerk je die controle in Logic4 zelf (Voorraad, Voorraadcontrole), en dan staat Houston gelijk aan de telling en gaat elke verkoop er vanaf het juiste getal af. Wijkt een trim af (grey of oak), pas het getelde aantal hieronder aan voordat je hem klaarzet.</p>
       <div class="actions" style="gap:10px;align-items:center;margin:0 0 10px">
         <label style="font-size:12.5px">Peildatum van de telling <input type="date" id="vlTelDatum" style="padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit"></label>
-        <button class="btn" type="button" id="vlTelProef">Voorstel maken</button>
-        <button class="btn" type="button" id="vlTelDoe" disabled style="background:var(--groen);color:#fff">Voorraadcontrole klaarzetten in Logic4</button>
+        <button class="btn" type="button" id="vlTelProef" title="Het Dashboard maakt een voorstel van de telling; er gaat nog niets naar Logic4">Voorstel maken</button>
+        <button class="btn" type="button" id="vlTelDoe" title="Het Dashboard zet de voorraadcontrole klaar in Logic4; de voorraad verandert pas als je die daar verwerkt" disabled style="background:var(--groen);color:#fff">Voorraadcontrole klaarzetten in Logic4</button>
         <span id="vlTelStatus" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div id="vlTelVoorstel"></div>
@@ -325,7 +325,7 @@
       <div class="step"><b>2. Redirect-adres</b> — in die app registreren we <code>https://fonteyn-data-store.g-mulder.workers.dev/amerika/qb/callback</code> als Redirect URI.</div>
       <div class="step"><b>3. Eénmalige toestemming</b> — iemand met toegang tot de US-QuickBooks (Audrey/Chantal) klikt één keer op "Verbinden" en logt in bij QuickBooks. Daarna onthoudt het systeem de toegang (met automatische vernieuwing).</div>
       <p class="lead" style="font-size:12.5px;margin-top:14px">Zodra dit er is, verschijnen hier automatisch de US-facturen, klanten/dealers en openstaande bedragen — read-only, net als de rest van het dashboard. Alles blijft meekijken; geld verplaatsen doe je in Logic4 zelf.</p>
-      <button class="btn solid" id="qbConnectBtn" type="button" disabled style="opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
+      <button class="btn solid" id="qbConnectBtn" type="button" title="Koppel het Dashboard aan QuickBooks" disabled style="opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
     </div>
     <!-- Zoeken in de QuickBooks-lijst (Chantal, video 30 aug 2026: "ik moet
          hier een zoekbalk hebben, zodat ik op factuurnummer kan zoeken en op
@@ -353,15 +353,15 @@
            style="min-height:88px;border:2px dashed var(--border);border-radius:10px;padding:12px 14px;font-size:13px;background:#fff;overflow:auto;max-height:220px"
            data-leeg="Klik hier en plak de mail (Ctrl+V)"></div>
       <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <button class="btn solid" id="audPlakBtn" type="button">Geplakte mail inlezen</button>
-        <button class="btn" id="audPlakLeeg" type="button">Leegmaken</button>
+        <button class="btn solid" id="audPlakBtn" type="button" title="Het Dashboard leest de geplakte mail van Audrey in als nieuwe batch">Geplakte mail inlezen</button>
+        <button class="btn" id="audPlakLeeg" type="button" title="Maak het plakveld leeg">Leegmaken</button>
       </div>
       <details style="margin-top:14px">
         <summary style="font-size:12.5px;color:var(--muted);cursor:pointer">Liever een bestand uploaden?</summary>
         <p class="lead" style="font-size:12.5px;margin:8px 0">Kan ook, als je de mail als bestand hebt: .eml, .txt of .html. Werkt 'Opslaan als' anders in jouw Outlook, gebruik dan gewoon plakken hierboven.</p>
         <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <input type="file" id="audFile" accept=".eml,.txt,.html" style="font-size:13px">
-          <button class="btn solid" id="audBtn" type="button">Inlezen &amp; opslaan</button>
+          <button class="btn solid" id="audBtn" type="button" title="Het Dashboard leest de mail van Audrey (.eml) in en bewaart hem als nieuwe batch">Inlezen &amp; opslaan</button>
         </div>
       </details>
       <div id="audStatus" class="status-msg hidden" style="margin-top:12px"></div>
@@ -1074,7 +1074,7 @@ function zdTeken(){
         "<td>"+(zdOpen[x.ref]?"▾ ":"▸ ")+"<b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
         "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+zdStandTekst(x)+"</td>"+
         "<td style='font-size:12px'>"+esc(datumNL(x.ts))+"</td>"+
-        "<td onclick='event.stopPropagation()'><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>Commercial invoice uploaden</button></td></tr>"+
+        "<td onclick='event.stopPropagation()'><button class='btn sm zdUpload' title='Upload de commercial invoice van deze zending' data-ref='"+esc(x.ref)+"' type='button'>Commercial invoice uploaden</button></td></tr>"+
         (zdOpen[x.ref]?zdStandRij(x,5):"")).join("")+
       "</tbody></table></div>"
     : "<p class='lead' style='font-size:12.5px'>In productie komt hier te staan. Maak bij <b>Containers</b> een inkooporder van een proforma, dan verschijnt hij hier.</p>");
@@ -1088,7 +1088,7 @@ function zdTeken(){
           (function(){ const d=zdDoelen(x.rec,x.z,alle); return d.length>1?"<br><span style='font-size:11px;color:var(--muted)'>verdeeld over "+esc(d.map(y=>zdOrderNr(y.ref)||y.ref).join(" + "))+"</span>":""; })()+"</td>"+
         "<td style='font-size:12px'>"+esc(x.z.naam||"—")+"<br><span style='color:var(--muted);font-size:11px'>"+esc(datumNL(x.z.ts))+"</span></td>"+
         "<td onclick='event.stopPropagation()'><input type='date' class='zdEta' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' value='"+esc(x.z.eta||"")+"' style='padding:6px;font:inherit'></td>"+
-        "<td onclick='event.stopPropagation()' style='white-space:nowrap'><button class='btn sm zdUpload' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' type='button'>vervangen</button> "+
+        "<td onclick='event.stopPropagation()' style='white-space:nowrap'><button class='btn sm zdUpload' title='Vervang de commercial invoice van deze zending door een nieuwe' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' type='button'>vervangen</button> "+
           "<button class='btn sm zdWeg' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' type='button' title='Deze zending weghalen; de spa's tellen dan weer als in productie'>weg</button></td></tr>"+
         (zdOpen[k]?zdZendingInhoud(x.z,6):""); }).join("")+
       "</tbody></table></div>"
@@ -1634,8 +1634,8 @@ function renderQbInvoices(){
   const nieuw=qbInvoices.filter(i=>!qbVerborgen[i.docNr] && !(i.audrey && i.betaald)).filter(i=>qbMatch(i,q));
   let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px'>"+
     "<h3 style='margin:0'>Nieuwe orders uit QuickBooks — "+nieuw.length+"</h3>"+
-    "<div style='display:flex;gap:10px;flex-wrap:wrap'><button id='qbSelAll' class='btn' type='button'>Alles selecteren</button>"+
-    "<button id='qbApprove' class='btn solid' type='button'>Accorderen → Logic4-orders</button></div></div>"+
+    "<div style='display:flex;gap:10px;flex-wrap:wrap'><button id='qbSelAll' class='btn' type='button' title='Vink alle facturen in deze lijst aan'>Alles selecteren</button>"+
+    "<button id='qbApprove' class='btn solid' type='button' title='Het Dashboard maakt van de aangevinkte facturen een order in Logic4'>Accorderen → Logic4-orders</button></div></div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 14px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.<br>Na accorderen blijft de factuur hier staan tot je <b>Ontv. Audrey</b> aanvinkt én hij volledig betaald is. Bij een deelbetaling staat hij op beide plekken, met het label <b>kopie</b>.</p>"+
     "<div id='qbApproveStatus' class='status-msg hidden'></div>"+
     "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Betaald</th><th>Ontv. Audrey</th><th>Status</th><th>Eigen notitie</th><th></th></tr></thead><tbody>";
@@ -1667,13 +1667,13 @@ function renderQbInvoices(){
             ? "<div onclick='event.stopPropagation()' style='margin-top:4px;padding:6px 8px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;font-size:11.5px;color:#9a3412;max-width:320px;white-space:normal'>"+
               "<b>Staat mogelijk al in Logic4:</b> order "+esc(String(qbDubbel[inv.id].orderId))+" van "+esc(qbDubbel[inv.id].klant)+" ("+esc(eurNL(qbDubbel[inv.id].totaal))+
               (qbDubbel[inv.id].referentie?", "+esc(qbDubbel[inv.id].referentie):"")+", "+esc(datumNL(qbDubbel[inv.id].datum))+"). Daarom is er geen nieuwe order gemaakt.<br>"+
-              "<button type='button' class='qbDubbelKoppel' data-qbid='"+esc(inv.id)+"' data-order='"+esc(String(qbDubbel[inv.id].orderId))+"' style='margin-top:5px;border:1px solid #fdba74;background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>koppel aan "+esc(String(qbDubbel[inv.id].orderId))+"</button> "+
-              "<button type='button' class='qbDubbelToch' data-qbid='"+esc(inv.id)+"' style='margin-top:5px;border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>toch nieuwe order</button></div>"
+              "<button type='button' class='qbDubbelKoppel' title='Koppel deze QuickBooks-factuur aan de order die al in Logic4 staat' data-qbid='"+esc(inv.id)+"' data-order='"+esc(String(qbDubbel[inv.id].orderId))+"' style='margin-top:5px;border:1px solid #fdba74;background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>koppel aan "+esc(String(qbDubbel[inv.id].orderId))+"</button> "+
+              "<button type='button' class='qbDubbelToch' title='Het Dashboard maakt toch een nieuwe order in Logic4, ook al lijkt deze factuur er al te staan' data-qbid='"+esc(inv.id)+"' style='margin-top:5px;border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>toch nieuwe order</button></div>"
             : "")+
           "<div onclick='event.stopPropagation()' style='margin-top:4px'>"+
           (qbKoppelOpen[sleutel]
             ? "<input type='text' inputmode='numeric' class='qbKoppelNr' data-qbid='"+esc(inv.id||"")+"' placeholder='Logic4-ordernummer' style='width:130px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px'> "+
-              "<button type='button' class='qbKoppel' data-qbid='"+esc(inv.id||"")+"' style='border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>koppelen</button>"
+              "<button type='button' class='qbKoppel' title='Koppel deze QuickBooks-factuur aan een order die al in Logic4 staat; het Dashboard maakt dan geen nieuwe order aan' data-qbid='"+esc(inv.id||"")+"' style='border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>koppelen</button>"
             : "<button type='button' class='qbKoppelOpen' data-k='"+esc(sleutel)+"' title='Deze factuur staat al als order in Logic4: koppel hem daaraan in plaats van een nieuwe order te maken' style='border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>bestaande order</button>")+
           "</div>")+"</td>"+
       /* Eigen notitie. Chantal (video, 9 sep 2026): "ik moet hier zelf achter
@@ -2051,7 +2051,7 @@ function audControleHtml(j){
   return "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
     (mis.length?"<b>In Logic4 ontbreken "+mis.length+" van de "+(j.regels||[]).length+" geboekte regels:</b><ul style='margin:6px 0 0;padding-left:18px'>"+
       mis.map(r=>"<li>factuur "+esc(r.factuur||"")+" op order "+esc(String(r.order))+": "+esc(usd(r.dollar))+" ("+eur(r.euro)+")</li>").join("")+"</ul>"+
-      "<div style='margin-top:8px'><button class='btn' type='button' data-opnieuw='"+esc(j.wireId)+"'>deze "+mis.length+" regels opnieuw boeken</button></div>":"")+
+      "<div style='margin-top:8px'><button class='btn' type='button' title='Het Dashboard boekt de regels die in Logic4 ontbreken alsnog' data-opnieuw='"+esc(j.wireId)+"'>deze "+mis.length+" regels opnieuw boeken</button></div>":"")+
     (vaag.length?"<div style='margin-top:8px'>Op deze regels is de order in Logic4 anders betaald dan het Dashboard verwacht; kijk ze in Logic4 na: "+
       vaag.map(r=>"factuur "+esc(r.factuur||"")+" (order "+esc(String(r.order))+")").join(", ")+"</div>":"")+
     "</div>";
@@ -2316,7 +2316,7 @@ function audRenderWachtrij(){
       "<h3 style='margin:0'>Geaccordeerd — nog te verwerken ("+wacht.length+")</h3>"+
       "<div style='display:flex;gap:8px;align-items:center'>"+
         (klaar.length?"<span class='pill' style='background:#dcfce7;color:#15803d'>"+klaar.length+" afgerond</span>":"")+
-        "<button class='btn' type='button' id='audWachtToon'>overzicht tonen</button></div></div></div>";
+        "<button class='btn' type='button' id='audWachtToon' title='Toon de facturen die op een wire wachten'>overzicht tonen</button></div></div></div>";
     document.getElementById("audWachtToon").addEventListener("click",()=>{ audWachtOpen=true; try{ localStorage.setItem("fp.amerika.wachtrij","open"); }catch(e){} audRenderWachtrij(); });
     return;
   }
@@ -2325,7 +2325,7 @@ function audRenderWachtrij(){
       "<h3 style='margin:0'>Geaccordeerd — nog te verwerken ("+wacht.length+")</h3>"+
       "<div style='display:flex;gap:8px;align-items:center'>"+
         (klaar.length?"<span class='pill' style='background:#dcfce7;color:#15803d'>"+klaar.length+" afgerond</span>":"")+
-        "<button class='btn' type='button' id='audWachtDicht'>inklappen</button>"+
+        "<button class='btn' type='button' id='audWachtDicht' title='Klap dit overzicht weer in'>inklappen</button>"+
         /* De bedragen alsnog op de bestaande orders zetten. Zie de
            toelichting bij /amerika/qb/prijzen in de worker: alles wat vóór
            7 sep 2026 is aangemaakt staat in Logic4 op nul, en daar valt niets
@@ -2540,21 +2540,21 @@ function audRegelActies(w,r,inQb){
   const idx=orig.regels.indexOf(r); if(idx<0) return "";
   const k=w.id+":"+idx, knop="border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer;margin:3px 4px 0 0";
   if(r.bijBatch) return "<div style='font-size:11px;margin-top:3px'><span class='pill' style='background:#e0f2fe;color:#075985;font-size:10px'>restant van batch "+esc(datumNL(r.bijBatchDatum)||r.bijBatchDatum||"")+"</span>"+
-    " <button type='button' class='audBatchLos' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>losmaken</button></div>";
+    " <button type='button' class='audBatchLos' title='Haal de koppeling met de eerdere batch weer weg' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>losmaken</button></div>";
   if(r.orderHand) return "<div style='font-size:11px;margin-top:3px'><span class='pill' style='background:#e0f2fe;color:#075985;font-size:10px'>gekoppeld aan order #"+esc(String(r.orderHand))+(r.orderHandKlant?" · "+esc(r.orderHandKlant):"")+"</span>"+
-    " <button type='button' class='audLos' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>losmaken</button></div>";
+    " <button type='button' class='audLos' title='Haal de koppeling van deze regel met een order weer weg' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>losmaken</button></div>";
   if(inQb&&inQb.logic4Order) return "";
   let h="<div>";
   h+=audKoppelOpen[k]
     ? "<input type='text' inputmode='numeric' class='audKoppelNr' data-wire='"+esc(w.id)+"' data-i='"+idx+"' placeholder='Logic4-ordernummer' style='width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px;margin-top:3px'>"+
-      " <button type='button' class='audKoppel' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>koppelen</button>"
+      " <button type='button' class='audKoppel' title='Koppel deze regel aan een order in Logic4, zodat hij mee kan met het boeken' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>koppelen</button>"
     : "<button type='button' class='audKoppelOpen' data-k='"+esc(k)+"' style='"+knop+"' title='Deze regel boeken op een order die al in Logic4 staat'>koppel aan order</button>";
   if(String(r.soort||"")==="balance"){
     const eerder=(wiresData.wires||[]).filter(x=>String(x.id)!==String(w.id)&&String(x.datum||"")<=String(w.datum||"")).sort((a,b)=>String(b.datum||"").localeCompare(String(a.datum||"")));
     h+=audBatchKies[k]
       ? "<select class='audBatchSel' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px;margin-top:3px'>"+
           eerder.map(x=>"<option value='"+esc(x.id)+"'>batch "+esc(datumNL(x.datum)||x.datum||"")+"</option>").join("")+"</select>"+
-        " <button type='button' class='audBatchKoppel' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>koppelen</button>"
+        " <button type='button' class='audBatchKoppel' title='Deze regel is de rest van een eerdere batch; het Dashboard boekt hem dan niet nog een keer' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>koppelen</button>"
       : (eerder.length?"<button type='button' class='audBatchOpen' data-k='"+esc(k)+"' style='"+knop+"' title='Dit bedrag is het restant van een eerdere batch die door de banklimiet in delen binnenkwam'>hoort bij eerdere batch</button>":"");
   }
   h+=r.naarChantal
@@ -2579,7 +2579,7 @@ function audRefundInfo(w,r){
     return "<div style='font-size:11px;color:var(--muted);margin-top:3px'>Reden van de refund ophalen uit QuickBooks…</div>";
   }
   const gevraagd=r.redenGevraagd?"<span style='color:#92400e;margin-left:4px'>reden gevraagd aan Chantal op "+esc(String(r.redenGevraagd).slice(0,10).split("-").reverse().join("-"))+"</span>":"";
-  const vraag=r.redenGevraagd?"":"<button type='button' class='audRedenVraag' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>reden vragen aan Chantal</button>";
+  const vraag=r.redenGevraagd?"":"<button type='button' class='audRedenVraag' title='Zet een taak klaar voor Chantal om bij Audrey de reden van deze terugbetaling te vragen' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>reden vragen aan Chantal</button>";
   if(rf.gevonden&&rf.reden){
     const verschil=Math.abs(Math.abs(Number(r.kolom1)||0)-Math.abs(Number(rf.bedrag)||0))>0.01;
     return "<div style='font-size:11.5px;margin-top:4px;padding:5px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;color:#075985;white-space:normal;max-width:420px'>"+
@@ -2625,12 +2625,18 @@ function audRender(){
     const totaalRegel=w.regels.find(r=>r.soort==="totaal"&&r.kolom3!=null);
     /* Geboekte batches gaan naar de Historie onderaan (Gerrit, 25 sep 2026),
        ingeklapt; klik op een batch en hij schuift uit. */
-    const inHistorie=!qz&&batchGeboekt(w).compleet;
+    /* Naar de historie: vanzelf als hij helemaal geboekt is, of met de hand
+       met de knop "naar historie" (w.plek). Er wordt nooit meer een batch
+       weggegooid (Gerrit, 26 okt 2026: "Alles moet in de historie blijven").
+       "terug naar wire-overzicht" haalt hem er weer uit (w.plek = overzicht). */
+    const compleet=batchGeboekt(w).compleet;
+    const inHistorie=!qz&&(w.plek==="historie"||(w.plek!=="overzicht"&&compleet));
     const histKop=inHistorie
       ? "<details class='audKaartHist' data-hist='"+esc(w.id)+"'"+(audHistOpen[w.id]?" open":"")+" style='margin:0 0 8px'>"+
         "<summary style='cursor:pointer;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:#fff;font-size:13px'>"+
         "<b>Batch van "+esc(String(w.datum||"").slice(0,10).split("-").reverse().join("-"))+"</b>"+
-        (totaalRegel?" · "+esc(usd(totaalRegel.kolom3))+" ontvangen":"")+" · <span style='color:#15803d'>geboekt</span></summary>"
+        (totaalRegel?" · "+esc(usd(totaalRegel.kolom3))+" ontvangen":"")+" · "+(compleet?"<span style='color:#15803d'>geboekt</span>":
+          "<span style='color:#92400e'>met de hand naar de historie"+(w.plekDoor?" door "+esc(String(w.plekDoor).split("@")[0]):"")+(w.plekTs?" op "+esc(datumNL(String(w.plekTs).slice(0,10))):"")+"</span>")+"</summary>"
       : "";
     return histKop+"<div class='card'>"+
       "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px'>"+
@@ -2663,7 +2669,9 @@ function audRender(){
           (batchGeboekt(w).orders>0||geboektIds["koers:"+w.id]
             ? "<button class='btn' type='button' data-terug='"+esc(w.id)+"' title='Alleen als de boekingen van deze batch in Logic4 met de hand zijn weggehaald: het Dashboard vergeet dat hij geboekt is, zodat je opnieuw kunt boeken. Logic4 blijft zoals hij is.'>opnieuw kunnen boeken</button>"
             : "")+
-          "<button class='btn' type='button' data-del='"+esc(w.id)+"'>verwijderen</button>"+
+          (inHistorie
+            ? "<button class='btn' type='button' data-plek='overzicht' data-wire='"+esc(w.id)+"' title='Zet deze batch terug in het wire-overzicht bovenaan, tussen de batches die nog aandacht vragen. Er wordt niets geboekt of gewist.'>terug naar wire-overzicht</button>"
+            : "<button class='btn' type='button' data-plek='historie' data-wire='"+esc(w.id)+"' title='Zet deze batch in de historie onderaan, bijvoorbeeld als de laatste regel met de hand in Logic4 is geboekt. Er wordt niets geboekt of gewist; met terug naar wire-overzicht haal je hem weer terug.'>naar historie</button>")+
         "</div></div>"+
       "<div class='audControle' data-controle-uit='"+esc(w.id)+"'>"+(audControleUit[w.id]||"")+"</div>"+
       (function(){
@@ -2680,7 +2688,7 @@ function audRender(){
             (ct.kostenUitVerschil?("<br>De mail noemt de bankkosten als één bedrag. Het verschil tussen gefactureerd en ontvangen ("+esc(usd(ct.kosten))+") zijn de bankkosten van deze batch."):"")+
             (totaalRegel&&totaalRegel.handmatig?"<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>Ontvangen bedrag (zelf ingevuld), aanpassen:</span>"+
                 "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' value='"+esc(nlBedrag(totaalRegel.kolom3))+"' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
-                "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>bedrag aanpassen</button></div>":"")+
+                "<button class='btn' type='button' title='Pas het bedrag aan dat op de bank is binnengekomen' data-ontvangen='"+esc(w.id)+"'>bedrag aanpassen</button></div>":"")+
             "</div>"
           : "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
             "<b>Afwijking, deze batch blijft staan.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
@@ -2692,7 +2700,7 @@ function audRender(){
             (ct.redenen.some(r=>/geen totaalregel/i.test(r))||(totaalRegel&&totaalRegel.handmatig)
               ? "<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>"+(totaalRegel&&totaalRegel.handmatig?"Ontvangen bedrag (zelf ingevuld), aanpassen:":"Wat is er op de bank ontvangen voor deze batch?")+"</span>"+
                 "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' value='"+(totaalRegel&&totaalRegel.handmatig?esc(nlBedrag(totaalRegel.kolom3)):"")+"' placeholder='bv. 99.757,07' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
-                "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>"+(totaalRegel&&totaalRegel.handmatig?"bedrag aanpassen":"ontvangen bedrag vastleggen")+"</button>"+
+                "<button class='btn' type='button' title='Leg vast hoeveel euro er voor deze batch op de bank is binnengekomen' data-ontvangen='"+esc(w.id)+"'>"+(totaalRegel&&totaalRegel.handmatig?"bedrag aanpassen":"ontvangen bedrag vastleggen")+"</button>"+
                 "<span style='font-size:11px;color:var(--muted)'>komma voor de centen, punt voor de duizendtallen (99.757,07); 20,000 wordt 20.000</span></div>"
               : "")+
             (ct.redenen.some(r=>/geen Logic4-order/i.test(r))
@@ -2729,7 +2737,7 @@ function audRender(){
         return "<div class='status-msg' style='margin:0 0 10px;background:#f8faf5;color:#1f2937;border:1px solid #dbe7cc;display:flex;gap:10px;align-items:center;flex-wrap:wrap'>"+
           "<span><b>Koersverschil.</b> Op 1160 staat nu "+esc(eur(g.op1160))+" (tegen 1,12). Wat kwam er in euro op de bank?</span>"+
           "<input type='text' inputmode='decimal' data-koers-eur='"+esc(w.id)+"' placeholder='bv. 33.850,12' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
-          "<button class='btn' type='button' data-koers='"+esc(w.id)+"'>verschil naar 9075 boeken</button></div>";
+          "<button class='btn' type='button' title='Het Dashboard boekt het verschil tussen 1160 en de ontvangst als koersverschil op 9075' data-koers='"+esc(w.id)+"'>verschil naar 9075 boeken</button></div>";
       })()+
       "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
       "<div class='tablewrap'><table class='grid'><thead><tr>"+
@@ -2974,10 +2982,16 @@ function audRender(){
       await audLoadGeboekt(); audRender();
     }catch(e){ alert("Het koersverschil vraagt nog een poging: "+e.message); b.disabled=false; b.textContent="verschil naar 9075 boeken"; }
   }));
-  box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
-    if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;
-    wiresData.wires=wiresData.wires.filter(w=>String(w.id)!==b.dataset.del);
-    try{ await audSave(); audRender(); }catch(e){ alert("Opslaan vraagt nog een poging: "+e.message); }
+  /* Naar de historie of terug. Wegggooien kan niet meer: elke batch blijft bewaard. */
+  box.querySelectorAll("[data-plek]").forEach(b=>b.addEventListener("click",async()=>{
+    const w=wiresData.wires.find(x=>String(x.id)===b.dataset.wire); if(!w) return;
+    const g=batchGeboekt(w), naar=b.dataset.plek;
+    if(naar==="historie"&&!g.compleet&&window.fpBevestig&&!(await fpBevestig("Batch van "+datumNL(String(w.datum||"").slice(0,10))+" naar de historie?\n\nHet Dashboard heeft hiervan "+g.orders+" van de "+g.teller+" regels geboekt. Zet hem alleen in de historie als de rest met de hand in Logic4 is geboekt. Er wordt niets geboekt of gewist.",{knop:"Naar historie"}))) return;
+    const oud={plek:w.plek,plekDoor:w.plekDoor,plekTs:w.plekTs};
+    w.plek=naar; w.plekDoor=(localStorage.getItem("fp.email")||""); w.plekTs=new Date().toISOString();
+    if(naar==="historie") audHistOpen.__alles=true;
+    try{ await audSave(); if(window.fpLog) window.fpLog(naar==="historie"?"batch-naar-historie":"batch-terug-naar-overzicht","batch "+(w.datum||w.id)); audRender(); }
+    catch(e){ Object.assign(w,oud); if(window.fpMelding) fpMelding("Opslaan vraagt nog een poging: "+e.message); }
   }));
 }
 /* Vangnet voor als de opmaak niet meekomt. Plakt iemand als platte tekst,
