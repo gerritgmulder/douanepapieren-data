@@ -17592,7 +17592,13 @@ async function logic4Lees(env, request, body) {
 /* Dani gaat uit dienst (Gerrit, 23 okt 2026): zijn bakwagen wordt een
    flexwagen. Een rit met "Dani" in de naam hoort dus bij de flexwagen, en
    Manon vult per dag in wie er rijdt. Vaste wagen blijft alleen Jordy. */
-const BW_CHAUFFEURS = [{ naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex|\bdan[iy]\b/i }];
+/* Maar pas vanaf 1 november (Manon, 26 okt 2026: "we hadden afgesproken per
+   1 november"). Tot en met 31 oktober houdt Dani zijn eigen bakwagen. */
+const BW_DANI_TOT = "2026-11-01";
+function bwDaniVast() { return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" }) < BW_DANI_TOT; }
+const BW_CHAUFFEURS_MET_DANI = [{ naam: "Dani", rx: /\bdan[iy]\b/i }, { naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex/i }];
+const BW_CHAUFFEURS_ZONDER = [{ naam: "Jordy", rx: /\bjord[iy]\b/i }, { naam: "Flex", rx: /\bflex|\bdan[iy]\b/i }];
+function bwChauffeurs() { return bwDaniVast() ? BW_CHAUFFEURS_MET_DANI : BW_CHAUFFEURS_ZONDER; }
 const BW_RIT = /eigen ?r?oute|bakwagen/i;
 // Waar een antwoord van de klant op de bevestiging terechtkomt.
 const BW_BON_ANTWOORD = "logistiek@fonteyn.nl";   // Manon, 23 okt 2026
@@ -17625,12 +17631,12 @@ async function bwDb(env) {
   }
   return db;
 }
-function bwChauffeur(tekst) { const c = BW_CHAUFFEURS.find(c => c.rx.test(String(tekst || ""))); return c ? c.naam : ""; }
+function bwChauffeur(tekst) { const c = bwChauffeurs().find(c => c.rx.test(String(tekst || ""))); return c ? c.naam : ""; }
 /* De inlog van een chauffeur: gebruikersnaam dani, jordy of flex (ook met een
    achternaam of mailadres erachter). */
 function bwChauffeurVanInlog(wie) {
   const w = String(wie || "").toLowerCase();
-  if (/^dan[iy]([.@_ -]|$)/.test(w)) return "Flex";   // Dani rijdt nu op een flexwagen
+  if (/^dan[iy]([.@_ -]|$)/.test(w)) return bwDaniVast() ? "Dani" : "Flex";   // vanaf 1 nov op de flexwagen
   if (/^jord[iy]([.@_ -]|$)/.test(w)) return "Jordy";
   if (/^flex([.@_ -]|$)/.test(w)) return "Flex";
   return "";
@@ -17802,7 +17808,7 @@ async function bakwagenOverzicht(env) {
     soort: Number(r.TypeId) === 2 ? "retour" : "levering", chauffeur: (ak[String(r.Id)] || {}).chauffeur || bwChauffeur(r.Description),
     aantal: aantalVan(r), aangepast: bwAanpasIets(aanpas[String(r.Id)]), akkoord: ak[String(r.Id)] || null }))
     .sort((a, b) => a.datum.localeCompare(b.datum) || a.naam.localeCompare(b.naam));
-  return { ok: true, vandaag, chauffeurs: BW_CHAUFFEURS.map(c => c.naam), ritten };
+  return { ok: true, vandaag, chauffeurs: bwChauffeurs().map(c => c.naam), ritten };
 }
 /* 2. Eén rit bekijken: de stops met de paklijst. */
 async function bakwagenRit(env, id) {
@@ -17813,14 +17819,14 @@ async function bakwagenRit(env, id) {
   const ak = await db.prepare("SELECT chauffeur, bestuurder, door, ts FROM bakwagen_akkoord WHERE rit = ?1").bind(id).first();
   const rit = { id: r.id, naam: r.naam, datum: r.datum, soort: r.soort, memo: r.memo, chauffeur: (ak && ak.chauffeur) || bwChauffeur(r.naam), akkoord: ak || null };
   const bezig = await bwStops(env, db, l4, [rit]);
-  return { ok: true, bezig, rit, chauffeurs: BW_CHAUFFEURS.map(c => c.naam) };
+  return { ok: true, bezig, rit, chauffeurs: bwChauffeurs().map(c => c.naam) };
 }
 /* Akkoord: de rit staat op de dag zelf klaar bij deze chauffeur. Intrekken kan. */
 async function bakwagenAkkoord(env, wie, b) {
   const id = String(b.rit || "").replace(/\D/g, "");
   const db = await bwDb(env);
   if (b.akkoord === false) { await db.prepare("DELETE FROM bakwagen_akkoord WHERE rit = ?1").bind(id).run(); await bwSein(env, wie, "akkoord", id); return { ok: true }; }
-  const chauffeur = BW_CHAUFFEURS.map(c => c.naam).find(n => n === b.chauffeur);
+  const chauffeur = bwChauffeurs().map(c => c.naam).find(n => n === b.chauffeur);
   if (!chauffeur) return { ok: false, error: "Kies eerst de chauffeur." };
   const r = await db.prepare("SELECT naam, datum, soort, memo FROM bakwagen_rit WHERE id = ?1").bind(id).first();
   if (!r) return { ok: false, error: "Druk eerst op Ritten ophalen." };

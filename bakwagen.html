@@ -240,7 +240,7 @@ var ikChauffeur = chauffeurVanInlog(ik);
 var voorbeeld = false, voorbeeldDatum = null;
 (function(){
   var als = (location.search.match(/[?&]als=([^&]*)/) || [])[1], dg = (location.search.match(/[?&]datum=(\d{4}-\d{2}-\d{2})/) || [])[1];
-  if (planner && als && ["Jordy","Flex"].indexOf(decodeURIComponent(als)) >= 0) {
+  if (planner && als && CHAUFFEURS.indexOf(decodeURIComponent(als)) >= 0) {
     voorbeeld = true; planner = false; ikChauffeur = decodeURIComponent(als); voorbeeldDatum = dg || null;
     document.documentElement.classList.add("voorbeeld");
   }
@@ -249,7 +249,9 @@ var voorbeeld = false, voorbeeldDatum = null;
    derde wagen is de flexwagen, die Manon inzet waar nodig. */
 /* Dani gaat uit dienst (23 okt 2026): zijn wagen is nu ook een flexwagen.
    Vast blijft alleen Jordy; bij de flexwagen vult Manon per dag in wie er rijdt. */
-var CHAUFFEURS = ["Jordy","Flex"];
+/* Maar pas vanaf 1 november (Manon, 26 okt 2026); tot dan rijdt Dani nog zijn eigen wagen. */
+var DANI_VAST = isoVan(new Date()) < "2026-11-01";
+var CHAUFFEURS = DANI_VAST ? ["Dani","Jordy","Flex"] : ["Jordy","Flex"];
 function wagenNaam(n){ return n === "Flex" ? "Flexwagen" : n ? "Bakwagen " + n : ""; }
 function chauffeurNaam(n){ return n === "Flex" ? "Flexwagen" : n; }
 
@@ -295,7 +297,7 @@ function tekenPlanning(){
       h += '<div class="dagtitel">'+esc(dagTekst(dag))+(dag === vandaag ? " (vandaag)" : dag === plusDagen(vandaag,1) ? " (morgen)" : "")+'</div>';
       /* Altijd Jordy en de flexwagen, ook zonder rit; kan er op één dag meer
          dan één flexrit zijn, dan staan ze allemaal onder de flexwagen. */
-      ["Jordy","Flex"].forEach(function(w){
+      CHAUFFEURS.forEach(function(w){
         var van = opDag.filter(function(r){ return r.chauffeur === w; });
         if (!van.length) h += '<div class="ritrij" style="opacity:.75"><div class="r1"><b>'+esc(wagenNaam(w))+'</b><small>nog geen rit in Logic4</small><span class="pil">Nog te maken</span></div></div>';
         van.forEach(function(r){ h += ritRij(r, wagenNaam(w) + (r.chauffeur === "Flex" && r.akkoord && r.akkoord.bestuurder ? " · " + r.akkoord.bestuurder : "")); });

@@ -75,9 +75,11 @@ var vandaag = iso(new Date());
 var morgen = plus(vandaag, 1); if (new Date(morgen+"T12:00:00").getDay() === 0) morgen = plus(morgen, 1);
 var wagen = "Jordy", dag = vandaag;
 try { wagen = localStorage.getItem("fp.bwc.wagen") || "Jordy"; } catch(e) {}
-if (["Jordy","Flex"].indexOf(wagen) < 0) wagen = "Flex";   // Dani rijdt nu op een flexwagen (23 okt 2026)
+// Dani rijdt vanaf 1 november op de flexwagen (Manon, 26 okt 2026: tot dan zijn eigen wagen).
+var WAGENS = vandaag < "2026-11-01" ? [["Dani","Bakwagen Dani"],["Jordy","Bakwagen Jordy"],["Flex","Flexwagen"]] : [["Jordy","Bakwagen Jordy"],["Flex","Flexwagen"]];
+if (WAGENS.map(function(w){ return w[0]; }).indexOf(wagen) < 0) wagen = "Flex";
 function teken(){
-  $("wagens").innerHTML = [["Jordy","Bakwagen Jordy"],["Flex","Flexwagen"]].map(function(w){ return '<button type="button" data-w="'+w[0]+'"'+(w[0]===wagen?' class="aan"':'')+'>'+w[1]+'</button>'; }).join("");
+  $("wagens").innerHTML = WAGENS.map(function(w){ return '<button type="button" data-w="'+w[0]+'"'+(w[0]===wagen?' class="aan"':'')+'>'+w[1]+'</button>'; }).join("");
   $("dagen").innerHTML = '<button type="button" data-d="'+vandaag+'"'+(dag===vandaag?' class="aan"':'')+'>Vandaag</button>' +
     '<button type="button" data-d="'+morgen+'"'+(dag===morgen?' class="aan"':'')+'>Volgende werkdag</button>' +
     '<input type="date" id="dagKeus" value="'+dag+'">';

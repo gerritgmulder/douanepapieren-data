@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-26", bestand: "bakwagen.html", soort: "hersteld",
+      titel: "Bakwagen Dani weer in beeld",
+      wat: "Dani rijdt tot en met 31 oktober gewoon zijn eigen bakwagen; zijn ritten staan weer onder Bakwagen Dani. Vanaf 1 november worden ze de flexwagen." },
+    {
       datum: "2026-10-26", iedereen: true, soort: "nieuw",
       titel: "Nieuwe werkwijze: voorstel wordt order",
       wat: "Vanaf 27 oktober maak je in Logic4 altijd meteen een order. Tot de eerste aanbetaling heet die order een Voorstel. Komt er geld binnen, dan zet het Dashboard het voorstel binnen het uur zelf op 30% aanbetaald of Volledig betaald. Een order zonder betaling gaat vanzelf terug naar Voorstel. Zo is een order bij Fonteyn pas een order als er is aanbetaald." },
