@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-26", bestand: "order-status.html", soort: "beter",
+      titel: "Orderstatus: lijst meteen bij het openen",
+      wat: "De lijst met statussen die aangepast kunnen worden staat er nu meteen; de knop om eerst te controleren is weg. Nieuw in de lijst: orders die op 30% aanbetaald of Volledig betaald staan terwijl er nog niets is betaald. Die gaan terug naar Wachten op aanbetaling en staan standaard uitgevinkt, zodat je ze eerst kunt bekijken." },
+    {
       datum: "2026-10-26", bestand: "amerika.html", soort: "beter",
       titel: "Ontvangen Audrey: naar historie in plaats van verwijderen",
       wat: "Een batch gaat nooit meer weg. Met naar historie zet je hem onderaan bij de historie, bijvoorbeeld als de laatste regel met de hand in Logic4 is geboekt. Met terug naar wire-overzicht haal je hem weer terug. Ga met de muis op een knop staan en je ziet wat hij doet." },

@@ -305,7 +305,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <div class="right">
     <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
     <button class="logout hidden" id="demoBtn" type="button" title="Toon een voorbeeld-dry-run (alleen kijken, Logic4 blijft zoals hij is)">🎬 Demo</button>
-    <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+    <button class="logout" id="logoutBtn" type="button" title="Uitloggen uit het Dashboard">Uitloggen</button>
   </div>
 </header>
 
@@ -327,17 +327,17 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <h2>Wat doet deze pagina?</h2>
       <p class="sub">
         Logic4 markeert een order pas als "officieel" zodra de status handmatig is aangepast
-        nadat er een betaling is binnengekomen. Deze tool zoekt orders die nog op
-        <b>Verkooporder</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald, en
-        adviseert de juiste status. Bij een dry-run kijk je alleen mee; Logic4 blijft zoals hij is.
+        nadat er een betaling is binnengekomen. Deze tegel zoekt orders die nog op
+        <b>Verkooporder</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald,
+        en orders die op <b>30% aanbetaald</b> of <b>Volledig betaald</b> staan terwijl er nog niets is betaald.
+        De lijst staat er meteen bij het openen; Logic4 verandert pas als je op Doorvoeren klikt.
       </p>
 
       <div id="lastDoorvoer" class="last-doorvoer">Laatste doorvoer wordt geladen…</div>
 
       <div class="actions">
-        <button id="btnDryRun" type="button">Dry-run starten</button>
         <button id="btnApply" type="button" disabled
-                title="Eerst een dry-run draaien om te zien wat er gewijzigd zou worden.">Doorvoeren (0)</button>
+                title="Het Dashboard zet de aangevinkte orders in Logic4 op de nieuwe status">Doorvoeren (0)</button>
       </div>
 
       <div id="statusBar" class="status-row hidden"></div>
@@ -354,6 +354,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <div class="stat accent"><div class="lbl">Wijzigingen nodig</div><div class="val" id="statChanges">—</div></div>
         <div class="stat"><div class="lbl">→ 30% aanbetaald</div><div class="val" id="statTo25">—</div></div>
         <div class="stat ok"><div class="lbl">→ Volledig betaald</div><div class="val" id="statTo30">—</div></div>
+        <div class="stat"><div class="lbl">→ Wachten op aanbetaling</div><div class="val" id="statTo15">—</div></div>
         <div class="stat"><div class="lbl">Totaal "verstopt"</div><div class="val" id="statHiddenAmount">—</div></div>
       </div>
 
@@ -423,6 +424,9 @@ const SOURCE_STATUSES = [
   { id: STATUS_VERKOOPORDER,   label: "Verkooporder" },
   { id: STATUS_WACHT_AANBETALING, label: "Wachten op aanbetaling" },
   { id: STATUS_30_AANBETAALD,  label: "30% aanbetaald" },
+  /* Ook volledig betaald: een order die daar staat terwijl er niets of te
+     weinig is betaald, hoort terug (Gerrit, 26 okt 2026). */
+  { id: STATUS_VOLLEDIG_BETAALD, label: "Volledig betaald" },
 ];
 
 const PAGE_SIZE = 500;
@@ -509,7 +513,15 @@ function decideTargetStatus(order) {
   // Tolerance: 0.5 cent — door BTW/floating-point kunnen totalen minimaal afwijken
   const epsilon = 0.005;
 
-  if (paid <= 0) return null; // nog geen betaling → geen wijziging
+  /* Nog niets betaald, maar wel op 30% aanbetaald of volledig betaald:
+     terug naar Wachten op aanbetaling (Gerrit, 26 okt 2026: order 3523328
+     stond op 30% aanbetaald zonder één betaling). Of de betaling niet op een
+     factuur staat, controleert runDryRun hierna nog. */
+  if (paid <= 0) {
+    // Een order van 0 euro of minder (garantie, retour) is terecht volledig betaald.
+    if (total > epsilon && (currentId === STATUS_30_AANBETAALD || currentId === STATUS_VOLLEDIG_BETAALD)) return STATUS_WACHT_AANBETALING;
+    return null;
+  }
   if (paid >= total - epsilon) {
     // volledig betaald
     if (currentId === STATUS_VOLLEDIG_BETAALD) return null;
@@ -531,14 +543,13 @@ function statusName(id) {
 }
 
 function targetBadgeClass(targetId) {
-  return targetId === STATUS_VOLLEDIG_BETAALD ? "to-30" : "to-25";
+  return targetId === STATUS_VOLLEDIG_BETAALD ? "to-30" : targetId === STATUS_WACHT_AANBETALING ? "from" : "to-25";
 }
 
-// ── Dry-run uitvoeren ──
+// ── De controle: draait vanzelf bij het openen (Gerrit, 26 okt 2026) ──
 let lastResults = null; // bewaar voor straks (apply-stap)
 
 async function runDryRun() {
-  el("btnDryRun").disabled = true;
   el("resultsPanel").classList.add("hidden");
   setStatus("", "Bezig met ophalen van orders…");
   setProgress(0);
@@ -601,6 +612,21 @@ async function runDryRun() {
         hiddenAmount += total;
       }
     }
+    /* Terug naar Wachten op aanbetaling alleen als er ook op een factuur van
+       die order niets staat: bij het factureren zet Logic4 de betaling van de
+       order over naar de factuur, en dan staat er op de order 0 betaald. */
+    const terug = candidates.filter(c => c.targetStatusId === STATUS_WACHT_AANBETALING);
+    for (let i = 0; i < terug.length; i++) {
+      const c = terug[i];
+      setStatus("", `Controle op facturen ${i + 1} van ${terug.length}…`);
+      try {
+        const f = await logic4("/v3/Orders/GetInvoices", { DebtorId: c.rawOrder.DebtorId, CreationDateFrom: String(c.date || "").slice(0, 10) + "T00:00:00", TakeRecords: 100, SkipRecords: 0 });
+        const fl = Array.isArray(f) ? f : (f?.Records || []);
+        const betaald = fl.filter(x => Number(x.InvoiceBelongsToOrderNumber) === Number(c.id)).reduce((n, x) => n + Number(x.Totals?.Calc_TotalPayed || 0), 0);
+        if (betaald > 0) c.overslaan = true;
+      } catch (e) { c.overslaan = true; }   // twijfel: niet aanbieden
+    }
+    for (let i = candidates.length - 1; i >= 0; i--) if (candidates[i].overslaan) candidates.splice(i, 1);
     candidates.sort((a, b) => b.total - a.total); // grootste eerst
 
     lastResults = { allOrders, candidates };
@@ -619,10 +645,8 @@ async function runDryRun() {
     }
   } catch (e) {
     console.error(e);
-    setStatus("bad", "De dry-run vraagt nog een poging: " + e.message);
+    setStatus("bad", "Het ophalen vraagt nog een poging: " + e.message + " (open de tegel opnieuw)");
     setProgress(null);
-  } finally {
-    el("btnDryRun").disabled = false;
   }
 }
 
@@ -632,6 +656,7 @@ function renderResults(checked, candidates, hiddenAmount) {
   el("statChanges").textContent = candidates.length.toLocaleString("nl-NL");
   el("statTo25").textContent = candidates.filter(c => c.targetStatusId === STATUS_30_AANBETAALD).length.toLocaleString("nl-NL");
   el("statTo30").textContent = candidates.filter(c => c.targetStatusId === STATUS_VOLLEDIG_BETAALD).length.toLocaleString("nl-NL");
+  el("statTo15").textContent = candidates.filter(c => c.targetStatusId === STATUS_WACHT_AANBETALING).length.toLocaleString("nl-NL");
   el("statHiddenAmount").textContent = fmtEur(hiddenAmount);
 
   const body = el("resultsBody");
@@ -646,7 +671,7 @@ function renderResults(checked, candidates, hiddenAmount) {
     const tr = document.createElement("tr");
     tr.dataset.orderId = String(c.id);
     tr.innerHTML = `
-      <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}" checked></td>
+      <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}"${c.targetStatusId === STATUS_WACHT_AANBETALING ? ' title="Er is nog niets betaald op deze order. Kijk eerst of dat klopt; vink aan om hem terug te zetten naar Wachten op aanbetaling."' : ' checked title="Vink uit om deze order over te slaan bij Doorvoeren"'}></td>
       <td class="col-num" data-kolom="Order">${c.id}</td>
       <td data-kolom="Datum">${fmtDate(c.date)}</td>
       <td class="col-customer" data-kolom="Klant" title="${escapeHtml(c.customer)}">${escapeHtml(c.customer)}</td>
@@ -670,7 +695,7 @@ function updateApplyButtonState() {
   btn.textContent = `Doorvoeren (${selected})`;
   btn.disabled = selected === 0;
   btn.title = selected === 0
-    ? "Selecteer minimaal één rij om door te voeren."
+    ? "Vink minimaal één rij aan om door te voeren."
     : `${selected} statuswijziging(en) doorvoeren in Logic4 + audit-CSV vastleggen`;
 }
 
@@ -736,6 +761,7 @@ async function boot() {
   }
   el("mainView").classList.remove("hidden");
   refreshLastDoorvoer();
+  runDryRun();   // meteen de lijst (Gerrit, 26 okt 2026: geen knop Dry-run meer)
 }
 
 // ─── Laatste-doorvoer-indicator ────────────────────────────────
@@ -801,7 +827,6 @@ async function refreshLastDoorvoer() {
   }
 }
 
-el("btnDryRun").addEventListener("click", runDryRun);
 
 /* ── Zoeken (Gerrit, 6 aug 2026) ────────────────────────────────────────────
    Filtert op ordernummer en klantnaam. Verbergen alleen zou hier gevaarlijk
@@ -867,7 +892,6 @@ async function runApply() {
   if (!ok) return;
 
   el("btnApply").disabled = true;
-  el("btnDryRun").disabled = true;
   setStatus("", `Bezig met doorvoeren van ${changes.length} wijziging(en)…`);
   setProgress(5);
 
@@ -918,7 +942,6 @@ async function runApply() {
     setStatus("bad", "Doorvoeren vraagt nog een poging: " + e.message);
     setProgress(null);
   } finally {
-    el("btnDryRun").disabled = false;
     updateApplyButtonState();
   }
 }
