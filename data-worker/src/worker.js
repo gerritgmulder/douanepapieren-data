@@ -14908,6 +14908,98 @@ async function autoFactuurRijErbij(env, lijst) {
   if (bij) await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(st));
 }
 
+/* ═══ Losse boekingen herboeken op de batch ═══════════════════════════════
+   Gerrit (26 okt 2026), voor Osman: de automaat boekte tussen 7 en 24
+   oktober elke QuickBooks-betaling los op dagboek 45, op de dag dat Audrey
+   hem in QuickBooks zette. Osman vond die in geen batch terug. Zodra de
+   batch van Audrey met zo'n betaling is ingelezen, zet het Dashboard hem
+   recht, per betaling:
+     1. min het bedrag op de oorspronkelijke dag (die dag komt op nul);
+     2. plus hetzelfde bedrag op de datum van de batch.
+   Status, uitlevering en factuur blijven zoals ze zijn. Is de order al
+   gefactureerd, dan staat de betaling op de factuur (Logic4 zet hem daar bij
+   het factureren naartoe): dan gaan beide boekingen op de factuur,
+   tegenrekening debiteuren (1300, MatchingLedgerId 76); anders op de order,
+   tegenrekening vooruit ontvangen (MatchingLedgerId 78), zoals het origineel.
+   Proef met 1 cent heen en terug op factuur 6642426 (order 3524227): akkoord.
+
+   Elke stap wordt meteen vastgelegd in qb-automaat (geboekt[k].herboekt), zodat
+   een tweede ronde nooit iets dubbel doet. De betaling blijft in het overzicht
+   als automatisch geboekt meetellen, dus de batch boekt hem niet nog eens. */
+const AUTO_MATCH_FACTUUR = 76;   // 1300 debiteuren
+const AUTO_MATCH_ORDER = 78;     // vooruit ontvangen, zoals bij AddPayment op een order
+/* Welke losse boeking hoort in welke ingelezen batch (oudste batch eerst). */
+async function autoHerboekPlan(env) {
+  const st = await autoLees(env);
+  if (!st) return { st: null, plan: [] };
+  const lees = async (k) => (await env.FONTEYN_DATA.get(k, { type: "json" })) || {};
+  const [wires, approved, geboekt] = await Promise.all([lees("qb-wires"), lees("qb-approved"), lees("qb-geboekt")]);
+  geboekt.ids = geboekt.ids || {};
+  // Dubbele QuickBooks-nummers (bijvoorbeeld 3366) uitzoeken zoals het overzicht 1160 dat doet.
+  const perFactuur = await qbVerrijkDubbel(env, qbOrdersPerFactuur(approved)).catch(() => qbOrdersPerFactuur(approved));
+  const auto = await qbAutoPerFactuur(env).catch(() => ({}));
+  const vrij = Object.entries(st.geboekt || {}).filter(([k, g]) => g && g.factuur && Number(g.usd) > 0)
+    .sort((a, b) => String(a[1].datum || a[1].ts).localeCompare(String(b[1].datum || b[1].ts)));
+  const bezet = new Set();
+  const plan = [];
+  for (const w of (wires.wires || []).slice().sort((a, b) => String(a.datum || "").localeCompare(String(b.datum || "")))) {
+    let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}, auto); } catch (e) { continue; }
+    for (const r of (b.regels || [])) {
+      if (!r.auto) continue;
+      let som = 0;
+      for (const [k, g] of vrij) {
+        if (bezet.has(k) || String(g.factuur) !== String(r.factuur) || som >= r.bedrag - 0.02) continue;
+        bezet.add(k); som = Math.round((som + Number(g.usd)) * 100) / 100;
+        if (g.herboekt && g.herboekt.klaar) continue;
+        plan.push({ sleutel: k, factuur: g.factuur, orderId: g.orderId, usd: g.usd, eur: g.eur, datum: g.datum || String(g.ts).slice(0, 10),
+                    batchId: String(w.id), batchDatum: w.datum, stap: (g.herboekt && g.herboekt.stap) || null });
+      }
+    }
+  }
+  return { st, plan };
+}
+async function autoHerboekRonde(env, opties) {
+  const proef = !!(opties && opties.proef), max = Math.min(14, Number(opties && opties.max) || 12);
+  const { st, plan } = await autoHerboekPlan(env);
+  if (!st || !plan.length) return { ok: true, niets: true, plan: [] };
+  if (proef) return { ok: true, proef: true, plan };
+  const token = await l4Token(env);
+  const post = async (pad, body) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch (e) {}
+    return { ok: r.ok, status: r.status, j, t };
+  };
+  const bewaar = async () => { const vers = await autoLees(env); for (const p of gedaan) if (vers.geboekt[p.sleutel]) vers.geboekt[p.sleutel].herboekt = st.geboekt[p.sleutel].herboekt; await env.FONTEYN_DATA.put(AUTO_SLEUTEL, JSON.stringify(vers)); };
+  const gedaan = [], uit = [];
+  for (const p of plan.slice(0, max)) {
+    const g = st.geboekt[p.sleutel];
+    const eur = Math.round(Number(p.eur) * 100) / 100;
+    if (!(eur > 0)) { uit.push({ ...p, fout: "geen bedrag" }); continue; }
+    // Waar staat de betaling nu: op de factuur (gefactureerd) of nog op de order?
+    const f = await post("/v3/Orders/GetInvoices", { DebtorId: AMERIKA_DEBTOR, Reference: "QuickBooks " + p.factuur, TakeRecords: 10, SkipRecords: 0 });
+    const fl = f.ok ? (Array.isArray(f.j) ? f.j : ((f.j && f.j.Records) || [])) : [];
+    const factuur = fl.find(x => Number(x.InvoiceBelongsToOrderNumber) === Number(p.orderId));
+    const doel = factuur ? { InvoiceId: Number(factuur.Id), MatchingLedgerId: AUTO_MATCH_FACTUUR } : { OrderId: Number(p.orderId), MatchingLedgerId: AUTO_MATCH_ORDER };
+    const oms = "Order " + Number(p.orderId) + " - QuickBooks-factuur " + p.factuur + " (" + Number(p.usd).toFixed(2) + " USD)";
+    g.herboekt = g.herboekt || {};
+    if (g.herboekt.stap !== "min") {
+      const r1 = await post("/v3/Orders/AddPayment", { ...doel, AmountIncl: -eur, BookingId: AMERIKA_DAGBOEK, DateTime: p.datum + "T12:00:00",
+        Description: oms + " - tegenboeking losse betaling, hoort bij batch " + p.batchDatum });
+      if (!r1.ok) { uit.push({ ...p, fout: "tegenboeking HTTP " + r1.status + " " + String(r1.t).slice(0, 140) }); break; }
+      g.herboekt = { stap: "min", batch: p.batchId, ts: new Date().toISOString(), op: factuur ? "factuur " + factuur.Id : "order" };
+      gedaan.push(p); await bewaar();
+    }
+    const r2 = await post("/v3/Orders/AddPayment", { ...doel, AmountIncl: eur, BookingId: AMERIKA_DAGBOEK, DateTime: p.batchDatum + "T12:00:00",
+      Description: oms + " - batch " + p.batchDatum + " (herboekt van " + p.datum + ")" });
+    if (!r2.ok) { uit.push({ ...p, fout: "opnieuw boeken HTTP " + r2.status + " " + String(r2.t).slice(0, 140) + " (de tegenboeking staat; volgende ronde probeert het opnieuw)" }); break; }
+    g.herboekt = { ...g.herboekt, stap: "klaar", klaar: new Date().toISOString() };
+    if (!gedaan.includes(p)) gedaan.push(p);
+    await bewaar();
+    uit.push({ ...p, ok: true, op: g.herboekt.op, eur });
+  }
+  return { ok: true, gedaan: uit.filter(x => x.ok).length, resultaat: uit, nogOver: Math.max(0, plan.length - uit.filter(x => x.ok).length) };
+}
+
 /* ═══ Groene batches vanzelf boeken ═════════════════════════════════════
    Gerrit (26 okt 2026), voor Osman: "als een batch helemaal op groen staat
    (dus geen afwijking meer) dan wordt hij geboekt; batch 09-10 wordt geboekt
@@ -14928,6 +15020,12 @@ async function autoBatchRonde(env, opties) {
   const st = (await env.FONTEYN_DATA.get(BATCH_AUTO_SLEUTEL, { type: "json" })) || { tegen: {}, log: [] };
   // Pas aan na een eerste controle samen (POST /amerika/automaat/instellen { batchBoeken: true }).
   if (!st.aan && !proef) return { ok: true, uit: true };
+  /* Eerst losse boekingen herboeken waarvan de batch binnen is; heeft dat
+     iets gedaan, dan is deze ronde vol en komt het boeken het uur erna. */
+  if (!proef) {
+    const hb = await autoHerboekRonde(env, { max: 12 }).catch(e => ({ ok: false, error: String(e.message || e) }));
+    if (hb.gedaan || hb.error) return { ok: true, herboekt: hb.gedaan || 0, fout: hb.error || null, resultaat: hb.resultaat };
+  }
   st.tegen = st.tegen || {};
   const lees = async (k) => (await env.FONTEYN_DATA.get(k, { type: "json" })) || {};
   const [wires, approved, geboekt] = await Promise.all([lees("qb-wires"), lees("qb-approved"), lees("qb-geboekt")]);
@@ -21154,6 +21252,7 @@ const FP_WORKER = {
       geboekt.ids = geboekt.ids || {};
       const perFactuur = await qbVerrijkDubbel(env, qbOrdersPerFactuur(approved));
       const auto = await qbAutoPerFactuur(env).catch(() => ({}));
+      const herboektFactuur = new Set(Object.values(st.geboekt || {}).filter(g => g && g.herboekt && g.herboekt.klaar).map(g => String(g.factuur)));
       const klantVan = {};
       for (const f of Object.values(st.factuurRij || {})) if (f && f.factuur) klantVan[String(f.factuur)] = f.klant || null;
       for (const l of (st.log || [])) if (l && l.factuur && l.klant && !klantVan[String(l.factuur)]) klantVan[String(l.factuur)] = l.klant;
@@ -21164,7 +21263,7 @@ const FP_WORKER = {
         let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}, auto); } catch (e) { continue; }
         const regels = (b.regels || []).filter(r => r.soort !== "totaal").map(r => ({
           factuur: r.factuur || null, naam: r.naam || "", order: r.order || null, bedrag: r.bedrag, kosten: r.kosten || 0,
-          stand: r.auto ? "automatisch geboekt" : (geboekt.ids[r.sleutel] ? "met de batch geboekt" : (r.factuur && verwerktNrs.has(String(r.factuur)) ? "met de hand verwerkt" : r.status)) }));
+          stand: r.auto ? (herboektFactuur.has(String(r.factuur)) ? "met de batch geboekt (herboekt)" : "automatisch geboekt") : (geboekt.ids[r.sleutel] ? "met de batch geboekt" : (r.factuur && verwerktNrs.has(String(r.factuur)) ? "met de hand verwerkt" : r.status)) }));
         uitbetalingen.push({ id: b.id, datum: b.datum, bruto: b.bruto, kosten: b.kosten, netto: b.netto, verschil: b.aansluiting ? b.aansluiting.verschil : null,
           sluit: !!(b.aansluiting && Math.abs(b.aansluiting.verschil) <= 0.005), redenen: b.redenen || [],
           nogTeBoeken: regels.filter(r => r.stand === "klaar om te boeken").length, regels });
@@ -21193,6 +21292,12 @@ const FP_WORKER = {
       if (url.pathname === "/amerika/automaat" && request.method === "GET") return reply(200, { ok: true, toestand: await autoLees(env) });
       // Welke batches staan groen en zou hij vanzelf boeken? Boekt niets.
       if (url.pathname === "/amerika/automaat/batches" && request.method === "GET") return reply(200, await autoBatchRonde(env, { proef: true }));
+      // Losse boekingen herboeken op hun batch: { proef } laat het plan zien, zonder proef gebeurt het (beheerlaag).
+      if (url.pathname === "/amerika/automaat/herboek" && request.method === "POST") {
+        if (!(await toegangMag(env, "administratie-proef", wie))) return reply(403, { ok: false, error: "alleen de beheerlaag" });
+        const b = await request.json().catch(() => ({}));
+        return reply(200, await autoHerboekRonde(env, { proef: b.proef !== false, max: b.max }));
+      }
       if (url.pathname === "/amerika/automaat/proef" && request.method === "POST")
         return autoRonde(env, { proef: true }).then(r => reply(200, r)).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
       if (!BERICHT_BEHEER.includes(wie) && wie !== AUTO_OSMAN) return reply(403, { ok: false, error: "alleen voor de beheerders en Osman" });
