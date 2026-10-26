@@ -14909,37 +14909,47 @@ async function autoFactuurRijErbij(env, lijst) {
 }
 
 /* ═══ Orderstatus vanzelf (voorstel wordt order) ══════════════════════════
-   Gerrit, Dolf en Gretha (26 okt 2026): vanaf 27 oktober maakt een adviseur
-   in Logic4 meteen een order; offertes maken kan niet meer. De status
-   "Verkooporder" (1) heet voortaan "Voorstel". Een voorstel wordt pas een
-   order als er is aanbetaald, en dat zet het Dashboard elk uur zelf:
-     iets betaald, niet alles   -> 30% aanbetaald (25)
-     alles betaald              -> Volledig betaald, vrijgeven leveren (30)
-   Precies de regels van de tegel Orderstatus (decideTargetStatus), alleen
-   omhoog. Terugzetten (aanbetaald zonder betaling) doet het Dashboard niet
-   vanzelf; dat blijft in de tegel Orderstatus.
+   Gerrit, Dolf en Gretha (26 okt 2026): een adviseur maakt in Logic4 meteen
+   een order; status 1 "Verkooporder" heet voortaan "Voorstel". Een voorstel
+   is pas een order als er is aanbetaald, en dat zet het Dashboard elk uur
+   zelf goed:
+     iets betaald, niet alles      -> 30% aanbetaald (25)
+     alles betaald                 -> Volledig betaald, vrijgeven leveren (30)
+     op 25/30 maar niets betaald   -> terug naar Voorstel (1)
+   Bron: Voorstel (1), Wachten op aanbetaling (15), 30% aanbetaald (25),
+   Volledig betaald (30) en oude offertes (4, laatste half jaar).
+   Terug naar Voorstel alleen als er ook op een factuur van die order niets
+   staat: bij factureren zet Logic4 de betaling over naar de factuur.
 
    Elk uur alleen de orders die de laatste twee dagen zijn veranderd
-   (LastActionFrom); één keer per nacht alles. Hooguit 12 wijzigingen per
-   ronde, de rest volgt het uur erna. Elke wijziging komt in het
+   (LastActionFrom); om 02:15 UTC alles, en ook alles zolang de vorige ronde
+   aan de grens van 8 wijzigingen zat. Elke wijziging komt in het
    activiteitenlogboek en in KV orderstatus-automaat (de laatste 300). */
 const OS_AUTO_SLEUTEL = "orderstatus-automaat";
-const OS_BRON = [1, 15, 25];          // voorstel (was verkooporder), wachten op aanbetaling, 30% aanbetaald
+const OS_BRON = [1, 15, 25, 30, 4];
 const OS_NAAM = { 1: "Voorstel", 4: "Offerte", 15: "Wachten op aanbetaling", 25: "30% aanbetaald", 30: "Volledig betaald, vrijgeven leveren" };
+const OS_MAX = 8;
+/* Volledig betaald gaat nooit terug naar 30% aanbetaald: daar staan dealers op
+   rekening en Amerika tussen die vrijgegeven zijn om te leveren (proef 26 okt:
+   64 zulke orders). Op rekening, Bol.com en garantie gaan nooit terug naar
+   Voorstel: daar komt het geld later of via een ander. */
+const OS_NOOIT_TERUG = /rekening|bol\.com|garantie/i;
 function osDoelStatus(o) {
   const t = o.Totals || {}, totaal = Number(t.AmountIncl || 0), betaald = Number(t.Calc_TotalPayed || 0), nu = o.OrderStatus && Number(o.OrderStatus.Id);
-  if (!(betaald > 0) || !(totaal > 0)) return null;
+  if (!(totaal > 0.005)) return null;
+  if (!(betaald > 0)) {
+    const bw = String((o.PaymentMethod && (o.PaymentMethod.Description || o.PaymentMethod.Value)) || "");
+    return ((nu === 25 || nu === 30) && !OS_NOOIT_TERUG.test(bw)) ? 1 : null;
+  }
   if (betaald >= totaal - 0.005) return nu === 30 ? null : 30;
-  return nu === 25 ? null : 25;
+  return (nu === 25 || nu === 30) ? null : 25;
 }
 async function orderstatusRonde(env, opties) {
   const proef = !!(opties && opties.proef);
   const st = (await env.FONTEYN_DATA.get(OS_AUTO_SLEUTEL, { type: "json" })) || { aan: true, log: [] };
   if (st.aan === false && !proef) return { ok: true, uit: true };
   const nu = new Date();
-  // Start: de nacht naar 27 oktober (02:15 UTC is meteen de volledige ronde).
-  if (!proef && nu.getTime() < Date.parse("2026-10-27T02:00:00Z")) return { ok: true, wachtOpStart: true };
-  const vol = !!(opties && opties.vol);
+  const vol = !!(opties && opties.vol) || !!st.volNodig;
   const token = await l4Token(env);
   let vragen = 1;
   const post = async (pad, body) => {
@@ -14949,24 +14959,40 @@ async function orderstatusRonde(env, opties) {
     return r.json().catch(() => null);
   };
   const sinds = new Date(nu.getTime() - 2 * 86400000).toISOString().slice(0, 19);
+  const halfJaar = new Date(nu.getTime() - 183 * 86400000).toISOString().slice(0, 19);
   const kandidaten = [];
   for (const sid of OS_BRON) {
-    for (let p = 0; p < (vol ? 8 : 2); p++) {
+    for (let p = 0; p < (vol ? 4 : 1); p++) {
       if (vragen > 14) break;
       const filter = { StatusId: sid, TakeRecords: 500, SkipRecords: p * 500 };
       if (!vol) filter.LastActionFrom = sinds;
+      if (sid === 4) filter.CreationDateFrom = halfJaar;
       const d = await post("/v3/Orders/GetOrders", filter);
       const l = Array.isArray(d) ? d : ((d && (d.Records || d.Orders)) || []);
       for (const o of l) { const doel = osDoelStatus(o); if (doel) kandidaten.push({ o, doel }); }
       if (l.length < 500) break;
     }
   }
+  // Eerst omhoog (daar wacht iemand op), dan terug naar Voorstel.
+  kandidaten.sort((a, b) => (a.doel === 1) - (b.doel === 1));
   const gedaan = [];
+  let overgeslagen = 0, rest = 0;
+  // Orders waarvan de betaling al op de factuur staat: onthouden, niet elk uur opnieuw vragen.
+  const opFactuurIds = new Set(st.opFactuur || []);
   for (const { o, doel } of kandidaten) {
-    if (gedaan.length >= 12 || vragen > 30) break;
+    if (doel === 1 && opFactuurIds.has(Number(o.Id))) { overgeslagen++; continue; }
+    if (gedaan.length >= (proef && opties.max ? opties.max : OS_MAX) || vragen > (proef ? 45 : 26)) { rest++; continue; }
+    if (doel === 1) {
+      try {
+        const f = await post("/v3/Orders/GetInvoices", { DebtorId: o.DebtorId, CreationDateFrom: String(o.CreationDate || "").slice(0, 10) + "T00:00:00", TakeRecords: 100, SkipRecords: 0 });
+        const fl = Array.isArray(f) ? f : ((f && f.Records) || []);
+        const opFactuur = fl.filter(x => Number(x.InvoiceBelongsToOrderNumber) === Number(o.Id)).reduce((n, x) => n + Number((x.Totals && x.Totals.Calc_TotalPayed) || 0), 0);
+        if (opFactuur > 0) { overgeslagen++; opFactuurIds.add(Number(o.Id)); continue; }
+      } catch (e) { overgeslagen++; continue; }
+    }
     const regel = { ts: nu.toISOString(), order: Number(o.Id), van: Number(o.OrderStatus && o.OrderStatus.Id), naar: doel,
-      vanNaam: (o.OrderStatus && o.OrderStatus.Value) || OS_NAAM[o.OrderStatus && o.OrderStatus.Id] || "", naarNaam: OS_NAAM[doel],
-      totaal: Math.round(Number(o.Totals.AmountIncl) * 100) / 100, betaald: Math.round(Number(o.Totals.Calc_TotalPayed) * 100) / 100 };
+      vanNaam: OS_NAAM[o.OrderStatus && o.OrderStatus.Id] || (o.OrderStatus && o.OrderStatus.Value) || "", naarNaam: OS_NAAM[doel],
+      totaal: Math.round(Number(o.Totals.AmountIncl) * 100) / 100, betaald: Math.round(Number(o.Totals.Calc_TotalPayed || 0) * 100) / 100 };
     if (proef) { gedaan.push(regel); continue; }
     try { await post("/v3/Orders/UpdateOrderStatus", { OrderId: Number(o.Id), StatusId: doel }); regel.ok = true; }
     catch (e) { regel.ok = false; regel.fout = String(e.message || e).slice(0, 160); }
@@ -14975,11 +15001,14 @@ async function orderstatusRonde(env, opties) {
       detail: "order " + regel.order + ": " + regel.vanNaam + " -> " + regel.naarNaam + " (betaald " + regel.betaald + " van " + regel.totaal + ")", wijziging: true }); } catch (e) {} }
   }
   if (!proef) {
-    st.laatste = nu.toISOString(); st.laatsteVol = vol ? nu.toISOString() : st.laatsteVol;
+    st.laatste = nu.toISOString(); if (vol) st.laatsteVol = nu.toISOString();
+    // Nog meer te doen dan deze ronde aankon: het volgende uur weer alles.
+    st.volNodig = rest > 0;
+    st.opFactuur = [...opFactuurIds].slice(-3000);
     if (gedaan.length) st.log = [...gedaan, ...(st.log || [])].slice(0, 300);
     await env.FONTEYN_DATA.put(OS_AUTO_SLEUTEL, JSON.stringify(st));
   }
-  return { ok: true, proef, vol, kandidaten: kandidaten.length, gedaan: gedaan.length, wijzigingen: gedaan, vragen };
+  return { ok: true, proef, vol, kandidaten: kandidaten.length, gedaan: gedaan.length, overgeslagen, rest, wijzigingen: gedaan, vragen };
 }
 
 /* ═══ Losse boekingen herboeken op de batch ═══════════════════════════════
@@ -21382,7 +21411,7 @@ const FP_WORKER = {
           await env.FONTEYN_DATA.put(OS_AUTO_SLEUTEL, JSON.stringify(st));
           return reply(200, { ok: true, aan: st.aan });
         }
-        return reply(200, await orderstatusRonde(env, { proef: b.proef !== false, vol: !!b.vol }));
+        return reply(200, await orderstatusRonde(env, { proef: b.proef !== false, vol: !!b.vol, max: Number(b.max) || 0 }));
       }
     }
     if (url.pathname.startsWith("/amerika/automaat")) {

@@ -329,7 +329,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         Logic4 markeert een order pas als "officieel" zodra de status handmatig is aangepast
         nadat er een betaling is binnengekomen. Deze tegel zoekt orders die nog op
         <b>Voorstel</b>, <b>Wachten op aanbetaling</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald,
-        en orders die op <b>30% aanbetaald</b> of <b>Volledig betaald</b> staan terwijl er nog niets is betaald.
+        en orders die op <b>30% aanbetaald</b> of <b>Volledig betaald</b> staan terwijl er nog niets is betaald (die gaan terug naar <b>Voorstel</b>).
         De lijst staat er meteen bij het openen; Logic4 verandert pas als je op Doorvoeren klikt.
       </p>
 
@@ -355,7 +355,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <div class="stat accent"><div class="lbl">Wijzigingen nodig</div><div class="val" id="statChanges">—</div></div>
         <div class="stat"><div class="lbl">→ 30% aanbetaald</div><div class="val" id="statTo25">—</div></div>
         <div class="stat ok"><div class="lbl">→ Volledig betaald</div><div class="val" id="statTo30">—</div></div>
-        <div class="stat"><div class="lbl">→ Wachten op aanbetaling</div><div class="val" id="statTo15">—</div></div>
+        <div class="stat"><div class="lbl">→ Voorstel</div><div class="val" id="statTo15">—</div></div>
         <div class="stat"><div class="lbl">Totaal "verstopt"</div><div class="val" id="statHiddenAmount">—</div></div>
       </div>
 
@@ -518,7 +518,9 @@ function decideTargetStatus(order) {
      factuur staat, controleert runDryRun hierna nog. */
   if (paid <= 0) {
     // Een order van 0 euro of minder (garantie, retour) is terecht volledig betaald.
-    if (total > epsilon && (currentId === STATUS_30_AANBETAALD || currentId === STATUS_VOLLEDIG_BETAALD)) return STATUS_WACHT_AANBETALING;
+    // Sinds 26 okt 2026 terug naar Voorstel, zoals het Dashboard elk uur doet; nooit bij rekening, Bol.com of garantie.
+    const bw = String(order.PaymentMethod?.Description || order.PaymentMethod?.Value || "");
+    if (total > epsilon && (currentId === STATUS_30_AANBETAALD || currentId === STATUS_VOLLEDIG_BETAALD) && !/rekening|bol\.com|garantie/i.test(bw)) return STATUS_VERKOOPORDER;
     return null;
   }
   if (paid >= total - epsilon) {
@@ -527,7 +529,8 @@ function decideTargetStatus(order) {
     return STATUS_VOLLEDIG_BETAALD;
   }
   // gedeeltelijk betaald (0 < paid < total)
-  if (currentId === STATUS_30_AANBETAALD) return null; // al goed
+  // al goed; Volledig betaald gaat nooit terug naar 30% (dealers op rekening, Amerika)
+  if (currentId === STATUS_30_AANBETAALD || currentId === STATUS_VOLLEDIG_BETAALD) return null;
   return STATUS_30_AANBETAALD;
 }
 
@@ -542,7 +545,7 @@ function statusName(id) {
 }
 
 function targetBadgeClass(targetId) {
-  return targetId === STATUS_VOLLEDIG_BETAALD ? "to-30" : targetId === STATUS_WACHT_AANBETALING ? "from" : "to-25";
+  return targetId === STATUS_VOLLEDIG_BETAALD ? "to-30" : targetId === STATUS_VERKOOPORDER ? "from" : "to-25";
 }
 
 // ── De controle: draait vanzelf bij het openen (Gerrit, 26 okt 2026) ──
@@ -614,7 +617,7 @@ async function runDryRun() {
     /* Terug naar Wachten op aanbetaling alleen als er ook op een factuur van
        die order niets staat: bij het factureren zet Logic4 de betaling van de
        order over naar de factuur, en dan staat er op de order 0 betaald. */
-    const terug = candidates.filter(c => c.targetStatusId === STATUS_WACHT_AANBETALING);
+    const terug = candidates.filter(c => c.targetStatusId === STATUS_VERKOOPORDER);
     for (let i = 0; i < terug.length; i++) {
       const c = terug[i];
       setStatus("", `Controle op facturen ${i + 1} van ${terug.length}…`);
@@ -655,7 +658,7 @@ function renderResults(checked, candidates, hiddenAmount) {
   el("statChanges").textContent = candidates.length.toLocaleString("nl-NL");
   el("statTo25").textContent = candidates.filter(c => c.targetStatusId === STATUS_30_AANBETAALD).length.toLocaleString("nl-NL");
   el("statTo30").textContent = candidates.filter(c => c.targetStatusId === STATUS_VOLLEDIG_BETAALD).length.toLocaleString("nl-NL");
-  el("statTo15").textContent = candidates.filter(c => c.targetStatusId === STATUS_WACHT_AANBETALING).length.toLocaleString("nl-NL");
+  el("statTo15").textContent = candidates.filter(c => c.targetStatusId === STATUS_VERKOOPORDER).length.toLocaleString("nl-NL");
   el("statHiddenAmount").textContent = fmtEur(hiddenAmount);
 
   const body = el("resultsBody");
@@ -670,7 +673,7 @@ function renderResults(checked, candidates, hiddenAmount) {
     const tr = document.createElement("tr");
     tr.dataset.orderId = String(c.id);
     tr.innerHTML = `
-      <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}"${c.targetStatusId === STATUS_WACHT_AANBETALING ? ' title="Er is nog niets betaald op deze order. Kijk eerst of dat klopt; vink aan om hem terug te zetten naar Wachten op aanbetaling."' : ' checked title="Vink uit om deze order over te slaan bij Doorvoeren"'}></td>
+      <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}"${c.targetStatusId === STATUS_VERKOOPORDER ? ' title="Er is nog niets betaald op deze order. Vink aan om hem nu al terug te zetten naar Voorstel; anders doet het Dashboard dat binnen het uur."' : ' checked title="Vink uit om deze order over te slaan bij Doorvoeren"'}></td>
       <td class="col-num" data-kolom="Order">${c.id}</td>
       <td data-kolom="Datum">${fmtDate(c.date)}</td>
       <td class="col-customer" data-kolom="Klant" title="${escapeHtml(c.customer)}">${escapeHtml(c.customer)}</td>
@@ -807,7 +810,7 @@ async function laadAutomaat(email) {
     const t = j.toestand || {};
     const log = (t.log || []).slice(0, 25);
     const wanneer = t.laatste ? formatDateNL(new Date(t.laatste)) + " (" + formatRelative(Date.now() - Date.parse(t.laatste)) + ")" : "nog niet";
-    let h = `<div><span class="clock">⏱</span> <b>Elk uur zet het Dashboard zelf</b> een voorstel met een betaling op <b>30% aanbetaald</b> of <b>Volledig betaald</b>. `
+    let h = `<div><span class="clock">⏱</span> <b>Elk uur zet het Dashboard zelf</b> een voorstel met een betaling op <b>30% aanbetaald</b> of <b>Volledig betaald</b>, en een order zonder betaling terug op <b>Voorstel</b>. `
       + (t.aan === false ? "<b>Dit staat nu uit.</b>" : "Laatste ronde: <b>" + escapeHtml(wanneer) + "</b>.") + `</div>`;
     if (log.length) {
       h += `<table style="width:100%;margin-top:8px;border-collapse:collapse;font-size:12px"><tr style="text-align:left"><th>Wanneer</th><th>Order</th><th>Van</th><th>Naar</th><th style="text-align:right">Betaald</th></tr>`

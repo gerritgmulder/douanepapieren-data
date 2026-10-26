@@ -51,9 +51,13 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-26", iedereen: true, soort: "nieuw",
+      titel: "Nieuwe werkwijze: voorstel wordt order",
+      wat: "Vanaf 27 oktober maak je in Logic4 altijd meteen een order. Tot de eerste aanbetaling heet die order een Voorstel. Komt er geld binnen, dan zet het Dashboard het voorstel binnen het uur zelf op 30% aanbetaald of Volledig betaald. Een order zonder betaling gaat vanzelf terug naar Voorstel. Zo is een order bij Fonteyn pas een order als er is aanbetaald." },
+    {
       datum: "2026-10-26", bestand: "order-status.html", soort: "beter",
       titel: "Orderstatus gaat vanzelf",
-      wat: "Vanaf 27 oktober kijkt het Dashboard elk uur welke voorstellen een betaling hebben gekregen en zet ze zelf op 30% aanbetaald of Volledig betaald. In de tegel staat wat het Dashboard de laatste keren heeft aangepast." },
+      wat: "Het Dashboard kijkt elk uur welke voorstellen een betaling hebben gekregen en zet ze zelf op 30% aanbetaald of Volledig betaald; een order zonder betaling gaat terug naar Voorstel. Volledig betaald blijft altijd staan, net als orders op rekening, via Bol.com of onder garantie. In de tegel staat wat het Dashboard de laatste keren heeft aangepast." },
     {
       datum: "2026-10-26", bestand: "order-status.html", soort: "beter",
       titel: "Orderstatus: lijst meteen bij het openen",
