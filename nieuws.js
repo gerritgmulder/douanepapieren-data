@@ -51,6 +51,34 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-27", bestand: "opleverbonnen-service.html", soort: "hersteld",
+      titel: "Factuur met prijzen, zonder order",
+      wat: "Factuur aanmaken zet nu alleen een factuur in Logic4, met de prijzen uit Logic4. Alleen de factuur, zonder order. Adres en kilometers kun je in het venster aanpassen. Gerwin en Kevin kunnen een opleverbon weghalen en weer terugzetten." },
+    {
+      datum: "2026-10-27", bestand: "planning-service.html", soort: "beter",
+      titel: "Routeduur en akkoord met één klik",
+      wat: "Achter de monteur staat hoe lang de route duurt, klussen en rijden samen. Met de knop op een afspraak zet je de klant direct op akkoord. Bart, Bertjan en Kevin staan erbij als monteur. Lukt een voorkeursdag niet, dan kiest Plannen een andere dag, en een klant die terugkomt krijgt waar het kan dezelfde monteur." },
+    {
+      datum: "2026-10-27", bestand: "service-meldingen.html", soort: "beter",
+      titel: "Meldingen zelf invullen, met of zonder mail",
+      wat: "Een melding kun je nu ook zelf invullen, en een klant zonder mail inplannen, ook op een al afgesproken datum. Handig om klanten uit Logic4 over te zetten. Een melding die al eens gepland stond, kan altijd opnieuw in de lijst." },
+    {
+      datum: "2026-10-27", bestand: "mijnroute-service.html", soort: "beter",
+      titel: "Anoniem bellen en alle routes",
+      wat: "Bellen gaat anoniem. Gerwin, Kevin en Tim kunnen bij de route van elke monteur." },
+    {
+      datum: "2026-10-27", bestand: "mijnroute.html", soort: "beter",
+      titel: "Paklijst terug en anoniem bellen",
+      wat: "De paklijst staat weer in Mijn route Plaatsing en bellen gaat anoniem. Op de opleverbon staan de namen van de route al ingevuld, kies je het kenteken uit de lijst en staat geleverd standaard op 0, zodat je alles ter plekke telt." },
+    {
+      datum: "2026-10-27", bestand: "planning.html", soort: "beter",
+      titel: "Planning Plaatsing",
+      wat: "De tegels heten nu Planning Plaatsing, Mijn route Plaatsing en Opleverbonnen Plaatsing. Bertjan heeft BJ in het rondje, en een afspraak met het vinkje rood staat nu ook rood in het tijdsraster." },
+    {
+      datum: "2026-10-27", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Auto's beheren",
+      wat: "Gerwin en Kevin kunnen met de knop Auto's beheren de kentekens toevoegen en weghalen waaruit de monteurs op de opleverbon kiezen." },
+    {
       datum: "2026-10-26", bestand: "bakwagen.html", soort: "hersteld",
       titel: "Bakwagen Dani weer in beeld",
       wat: "Dani rijdt tot en met 31 oktober gewoon zijn eigen bakwagen; zijn ritten staan weer onder Bakwagen Dani. Vanaf 1 november worden ze de flexwagen." },

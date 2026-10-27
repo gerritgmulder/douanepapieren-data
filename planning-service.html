@@ -85,6 +85,9 @@ main{max-width:none;margin:0 auto;padding:14px 14px 50px}
 .stop.akkoord .nr{background:#15803d;color:#fff}
 .stop .wat{flex:1;min-width:0}
 .stop .k{font-weight:600;font-size:12.5px;overflow-wrap:break-word}
+.route .rduur{font-size:11px;font-weight:700;color:#144734;background:#eef2e6;border-radius:999px;padding:1px 7px;white-space:nowrap}
+.akknop{margin-left:6px;font:inherit;font-size:10.5px;font-weight:700;border:1px solid #cbd5c0;background:#fff;color:#144734;border-radius:999px;padding:1px 7px;cursor:pointer;white-space:nowrap}
+.akknop.aan{background:#15803d;border-color:#15803d;color:#fff}
 .stop .p{font-size:11.5px;color:var(--grijs);overflow-wrap:break-word}
 .stop .pillen{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
 .stop.klaar{opacity:.55}
@@ -156,8 +159,12 @@ function stopHtml(a, i){
   /* De klant kreeg een ander dagdeel gemaild dan waar hij nu uitkomt. */
   if (j.dagdeelNu && a.status !== "klaar") pillen += '<span class="pil rood" title="Gemaild: ' + esc(svc.DAGDEEL[a.dagdeel]) + '">verschuift naar: ' + esc(svc.DAGDEEL[j.dagdeelNu]) + '</span>';
   if (/^ja/i.test(m.garantie||"")) pillen += '<span class="pil groen">garantie</span>';
+  /* Kevin (27 okt 2026): de klant met één klik op akkoord zetten (of terug). */
+  var akKnop = (a.status === "voorstel" || a.status === "akkoord") && a.datum >= vandaag
+    ? '<button type="button" class="akknop' + (a.status === "akkoord" ? " aan" : "") + '" data-ak="' + esc(a.id) + '" title="' + (a.status === "akkoord" ? "Het Dashboard haalt het akkoord weg; de afspraak wacht dan weer op de klant" : "Het Dashboard zet deze afspraak op akkoord, bijvoorbeeld als de klant telefonisch ja zei") + '">' + (a.status === "akkoord" ? "✓ akkoord" : "akkoord zetten") + '</button>' : '';
+  if (j.geenMail) pillen += '<span class="pil grijs">zonder mail</span>';
   return '<li class="stop ' + a.status + '" data-id="' + esc(a.id) + '"><span class="nr">' + (i+1) + '</span><div class="wat">' +
-    '<div class="k">' + esc(k.naam || "ITS " + a.its) + '</div>' +
+    '<div class="k">' + esc(k.naam || "ITS " + a.its) + akKnop + '</div>' +
     '<div class="p">' + esc(k.plaats || (k.adres||"").split(",").pop()) + ' · ITS ' + esc(a.its) + ' · ' + esc(svc.duurTekst(m.duur)) + '</div>' +
     '<div class="pillen">' + pillen + '</div></div></li>';
 }
@@ -184,8 +191,12 @@ function teken(){
       var actief = stops.filter(function(a){ return a.status !== "klaar"; });
       var vul = Math.min(100, Math.round((terugOm(r, actief) - r.start) / Math.max(1, r.eind - r.start) * 100));
       var afwijkend = r.start !== data.tijden.start || r.eind !== data.tijden.eind;
+      /* Kevin (27 okt 2026): hoe lang de route duurt, klussen en rijden bij elkaar. */
+      var klus = actief.reduce(function(n, a){ return n + (Number((melding(a.its)||{}).duur) || 60); }, 0);
+      var totaal = actief.length ? terugOm(r, actief) - r.start : 0;
+      var duurRoute = actief.length ? '<span class="rduur" title="Klussen ' + esc(svc.duurTekst(klus)) + ' en rijden ' + esc(svc.duurTekst(totaal - klus)) + ' (heen, tussendoor en terug, geschat)">' + esc(svc.duurTekst(totaal)) + '</span>' : '';
       h += '<div class="route' + (r.ziek ? " ziek" : "") + '" data-nr="' + r.nr + '">' +
-        '<div class="rkop" title="Klik om de route aan te passen"><span class="rnr">' + r.nr + '</span><span class="rwie">' + esc(r.monteur || "monteur kiezen") + '</span>' +
+        '<div class="rkop" title="Klik om de route aan te passen"><span class="rnr">' + r.nr + '</span><span class="rwie">' + esc(r.monteur || "monteur kiezen") + '</span>' + duurRoute +
           (r.ziek ? '<span class="pil rood">ziek</span>' : afwijkend ? '<span class="rtijd">' + (r.start !== data.tijden.start ? "begint " + tijd(r.start) : "") + (r.start !== data.tijden.start && r.eind !== data.tijden.eind ? " · " : "") + (r.eind !== data.tijden.eind ? "terug " + tijd(r.eind) : "") + '</span>' : '') + '</div>' +
         (actief.length ? '<div class="vul" title="Zo vol is de dag ongeveer"><span' + (vul >= 95 ? ' class="vol"' : '') + ' style="width:' + vul + '%"></span></div>' : '') +
         (stops.length ? '<ul class="stops">' + stops.map(stopHtml).join("") + '</ul>' : '<div class="leegroute">' + (r.ziek ? "Afspraken zijn verdeeld." : "Nog leeg: Plannen vult deze route als de andere vol zijn.") + '</div>') +
@@ -198,6 +209,14 @@ function teken(){
   $("week").querySelectorAll(".rkop").forEach(function(el){ el.onclick = function(){ var dg = el.closest(".dag").dataset.datum, nr = Number(el.closest(".route").dataset.nr); routeVenster(data.routes.find(function(r){ return r.datum === dg && r.nr === nr; })); }; });
   $("week").querySelectorAll("[data-plus]").forEach(function(b){ b.onclick = function(){ routeVenster(null, b.dataset.plus); }; });
   $("week").querySelectorAll(".stop").forEach(function(el){ el.onclick = function(){ stopVenster(data.afspraken.find(function(a){ return a.id === el.dataset.id; })); }; });
+  $("week").querySelectorAll("[data-ak]").forEach(function(b){ b.onclick = async function(e){
+    e.stopPropagation(); b.disabled = true;
+    var a = data.afspraken.find(function(x){ return x.id === b.dataset.ak; });
+    var r = await svc.api("/service/afspraak", { id: a.id, actie: "akkoord", uit: a.status === "akkoord" }).catch(function(er){ return { ok:false, error:er.message }; });
+    try { if (window.fpLog) fpLog("service-afspraak", (a.status === "akkoord" ? "akkoord weg" : "akkoord") + " ITS " + a.its); } catch(er) {}
+    if (!r.ok) { $("fout").textContent = r.error; b.disabled = false; return; }
+    laad();
+  }; });
 }
 function weekNr(isoD){ var d = new Date(isoD+"T12:00:00"); d.setDate(d.getDate()+3-((d.getDay()+6)%7)); var j = new Date(d.getFullYear(),0,4); return 1+Math.round(((d-j)/864e5-3+((j.getDay()+6)%7))/7); }
 

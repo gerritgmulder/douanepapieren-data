@@ -61,7 +61,7 @@ const SVC_DAGDEEL = {
 const SVC_DAGDEEL_KORT = { 1: "ochtend", 2: "eind ochtend / begin middag", 3: "middag" };
 const SVC_WEEKDAG = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
 const SVC_MAAND = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
-const SVC_MONTEURS = ["Thieme", "Patrick", "Hans"];
+const SVC_MONTEURS = ["Thieme", "Patrick", "Hans", "Bart", "Bertjan", "Kevin"];   // Bart, Bertjan en Kevin erbij (Kevin, 27 okt 2026)
 const SVC_UDDEL = [52.2449, 5.7797];   // als Uddel nog niet in geo_cache staat
 /* De hulpfuncties uit worker.js voor deze aanroep (zie svcHandle/svcRonde). */
 let _svcH = null;
@@ -131,10 +131,12 @@ function svcTijden(route, stops, thuis) {
   if (stops.length) t += svcRij(vorige, thuis);
   return { aankomst, terug: t };
 }
-function svcDatumMag(m, datum) {
+function svcDatumMag(m, datum, zonderVoorkeur) {
   const wd = new Date(datum + "T12:00:00Z").getUTCDay();
   if (wd === 0 || wd === 6) return false;
-  if (Array.isArray(m.voorkeur) && m.voorkeur.length && !m.voorkeur.includes(wd)) return false;
+  // Een al afgesproken datum (klant overgezet uit Logic4) gaat voor alles.
+  if (m.vast) return datum === m.vast;
+  if (!zonderVoorkeur && Array.isArray(m.voorkeur) && m.voorkeur.length && !m.voorkeur.includes(wd)) return false;
   if (m.vanaf && datum < m.vanaf) return false;
   if (m.nietVan && m.nietTot && datum >= m.nietVan && datum <= m.nietTot) return false;
   return true;
@@ -144,10 +146,27 @@ function svcDatumMag(m, datum) {
    gevulde routes de plek die de minste extra rijtijd kost, met een kleine
    voorkeur voor eerder; bij een lege route de eerste dag. Bij een zieke
    monteur (zoSnelMogelijk) gaat de vroegste dag boven alles. */
+/* Kevin (27 okt 2026): lukt het niet op een voorkeursdag, dan op een andere
+   werkdag; "inplannen vanaf" en "klant is weg" blijven altijd gelden. En
+   komt de klant terug, dan liefst dezelfde monteur als de vorige keer, als
+   dat hooguit een week later uitkomt. */
 function svcBestePlek(m, routes, stopsPer, thuis, vandaag, zoSnelMogelijk) {
+  let p = svcBestePlek1(m, routes, stopsPer, thuis, vandaag, zoSnelMogelijk, false);
+  if (p.geen && !m.vast && Array.isArray(m.voorkeur) && m.voorkeur.length) {
+    const q = svcBestePlek1(m, routes, stopsPer, thuis, vandaag, zoSnelMogelijk, true);
+    if (!q.geen) { q.buitenVoorkeur = true; p = q; }
+  }
+  if (!p.geen && m.vorigeMonteur && !svcMonteurGelijk(p.R.monteur, m.vorigeMonteur)) {
+    const eigen = routes.filter(R => svcMonteurGelijk(R.monteur, m.vorigeMonteur));
+    let q = svcBestePlek1(m, eigen, stopsPer, thuis, vandaag, zoSnelMogelijk, !!p.buitenVoorkeur);
+    if (!q.geen && (Date.parse(q.R.datum) - Date.parse(p.R.datum)) / 864e5 <= 7) { q.buitenVoorkeur = p.buitenVoorkeur; q.zelfdeMonteur = true; p = q; }
+  } else if (!p.geen && m.vorigeMonteur) p.zelfdeMonteur = true;
+  return p;
+}
+function svcBestePlek1(m, routes, stopsPer, thuis, vandaag, zoSnelMogelijk, zonderVoorkeur) {
   let beste = null, redenDatum = 0, redenVol = 0;
   for (const R of routes) {
-    if (!svcDatumMag(m, R.datum)) { redenDatum++; continue; }
+    if (!svcDatumMag(m, R.datum, zonderVoorkeur)) { redenDatum++; continue; }
     const stops = stopsPer[R.datum + "|" + R.nr] || [];
     const oud = svcTijden(R, stops, thuis).terug;
     const dagen = Math.round((Date.parse(R.datum) - Date.parse(vandaag)) / 864e5);
@@ -172,6 +191,7 @@ function svcBestePlek(m, routes, stopsPer, thuis, vandaag, zoSnelMogelijk) {
   }
   if (beste) return beste;
   return { geen: true, reden: !routes.length ? "Er staan geen routes klaar."
+    : m.vast && !redenVol ? "Op de afgesproken datum (" + m.vast.split("-").reverse().join("-") + ") staat nog geen route met een monteur."
     : redenVol ? "De routes die passen bij de wensen van de klant zitten vol."
     : "Er is nog geen route op een dag die past bij de wensen van de klant." };
 }
@@ -275,6 +295,9 @@ function svcSchoonMelding(b, oud) {
   if (b.nietTot !== undefined) m.nietTot = datum(b.nietTot);
   if (m.nietVan && m.nietTot && m.nietTot < m.nietVan) { const x = m.nietVan; m.nietVan = m.nietTot; m.nietTot = x; }
   if (b.opmerking !== undefined) m.opmerking = tekst(b.opmerking, 600);
+  // Kevin (27 okt 2026): klanten overzetten uit Logic4 zonder mail, eventueel op een al afgesproken datum.
+  if (b.geenMail !== undefined) m.geenMail = !!b.geenMail;
+  if (b.vast !== undefined) m.vast = datum(b.vast);
   return m;
 }
 async function svcMeldingBewaar(env, H, wie, b) {
@@ -290,8 +313,11 @@ async function svcMeldingBewaar(env, H, wie, b) {
   if (!oud || adresWas !== m.klant.adres || m.geo === undefined) m.geo = await svcGeo(env, H, m.klant.adres).catch(() => null);
   let status = rij ? rij.status : "open";
   if (!rij) { m.door = wie; m.gemaakt = new Date().toISOString(); }
-  /* Weer in de lijst zetten wat er ooit uit ging (vervallen of klaar). */
-  if (b.heropen && status !== "gepland") status = "open";
+  /* Weer in de lijst zetten wat er ooit uit ging (vervallen of klaar), en
+     ook wat al eens gepland stond: een melding moet altijd opnieuw in de
+     lijst kunnen (Kevin, 27 okt 2026). Een afspraak die nog staat blijft
+     staan; Plannen maakt er dan een tweede bij. */
+  if (b.heropen) status = "open";
   m.gewijzigdDoor = wie; m.gewijzigd = new Date().toISOString();
   await db.prepare("INSERT OR REPLACE INTO svc_melding (its, status, json, ts) VALUES (?1, ?2, ?3, ?4)").bind(its, status, JSON.stringify(m), Date.now()).run();
   await svcLog(db, its, wie, rij ? "melding aangepast" : "melding toegevoegd (" + m.duur + " min)");
@@ -364,6 +390,8 @@ function svcLinkBasis(env) { return (env.SVC_LINK_BASIS || "https://fonteyn-data
 async function svcMailStuur(env, db, a, m, soort, extra) {
   const inst = await svcInstellingen(env);
   a.json = a.json || {};
+  // Handmatig overgezet zonder mail: nooit mailen, ook geen herinnering.
+  if (m && m.geenMail) { a.json.geenMail = true; delete a.json.mailWacht; delete a.json.mailFout; return { ok: true, geenMail: true }; }
   const naarKlant = String((m.klant && m.klant.mail) || "").toLowerCase().split(/[;,\s]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
   if (!naarKlant.length) { a.json.mailFout = "Er staat nog geen mailadres bij de klant."; a.json.mailWacht = soort; return { ok: false, error: a.json.mailFout }; }
   if (!inst.mailAan) { a.json.mailWacht = soort; if (extra && extra.oudeDatum) a.json.oudeDatum = extra.oudeDatum; return { ok: true, wacht: "mailen staat nog uit" }; }
@@ -451,6 +479,16 @@ async function svcPlannen(env, H, wie, opts) {
   }
   let lijst = Object.values(meld).filter(m => m.status === "open");
   if (Array.isArray(opts.its)) lijst = lijst.filter(m => opts.its.map(String).includes(String(m.its)));
+  // Wie ging er de vorige keer naar deze klant? Uit de werkbonnen (zelfde ITS of zelfde debiteur).
+  if (lijst.length) {
+    const vorig = {};
+    for (const r of ((await db.prepare("SELECT its, monteur, datum, json FROM svc_bon WHERE monteur != '' ORDER BY datum").all().catch(() => ({ results: [] }))).results || [])) {
+      const k = svcJson(r.json, {}).klant || {};
+      vorig["its:" + r.its] = r.monteur;
+      if (k.debiteur) vorig["deb:" + k.debiteur] = r.monteur;
+    }
+    for (const m of lijst) m.vorigeMonteur = vorig["its:" + m.its] || ((m.klant || {}).debiteur ? vorig["deb:" + m.klant.debiteur] : null) || null;
+  }
   // Wie het langst wacht eerst.
   lijst.sort((a, b) => String(a.gemeld || a.gemaakt || "").localeCompare(String(b.gemeld || b.gemaakt || "")));
   const gepland = [], over = [];
@@ -462,7 +500,8 @@ async function svcPlannen(env, H, wie, opts) {
     const stops = stopsPer[k] = stopsPer[k] || [];
     const stop = { its: m.its, geo: m.geo || null, duur: m.duur, dagdeel: svcDagdeel(plek.aankomst), nieuw: true };
     stops.splice(plek.p, 0, stop);
-    gepland.push({ its: m.its, naam: (m.klant || {}).naam || "", plaats: (m.klant || {}).plaats || "", datum: plek.R.datum, nr: plek.R.nr, monteur: plek.R.monteur, dagdeel: stop.dagdeel, leeg: plek.leeg });
+    gepland.push({ its: m.its, naam: (m.klant || {}).naam || "", plaats: (m.klant || {}).plaats || "", datum: plek.R.datum, nr: plek.R.nr, monteur: plek.R.monteur, dagdeel: stop.dagdeel, leeg: plek.leeg,
+      buitenVoorkeur: !!plek.buitenVoorkeur, zelfdeMonteur: !!plek.zelfdeMonteur, geenMail: !!m.geenMail });
   }
   const vrijeRoutes = routes.filter(R => !(stopsPer[R.datum + "|" + R.nr] || []).length).length;
   if (opts.voorbeeld) return { ok: true, voorbeeld: true, gepland, over, vrijeRoutes };
@@ -479,10 +518,12 @@ async function svcPlannen(env, H, wie, opts) {
                   status: "voorstel", token: svcToken(), json: { door: wie, gemaakt: nu } };
       const m = meld[s.its];
       const mr = await svcMailStuur(env, db, a, m, "voorstel");
-      (mr.ok && !mr.wacht ? gemaild : mr.ok ? wacht : fout).push(s.its);
+      // Zonder mail kan de klant niet zelf akkoord geven: dan staat hij meteen op akkoord.
+      if (mr.geenMail) { a.status = "akkoord"; a.json.akkoordDoor = wie; a.json.akkoordTs = Date.now(); a.json.akkoordZonderMail = true; }
+      else (mr.ok && !mr.wacht ? gemaild : mr.ok ? wacht : fout).push(s.its);
       await svcAfspraakSchrijf(db, a);
       await db.prepare("UPDATE svc_melding SET status = 'gepland', ts = ?2 WHERE its = ?1").bind(s.its, Date.now()).run();
-      await svcLog(db, s.its, wie, "ingepland op " + datum + " route " + nr + " (" + SVC_DAGDEEL_KORT[s.dagdeel] + ")" + (mr.ok && !mr.wacht ? ", klant gemaild" : mr.wacht ? ", mail wacht: " + mr.wacht : ", " + (mr.error || "mail lukte nog niet")));
+      await svcLog(db, s.its, wie, "ingepland op " + datum + " route " + nr + " (" + SVC_DAGDEEL_KORT[s.dagdeel] + ")" + (mr.geenMail ? ", zonder mail, meteen akkoord" : mr.ok && !mr.wacht ? ", klant gemaild" : mr.wacht ? ", mail wacht: " + mr.wacht : ", " + (mr.error || "mail lukte nog niet")));
     }
   }
   return { ok: true, gepland, over, vrijeRoutes, gemaild: gemaild.length, mailWacht: wacht.length, mailFout: fout.length,
@@ -626,7 +667,9 @@ async function svcAfspraakActie(env, H, wie, b) {
     const oudeDatum = a.datum, oudeNr = a.nr;
     const x = await db.prepare("SELECT MAX(volg) AS m FROM svc_afspraak WHERE datum = ?1 AND nr = ?2 AND status IN ('voorstel','akkoord')").bind(datum, nr).first();
     a.datum = datum; a.nr = nr; a.volg = (x && x.m ? Number(x.m) : 0) + 1;
-    const andereDag = datum !== oudeDatum;
+    const mRij = await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(a.its).first();
+    const zonderMail = !!svcJson(mRij && mRij.json, {}).geenMail;
+    const andereDag = datum !== oudeDatum && !zonderMail;
     if (andereDag) {
       /* Een andere dag is een nieuw voorstel: de klant moet opnieuw akkoord
          geven. Eerst het dagdeel op de nieuwe plek bepalen, dan pas mailen. */
@@ -810,6 +853,10 @@ const SVC_MONTEUR = [
   { naam: "Thieme", rx: /thieme/i, l4: 2019103 },
   { naam: "Patrick", rx: /kroes/i, l4: 2019104 },
   { naam: "Hans", rx: /putten|^hans\b/i, l4: 2019105 },
+  // Kevin, 27 okt 2026: ook Bart, Bertjan en Kevin rijden service.
+  { naam: "Bart", rx: /^bart\b|^bart\.vdb/i, l4: 2016630 },
+  { naam: "Bertjan", rx: /^bertjan/i, l4: 2013394 },
+  { naam: "Kevin", rx: /^kevin\b/i, l4: 2003103 },
 ];
 const SVC_VERZEND_SERVICEMONTEUR = 11;   // "Fonteyn Servicemonteur"
 const SVC_BETAAL_REKENING14 = 6;         // "Rekening 14 dagen"
@@ -899,7 +946,9 @@ async function svcMijn(env, wie, planner, url) {
         garantie: m.garantie || null, duur: m.duur || null, opmerking: m.opmerking || "", bon: bonnen[a.id] || "" };
     });
   }
-  return { ok: true, monteur: als, ik, datum, dagen, stops, monteurs: planner ? SVC_MONTEUR.map(x => x.naam) : [] };
+  // De planning (Gerwin, Kevin, Tim) kan bij de route van elke monteur, ook als die nog niet in de vaste lijst staat.
+  const namen = planner ? [...new Set(SVC_MONTEUR.map(x => x.naam).concat(routesAll.map(r => String(r.monteur || "").trim()).filter(Boolean)))] : [];
+  return { ok: true, monteur: als, ik, datum, dagen, stops, monteurs: namen };
 }
 /* Mag deze inlog bij deze afspraak? De planning altijd; een monteur alleen
    bij een afspraak in zijn eigen route. */
@@ -967,9 +1016,25 @@ async function svcArtikel(env, H, q) {
 }
 
 /* ── Kantoor: de lijst, aanvullen, akkoord, mailen en de factuur ───────── */
-async function svcBonnen(env) {
+async function svcBonWeg(env, wie, b) {
   const db = await svcBonDb(env);
-  const r = (await db.prepare("SELECT json, status FROM svc_bon WHERE status IN ('concept','klaar','akkoord') OR (status = 'gemaild' AND ts > ?1) ORDER BY datum DESC LIMIT 400").bind(Date.now() - 45 * 864e5).all()).results || [];
+  const bon = await svcBonLees(db, b.id);
+  if (!bon) return { ok: false, error: "Deze opleverbon is intussen weg." };
+  if (b.terug) {
+    bon.status = (bon.weg && bon.weg.status) || "klaar"; bon.terugGezet = { door: wie, ts: new Date().toISOString() }; delete bon.weg;
+  } else {
+    if (bon.status === "weg") return { ok: true };
+    bon.weg = { door: wie, ts: new Date().toISOString(), status: bon.status }; bon.status = "weg";
+  }
+  await svcBonSchrijf(db, bon);
+  await svcLog(db, bon.its, wie, b.terug ? "opleverbon teruggezet" : "opleverbon weggehaald");
+  return { ok: true };
+}
+async function svcBonnen(env, alleenWeg) {
+  const db = await svcBonDb(env);
+  const r = (alleenWeg
+    ? await db.prepare("SELECT json, status FROM svc_bon WHERE status = 'weg' ORDER BY datum DESC LIMIT 200").all()
+    : await db.prepare("SELECT json, status FROM svc_bon WHERE status IN ('concept','klaar','akkoord') OR (status = 'gemaild' AND ts > ?1) ORDER BY datum DESC LIMIT 400").bind(Date.now() - 45 * 864e5).all()).results || [];
   return { ok: true, bonnen: r.map(x => { const b = Object.assign(svcJson(x.json, {}), { status: x.status }); delete b.handtekeningKlant; b.getekend = !!svcJson(x.json, {}).handtekeningKlant; return b; }) };
 }
 async function svcBonKantoor(env, wie, b) {
@@ -1050,33 +1115,69 @@ async function svcKmEnkel(env, H, geo) {
   }
   return res ? Number(res.km) : Math.round(svcKm(thuis, geo) * 1.3);
 }
-/* Wat er op de factuur komt; ook als voorbeeld voor de knop. */
-async function svcFactuurPlan(env, H, bon, betaal) {
+/* Wat er op de factuur komt; ook als voorbeeld voor de knop.
+   Kevin (27 okt 2026): alleen een factuur in Logic4, geen order, en nooit
+   prijzen van € 0. De prijzen komen uit Logic4 (prijs voor deze debiteur,
+   staffel op aantal); op de werkbon voor de klant blijven ze weg.
+   Het adres en de kilometers zijn in het venster aan te passen: x.adres
+   zet het adres van de melding goed, x.km zet de kilometers met de hand. */
+async function svcPrijs(env, H, token, code, debiteur, aantal) {
+  const r = await fetch("https://api.logic4server.nl/v3/Products/GetPriceInformationForProduct", { method: "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ ProductCode: String(code), DebtorId: Number(debiteur) || null }) });
+  if (!r.ok) return null;
+  const j = await r.json().catch(() => null);
+  const st = (j && Array.isArray(j.ShiftPrices) ? j.ShiftPrices : []).filter(x => Number(x.Qty || 1) <= Math.max(1, Number(aantal) || 1)).sort((a, b) => Number(b.Qty || 1) - Number(a.Qty || 1));
+  const p = st[0] || (j && j.ShiftPrices && j.ShiftPrices[0]);
+  const excl = p ? Number(p.SellPriceExcl || p.SellPriceGrossExcl || 0) : 0;
+  return excl > 0 ? Math.round(excl * 10000) / 10000 : null;
+}
+async function svcFactuurPlan(env, H, bon, betaal, x) {
+  x = x || {};
   const db = await svcBonDb(env);
-  const m = svcJson(((await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(String(bon.its)).first()) || {}).json, {});
-  const mont = SVC_MONTEUR.find(x => svcMonteurGelijk(x.naam, bon.monteur));
-  const km = await svcKmEnkel(env, H, m.geo || null);
+  const rij = await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(String(bon.its)).first();
+  const m = svcJson((rij || {}).json, {});
+  // Nieuw adres uit het venster: bij de melding bewaren en opnieuw opzoeken.
+  if (x.adres && rij && m.klant && String(x.adres).trim() && String(x.adres).trim() !== m.klant.adres) {
+    m.klant.adres = String(x.adres).trim().slice(0, 200);
+    m.geo = await svcGeo(env, H, m.klant.adres).catch(() => null);
+    await db.prepare("UPDATE svc_melding SET json = ?2 WHERE its = ?1").bind(String(bon.its), JSON.stringify(m)).run();
+    if (bon.klant) { bon.klant.adres = m.klant.adres; await svcBonSchrijf(db, bon); }
+  }
+  if (!m.geo && m.klant && m.klant.adres) m.geo = await svcGeo(env, H, m.klant.adres).catch(() => null);
+  const mont = SVC_MONTEUR.find(y => svcMonteurGelijk(y.naam, bon.monteur));
+  const handKm = x.km !== undefined && x.km !== null && x.km !== "" && isFinite(Number(x.km)) && Number(x.km) >= 0;
+  const km = handKm ? Math.round(Number(x.km)) : (m.geo ? await svcKmEnkel(env, H, m.geo) : null);
   const debiteur = (bon.klant && bon.klant.debiteur) || (m.klant && m.klant.debiteur) || null;
   const regels = (bon.materialen || []).filter(r => r.code && r.aantal > 0).map(r => ({ code: r.code, oms: r.oms, aantal: r.aantal }));
-  if (km) regels.push({ code: SVC_ART_KM, oms: "Voorrijkosten per km (enkele reis)", aantal: km });
+  if (km > 0) regels.push({ code: SVC_ART_KM, oms: "Voorrijkosten per km (enkele reis)", aantal: km });
   if (bon.uren > 0) regels.push({ code: SVC_ART_UUR, oms: "Arbeidskosten (uren)", aantal: bon.uren });
   const garantie = /^ja/i.test(bon.garantie || m.garantie || "");
   const problemen = [];
   if (!debiteur) problemen.push("Bij de melding hoort nog een debiteur uit Logic4.");
   if (!mont) problemen.push("Voor monteur \"" + (bon.monteur || "?") + "\" ontbreekt de koppeling met zijn Logic4-gebruiker.");
-  if (!km) problemen.push("Het adres van de klant is onbekend, dus de kilometers ook. Vul het adres aan bij de melding.");
-  return { debiteur, klant: (bon.klant || {}).naam || "", monteur: mont ? mont.naam : bon.monteur, userId: mont ? mont.l4 : null,
+  if (km === null) problemen.push("Het adres van de klant is nog onbekend. Vul hierboven het adres of de kilometers in.");
+  // Prijzen uit Logic4; een regel zonder prijs gaat er niet in (nooit € 0).
+  if (debiteur && regels.length) {
+    const token = await H.l4Token(env);
+    for (const r of regels) {
+      r.prijs = await svcPrijs(env, H, token, r.code, debiteur, r.aantal).catch(() => null);
+      if (!r.prijs) problemen.push("Voor artikel " + r.code + " (" + r.oms + ") staat nog geen verkoopprijs in Logic4.");
+    }
+  }
+  return { debiteur, klant: (bon.klant || {}).naam || "", adres: (m.klant && m.klant.adres) || (bon.klant || {}).adres || "", monteur: mont ? mont.naam : bon.monteur, userId: mont ? mont.l4 : null,
     verzend: { id: SVC_VERZEND_SERVICEMONTEUR, naam: "Fonteyn Servicemonteur" },
     betaal: Number(betaal) === SVC_BETAAL_GARANTIE ? { id: SVC_BETAAL_GARANTIE, naam: "Garantie" } : { id: SVC_BETAAL_REKENING14, naam: "Rekening 14 dagen" },
-    datum: bon.datum, km, regels, garantie, problemen };
+    datum: bon.datum, km, kmHand: handKm, regels, garantie, problemen,
+    totaalExcl: Math.round(regels.reduce((n, r) => n + (r.prijs || 0) * r.aantal, 0) * 100) / 100 };
 }
 async function svcFactuur(env, H, wie, b) {
   const db = await svcBonDb(env);
   const bon = await svcBonLees(db, b.id);
   if (!bon) return { ok: false, error: "Deze werkbon is intussen weg." };
-  if (bon.factuur && bon.factuur.orderId) return { ok: false, error: "Hiervoor is al order " + bon.factuur.orderId + " gemaakt in Logic4." };
+  if (bon.factuur && bon.factuur.factuurId) return { ok: false, error: "Hiervoor is al factuur " + bon.factuur.factuurId + " gemaakt in Logic4." };
+  if (bon.factuur && bon.factuur.bezig && Date.now() - Date.parse(bon.factuur.ts) < 120000) return { ok: false, error: "De factuur wordt al gemaakt. Wacht even en kijk dan opnieuw." };
   if (bon.status === "concept") return { ok: false, error: "De monteur moet de werkbon eerst afronden, of geef hem eerst akkoord." };
-  const plan = await svcFactuurPlan(env, H, bon, b.betaal);
+  const plan = await svcFactuurPlan(env, H, bon, b.betaal, { adres: b.adres, km: b.km });
   if (b.voorbeeld) return { ok: true, plan };
   if (plan.problemen.length) return { ok: false, error: plan.problemen.join(" ") };
   const token = await H.l4Token(env);
@@ -1084,39 +1185,44 @@ async function svcFactuur(env, H, wie, b) {
     const r = await fetch("https://api.logic4server.nl" + pad, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch (e) {}
     if (!r.ok) throw new Error(pad.split("/").pop() + " HTTP " + r.status + ": " + ((j && (j.detail || j.title)) || t.slice(0, 200)));
-    return j;
+    return j === null ? t : j;
   };
+  const nummer = v => (typeof v === "number" && v) || (v && typeof v === "object" && (v.Id || (v.Value && v.Value.Id) || v.Value)) || Number(v) || null;
   /* Eerst vastleggen dat we bezig zijn, zodat een tweede klik geen tweede
-     order maakt. */
-  bon.factuur = { bezig: true, door: wie, ts: new Date().toISOString() };
+     factuur maakt. Een oude order van vóór 27 okt (alleen order, prijzen 0)
+     onthouden we, zodat kantoor die in Logic4 kan weghalen. */
+  const oudeOrder = bon.factuur && bon.factuur.orderId ? bon.factuur.orderId : null;
+  bon.factuur = { bezig: true, door: wie, ts: new Date().toISOString(), oudeOrder };
   await svcBonSchrijf(db, bon);
+  const kop = {
+    DebtorId: Number(plan.debiteur),
+    CreationDate: new Date().toISOString().slice(0, 19),
+    UserId: plan.userId,
+    ShippingMethod: { Id: plan.verzend.id },
+    PaymentMethod: { Id: plan.betaal.id },
+    DeliveryDate: plan.datum + "T00:00:00",
+    Reference: "ITS " + bon.its,
+    Notes: ("Servicebezoek " + plan.datum.split("-").reverse().join("-") + " door " + plan.monteur + ".\n" + String(bon.gedaan || "")).slice(0, 2000),
+    OrderRows: plan.regels.map(r => ({ ProductCode: r.code, Description: r.oms, Qty: r.aantal, NettPrice: r.prijs, GrossPrice: r.prijs })),
+  };
+  let factuurId = null;
   try {
-    const order = await post("/v3/Orders/AddUpdateOrder", {
-      OrderStatus: { Id: 1 },
-      DebtorId: Number(plan.debiteur),
-      CreationDate: new Date().toISOString().slice(0, 19),
-      UserId: plan.userId,
-      ShippingMethod: { Id: plan.verzend.id },
-      PaymentMethod: { Id: plan.betaal.id },
-      DeliveryDate: plan.datum + "T00:00:00",
-      Reference: "ITS " + bon.its,
-      Notes: ("Servicebezoek " + plan.datum.split("-").reverse().join("-") + " door " + plan.monteur + ".\n" + String(bon.gedaan || "")).slice(0, 2000),
-      OrderRows: plan.regels.map(r => ({ ProductCode: r.code, Description: r.oms, Qty: r.aantal })),
-    });
-    const orderId = (typeof order === "number" && order) || (order && (order.Id || (order.Value && order.Value.Id))) || Number(order) || null;
-    if (!orderId) throw new Error("Logic4 gaf geen ordernummer terug");
-    bon.factuur = { orderId, door: wie, ts: new Date().toISOString() };
+    // Status 3 is wat een factuur in Logic4 heeft; lukt dat niet, dan 1.
+    try { factuurId = nummer(await post("/v3/Orders/AddUpdateInvoice", Object.assign({ OrderStatus: { Id: 3 } }, kop))); }
+    catch (e) { if (!/status/i.test(String(e.message))) throw e; factuurId = nummer(await post("/v3/Orders/AddUpdateInvoice", Object.assign({ OrderStatus: { Id: 1 } }, kop))); }
+    if (!factuurId) throw new Error("Logic4 gaf geen factuurnummer terug");
+    bon.factuur = { factuurId, door: wie, ts: new Date().toISOString(), oudeOrder, totaalExcl: plan.totaalExcl, km: plan.km };
     await svcBonSchrijf(db, bon);
-    const fac = await post("/v3/Orders/CreateAndProcessInvoiceForOrder", Number(orderId));
-    bon.factuur.factuurId = (typeof fac === "number" && fac) || (fac && (fac.Id || (fac.Value && fac.Value.Id))) || Number(fac) || null;
+    await post("/v3/Orders/ProcessInvoice", Number(factuurId));
+    bon.factuur.verwerkt = true;
     await svcBonSchrijf(db, bon);
-    await svcLog(db, bon.its, wie, "factuur aangemaakt in Logic4: order " + orderId + (bon.factuur.factuurId ? ", factuur " + bon.factuur.factuurId : ""));
-    return { ok: true, orderId, factuurId: bon.factuur.factuurId || null };
+    await svcLog(db, bon.its, wie, "factuur " + factuurId + " aangemaakt in Logic4 (€ " + plan.totaalExcl.toFixed(2) + " excl. btw)");
+    return { ok: true, factuurId, totaalExcl: plan.totaalExcl, oudeOrder };
   } catch (e) {
-    const al = bon.factuur && bon.factuur.orderId;
-    bon.factuur = al ? Object.assign({}, bon.factuur, { fout: String(e.message || e).slice(0, 300) }) : null;
+    const fout = String(e.message || e).slice(0, 300);
+    bon.factuur = factuurId ? Object.assign({}, bon.factuur, { fout }) : (oudeOrder ? { orderId: oudeOrder, fout } : null);
     await svcBonSchrijf(db, bon);
-    return { ok: false, error: al ? "Order " + al + " staat in Logic4, maar de factuur maken lukte nog niet: " + String(e.message || e) + ". Maak de factuur in Logic4 af." : String(e.message || e) };
+    return { ok: false, error: factuurId ? "Factuur " + factuurId + " staat in Logic4, maar afronden lukte nog niet: " + fout + ". Rond hem af in Logic4." : fout };
   }
 }
 
@@ -1147,7 +1253,13 @@ export async function svcHandle(request, env, url, H) {
   }
   if (!planner) return H.reply(403, { ok: false, error: "Deze tegel is voor de planning van Service." });
   try {
-    if (p === "/service/bonnen" && request.method === "GET") return H.reply(200, await svcBonnen(env));
+    if (p === "/service/bonnen" && request.method === "GET") return H.reply(200, Object.assign(await svcBonnen(env, url.searchParams.get("weg") === "1"), { magWeg: await H.toegangMag(env, "service-bon-weg", wie) }));
+    /* Een opleverbon weghalen: alleen Gerwin en Kevin (Kevin, 27 okt 2026).
+       Niets gaat echt weg: hij krijgt status "weg" en kan terug. */
+    if (p === "/service/bon/weg" && request.method === "POST") {
+      if (!(await H.toegangMag(env, "service-bon-weg", wie))) return H.reply(403, { ok: false, error: "Alleen Gerwin en Kevin kunnen een opleverbon weghalen." });
+      return H.reply(200, await svcBonWeg(env, wie, body));
+    }
     if (p === "/service/bon/kantoor" && request.method === "POST") return H.reply(200, await svcBonKantoor(env, wie, body));
     if (p === "/service/bon/mail" && request.method === "POST") return H.reply(200, await svcBonMail(env, wie, body));
     if (p === "/service/bon/handtekening" && request.method === "GET") {

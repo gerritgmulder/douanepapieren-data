@@ -21,7 +21,7 @@
   })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Opleverbonnen - Fonteyn Dashboard</title>
+<title>Opleverbonnen Plaatsing - Fonteyn Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- ══════════════════════════════════════════════════════════════════════
      OPLEVERBONNEN - wat de monteurs bij de klant hebben ingevuld (Mijn route)
@@ -74,7 +74,8 @@ main{max-width:1000px;margin:16px auto;padding:0 14px 60px}
 <body>
 <header>
   <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
-  <h1>📋 Opleverbonnen</h1>
+  <h1>📋 Opleverbonnen Plaatsing</h1>
+  <button type="button" class="fp-kop-knop" id="autoKnop" style="display:none;margin-left:auto" title="Het Dashboard laat de lijst met auto's zien waaruit de monteurs op de opleverbon kiezen">Auto's beheren</button>
 </header>
 <main>
   <div class="kaart">
@@ -95,6 +96,46 @@ function esc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){ ret
 function nlD(d){ return String(d||"").split("-").reverse().join("-"); }
 function planNaam(wie){ var n = String(wie||"").split("@")[0].replace(/^fonteyn\./i,""); return n ? n.charAt(0).toUpperCase()+n.slice(1) : ""; }
 var bonFilter = "open";
+/* De auto's op de opleverbon (document "aanpassingen plaatsing", 27 okt
+   2026): Gerwin en Kevin voegen toe en halen weg. */
+var KENTEKENS_STD = ["V-268-SG", "VFV-72-P", "VZ-616-B", "VZK-24-N", "VZK-25-N", "VNS-36-G", "VNS-39-G", "VNS-40-G", "VNS-41-G"];
+async function kentekensLees(){
+  var r = await fetch(W+"/data/plaatsing-kentekens", { headers:{ "X-Fonteyn-Auth": teamKey() } });
+  var j = r.ok ? await r.json().catch(function(){ return null; }) : null;
+  return (j && Array.isArray(j.lijst) && j.lijst.length) ? j.lijst : KENTEKENS_STD.slice();
+}
+async function kentekensBewaar(lijst){
+  var r = await fetch(W+"/data/plaatsing-kentekens", { method:"PUT", headers:{ "X-Fonteyn-Auth": teamKey(), "Content-Type":"application/json" }, body: JSON.stringify({ lijst: lijst, door: ik, updated: new Date().toISOString() }) });
+  if (!r.ok) throw new Error("Bewaren lukte nog niet ("+r.status+")");
+}
+async function autoVenster(){
+  var lijst = await kentekensLees();
+  var laag = document.createElement("div");
+  laag.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px";
+  document.body.appendChild(laag);
+  function teken(melding){
+    laag.innerHTML = '<div style="background:#fff;border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:85vh;overflow:auto">'+
+      '<h3 style="margin:0 0 10px;color:var(--groen)">Auto\'s op de opleverbon</h3>'+
+      '<div>'+lijst.map(function(k, i){ return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--rand)"><b style="flex:1">'+esc(k)+'</b><button type="button" data-weg="'+i+'" title="Het Dashboard haalt deze auto uit de keuzelijst">Weghalen</button></div>'; }).join("")+'</div>'+
+      '<div style="display:flex;gap:8px;margin-top:12px"><input id="autoNieuw" placeholder="nieuw kenteken, bijv. VNS-42-G" style="flex:1;font:inherit;padding:8px;border:1px solid var(--rand);border-radius:8px"><button type="button" id="autoErbij" title="Het Dashboard zet deze auto in de keuzelijst">Toevoegen</button></div>'+
+      '<p style="font-size:12.5px;color:'+(melding && melding.fout ? '#b91c1c' : 'var(--grijs)')+';min-height:16px">'+esc((melding && melding.t) || "")+'</p>'+
+      '<div style="text-align:right"><button type="button" id="autoDicht" title="Venster sluiten">Klaar</button></div></div>';
+    laag.querySelector("#autoDicht").onclick = function(){ laag.remove(); };
+    laag.querySelector("#autoErbij").onclick = async function(){
+      var k = laag.querySelector("#autoNieuw").value.trim().toUpperCase();
+      if (!k) return teken({ t: "Vul eerst een kenteken in.", fout: true });
+      if (lijst.indexOf(k) >= 0) return teken({ t: k + " staat er al in." });
+      lijst.push(k);
+      try { await kentekensBewaar(lijst); if (window.fpLog) fpLog("kenteken-erbij", k); teken({ t: k + " staat in de lijst." }); } catch(e) { lijst.pop(); teken({ t: e.message, fout: true }); }
+    };
+    laag.querySelectorAll("[data-weg]").forEach(function(b){ b.onclick = async function(){
+      var k = lijst[+b.dataset.weg]; lijst.splice(+b.dataset.weg, 1);
+      try { await kentekensBewaar(lijst); if (window.fpLog) fpLog("kenteken-weg", k); teken({ t: k + " is uit de lijst." }); } catch(e) { lijst.splice(+b.dataset.weg, 0, k); teken({ t: e.message, fout: true }); }
+    }; });
+  }
+  teken();
+}
+if (window.fpToegang && fpToegang.mag("kentekens", ik)) { $("autoKnop").style.display = ""; $("autoKnop").onclick = autoVenster; }
 async function bonApi(pad, body){
   var r = await fetch(W+pad, { method: body ? "POST" : "GET", headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" }, body: body ? JSON.stringify(body) : undefined });
   var j = await r.json().catch(function(){ return null; });

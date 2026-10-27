@@ -107,6 +107,12 @@ textarea{resize:vertical}
 <script>
 var W = "https://fonteyn-data-store.g-mulder.workers.dev";
 var $ = function(id){ return document.getElementById(id); };
+/* Anoniem bellen (Kevin, 27 okt 2026): op Android met #31# voor het nummer.
+   Een iPhone belt een link met # helemaal niet (regel van Apple); daar het
+   gewone nummer, met de tip om "Toon mijn nummer" uit te zetten. */
+var IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+function telAnoniem(t){ var nr = String(t||"").replace(/[^\d+]/g,""); return IS_IOS ? "tel:" + nr : "tel:%2331%23" + nr; }
+var TEL_TITEL = IS_IOS ? "Bellen. Anoniem bellen op de iPhone: Instellingen > Telefoon > Toon mijn nummer uit" : "Anoniem bellen: de klant ziet het nummer niet";
 var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
 function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
@@ -149,7 +155,7 @@ function teken(){
     var klaar = s.bon === "klaar" || s.bon === "akkoord" || s.bon === "gemaild" || s.status === "klaar";
     return '<div class="stop' + (klaar ? " klaar" : "") + '" data-id="' + esc(s.id) + '">' +
       '<div class="klapkop" data-klap="' + esc(s.id) + '"><span class="nr">' + (i+1) + '</span><span class="naam">' + esc(k.naam || "ITS " + s.its) + '</span>' +
-        (tel ? '<a class="tel" href="tel:' + esc(tel.replace(/[^\d+]/g,"")) + '">📞 ' + esc(tel) + '</a>' : '') + '</div>' +
+        (tel ? '<a class="tel" href="' + esc(telAnoniem(tel)) + '" title="' + esc(TEL_TITEL) + '">📞 ' + esc(tel) + '</a>' : '') + '</div>' +
       '<div class="blokje">' + (k.adres ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(k.adres) + '" target="_blank" rel="noopener">' + esc(k.adres) + '</a>' : '') +
         '<div class="pillen"><span class="pil paars">ITS ' + esc(s.its) + '</span><span class="pil grijs">' + esc(DAGDEEL[s.dagdeel]||"") + '</span>' +
         (s.status === "akkoord" ? '<span class="pil groen">klant akkoord</span>' : s.status === "voorstel" ? '<span class="pil oranje">wacht op bevestiging klant</span>' : '') +

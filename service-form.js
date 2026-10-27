@@ -89,7 +89,10 @@
     var h = "";
     if (j.gepland && j.gepland.length) {
       h += '<div class="svc-kop2">' + (j.voorbeeld ? "Zo komt het te staan" : "Ingepland") + " (" + j.gepland.length + ")</div><ul class=\"svc-uitslag\">" +
-        j.gepland.map(function (g) { return "<li><b>" + esc(g.naam || ("ITS " + g.its)) + "</b> " + esc(g.plaats || "") + "<br><span style=\"color:#6b7280\">" + esc(datumLang(g.datum)) + " · route " + g.nr + " · " + esc(g.monteur) + " · " + esc(DAGDEEL[g.dagdeel]) + "</span></li>"; }).join("") + "</ul>";
+        j.gepland.map(function (g) { return "<li><b>" + esc(g.naam || ("ITS " + g.its)) + "</b> " + esc(g.plaats || "") + "<br><span style=\"color:#6b7280\">" + esc(datumLang(g.datum)) + " · route " + g.nr + " · " + esc(g.monteur) + " · " + esc(DAGDEEL[g.dagdeel]) + "</span>" +
+          (g.zelfdeMonteur ? " <span class=\"svc-pil groen\">zelfde monteur als vorige keer</span>" : "") +
+          (g.buitenVoorkeur ? " <span class=\"svc-pil oranje\">op een andere dag dan de voorkeur</span>" : "") +
+          (g.geenMail ? " <span class=\"svc-pil grijs\">zonder mail, meteen akkoord</span>" : "") + "</li>"; }).join("") + "</ul>";
     } else h += '<p style="font-size:13.5px">' + (j.voorbeeld ? "Er is nu niets om in te plannen." : "Er is niets bijgekomen.") + "</p>";
     if (j.over && j.over.length) {
       h += '<div class="svc-kop2">Nog zonder plek (' + j.over.length + ")</div><ul class=\"svc-uitslag\">" +
@@ -113,7 +116,9 @@
     var romp = v.el.querySelector("#svcFormRomp");
     function stap1() {
       romp.innerHTML = '<div class="svc-velden"><label class="breed">ITS-nummer<input id="svcIts" inputmode="numeric" autocomplete="off" placeholder="bijvoorbeeld 48211" value="' + esc(opties.its || "") + '"></label></div>' +
-        '<div class="svc-melding" id="svcMeld"></div><div class="svc-knoppen"><button type="button" class="svc-knop wit" id="svcTerug">Terug</button><button type="button" class="svc-knop" id="svcHaal">Ophalen uit Logic4</button></div>';
+        '<div class="svc-melding" id="svcMeld"></div><div class="svc-knoppen"><button type="button" class="svc-knop wit" id="svcTerug">Terug</button>' +
+        '<button type="button" class="svc-knop wit" id="svcHand" title="Alles zelf invullen, zonder de melding uit Logic4 op te halen">Zelf invullen</button>' +
+        '<button type="button" class="svc-knop" id="svcHaal" title="Het Dashboard haalt de melding en de klant op uit Logic4">Ophalen uit Logic4</button></div>';
       var inp = romp.querySelector("#svcIts");
       setTimeout(function () { inp.focus(); }, 30);
       romp.querySelector("#svcTerug").onclick = v.dicht;
@@ -129,6 +134,13 @@
         } catch (e) { meld(e.message, "fout"); b.disabled = false; b.textContent = "Ophalen uit Logic4"; }
       }
       romp.querySelector("#svcHaal").onclick = haal;
+      /* Handmatig toevoegen (Kevin, 27 okt 2026): alleen het ITS-nummer, de rest vul je zelf in. */
+      romp.querySelector("#svcHand").onclick = function () {
+        var its = inp.value.replace(/\D/g, "");
+        if (!its) { meld("Vul een ITS-nummer in; dat blijft de sleutel van de melding.", "fout"); return; }
+        m = { its: its, titel: "", omschrijving: "", tekst: "", garantie: null, klant: { debiteur: null, naam: "", adres: "", tel: "", mail: "" }, duur: null, voorkeur: [], vanaf: null, nietVan: null, nietTot: null, opmerking: "", handmatig: true };
+        stap2(true);
+      };
       inp.addEventListener("keydown", function (e) { if (e.key === "Enter") haal(); });
     }
     function meld(t, soort) { var x = romp.querySelector("#svcMeld"); if (x) { x.textContent = t || ""; x.className = "svc-melding " + (soort || ""); } }
@@ -153,6 +165,10 @@
           '<label>Klant is weg: van<input id="fNietVan" type="date" value="' + esc(m.nietVan || "") + '"></label>' +
           '<label>tot en met<input id="fNietTot" type="date" value="' + esc(m.nietTot || "") + '"></label>' +
           '<label class="breed">Opmerking voor de planning<textarea id="fOpm">' + esc(m.opmerking || "") + "</textarea></label>" +
+          (m.handmatig ? '<label class="breed">Omschrijving van de melding<textarea id="fTekst">' + esc(m.tekst || "") + "</textarea></label>" : "") +
+          /* Klanten overzetten uit de agenda van Logic4 (Kevin, 27 okt 2026). */
+          '<label class="breed" style="flex-direction:row;align-items:center;gap:8px;font-size:13px;color:#1f2937"><input type="checkbox" id="fGeenMail"' + (m.geenMail ? " checked" : "") + ' style="width:auto"> Klant geen mail sturen (bijvoorbeeld bij overzetten uit Logic4). Na het inplannen staat de afspraak meteen op akkoord.</label>' +
+          '<label>Al afgesproken datum (alleen invullen bij overzetten)<input id="fVast" type="date" value="' + esc(m.vast || "") + '"></label>' +
         "</div>" +
         '<div class="svc-melding" id="svcMeld"></div>' +
         '<div class="svc-knoppen"><button type="button" class="svc-knop wit" id="svcTerug">Terug</button>' +
@@ -173,8 +189,12 @@
           duur: duur,
           voorkeur: Array.prototype.map.call(romp.querySelectorAll("[data-dag].aan"), function (b) { return Number(b.dataset.dag); }),
           vanaf: romp.querySelector("#fVanaf").value || null, nietVan: romp.querySelector("#fNietVan").value || null, nietTot: romp.querySelector("#fNietTot").value || null,
-          opmerking: romp.querySelector("#fOpm").value, heropen: !!opties.heropen,
+          opmerking: romp.querySelector("#fOpm").value,
+          // Toevoegen zet hem altijd (weer) in de lijst, ook als hij al eens ingepland stond.
+          heropen: !!opties.heropen || !!nieuw,
+          geenMail: romp.querySelector("#fGeenMail").checked, vast: romp.querySelector("#fVast").value || null,
         };
+        if (m.handmatig) { body.tekst = romp.querySelector("#fTekst").value; body.omschrijving = body.tekst.slice(0, 300); }
         if ((body.nietVan && !body.nietTot) || (!body.nietVan && body.nietTot)) { meld("Vul bij 'klant is weg' allebei de datums in.", "fout"); return; }
         var knop = romp.querySelector(direct ? "#svcDirect" : "#svcBewaar"); knop.disabled = true; knop.textContent = "Bezig…";
         try {
@@ -190,8 +210,9 @@
       var bk = romp.querySelector("#svcBewaar"), dk = romp.querySelector("#svcDirect");
       if (bk) bk.onclick = function () { bewaar(false); };
       if (dk) dk.onclick = function () { bewaar(true); };
-      if (!romp.querySelector("#fAdres").value) meld("Het adres ontbreekt nog in Logic4: vul het hier in.", "fout");
-      else if (!romp.querySelector("#fMail").value) meld("Er staat nog geen mailadres in Logic4. Vul het in, dan kan het voorstel gemaild worden.", "fout");
+      if (m.handmatig) meld("Vul de klant zelf in. Het adres is nodig om de route te maken.", "");
+      else if (!romp.querySelector("#fAdres").value) meld("Het adres ontbreekt nog in Logic4: vul het hier in.", "fout");
+      else if (!romp.querySelector("#fMail").value && !m.geenMail) meld("Er staat nog geen mailadres in Logic4. Vul het in, dan kan het voorstel gemaild worden.", "fout");
     }
     if (m) stap2(false); else stap1();
     if (!m && opties.its) setTimeout(function () { var b = romp.querySelector("#svcHaal"); if (b) b.click(); }, 50);

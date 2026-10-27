@@ -158,6 +158,7 @@ const ALLOWED_BUCKETS = new Set([
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
   "herinneringen-log",
   "voorraadbepaling",    // Voorraadbepaling: verkoop per model (12 mnd) naast de open inkooporders, zes uur geldig
+  "plaatsing-kentekens", // Opleverbon Plaatsing: de auto's om uit te kiezen; Gerwin en Kevin beheren de lijst (27 okt 2026)
   "beurs",            // Tegel Beurs (Dolf en Gerrit): Piscine Global Lyon 2026, stand per taal en de lijst nog te bevestigen (25 okt 2026)
   "voorraadbepaling-crisis", // Voorraadbepaling, tabblad Crisisoverzicht: ingeladen Excel per uitvoering + handmatige aanpassingen (Gerrit, 24 okt 2026)
   "maand-werk",          // Maandcontrole (proef): per maand en rekening wie wat heeft nagekeken en wat de verklaring is

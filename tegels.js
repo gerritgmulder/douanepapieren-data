@@ -156,13 +156,13 @@
     /* Mijn route: de monteur op zijn telefoon, met de paklijst per order.
        Gerrit (14 sep 2026). Zelfde groep als Planning: wie de planning mag
        zien, ziet zijn eigen routes. */
-    { bestand:"mijnroute.html",     groep:"planning",         ic:"🚚",  naam:"Mijn route",
+    { bestand:"mijnroute.html",     groep:"planning",         ic:"🚚",  naam:"Mijn route Plaatsing",
       uit:"Jouw routes per dag, met de paklijst per order",   mobiel:"goed", tile:"tileMijnRoute" },
     { telefoon:true, bestand:"werkplaats.html",     groep:"werkplaats",       ic:"🔧",  naam:"Werkplaats",
       uit:"Spa's die getest moeten worden, op leverdatum",     mobiel:"goed", tile:"tileWerkplaats" },
-    { telefoon:true, bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning",
+    { telefoon:true, bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning Plaatsing",
       uit:"Weekoverzicht van leveringen en service-afspraken",     mobiel:"goed", tile:"tilePlanning" },
-    { bestand:"opleverbonnen.html",  groep:"planning-bewerk",  ic:"📋", naam:"Opleverbonnen",
+    { bestand:"opleverbonnen.html",  groep:"planning-bewerk",  ic:"📋", naam:"Opleverbonnen Plaatsing",
       uit:"Bonnen van de monteurs nakijken, akkoord geven en mailen", mobiel:"krap", tile:"tileOpleverbonnen" },
     /* Service planning (Kevin, document 23 okt 2026): meldingen in de lijst,
        met één knop inplannen en de klant laten kiezen. */

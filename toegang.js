@@ -375,6 +375,18 @@
        via de groep service-planning mee. */
     "service-monteurs": [
       "dolf", "fonteynbot", "gerrit", "hans.van.putten", "patrick.kroes", "thieme.wennink",
+      // Kevin, 27 okt 2026: Bart, Bertjan en Kevin rijden ook service; Gerwin, Kevin en Tim kunnen bij alle routes.
+      "bart.vdb", "bertjan", "gerwin", "kevin", "tim",
+    ],
+    /* Opleverbonnen Service weghalen (en terugzetten): alleen Gerwin en Kevin
+       (Kevin, 27 okt 2026). */
+    "service-bon-weg": [
+      "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
+    ],
+    /* De auto's op de opleverbon van de plaatsing: Gerwin en Kevin voegen
+       toe en halen weg (document "aanpassingen plaatsing", 27 okt 2026). */
+    "kentekens": [
+      "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
     ],
     /* Beurs: de uitnodigingscampagne voor Piscine Global Lyon 2026, voor Dolf
        en Gerrit (25 okt 2026). */
