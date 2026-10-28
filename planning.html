@@ -1497,7 +1497,9 @@ function stopsVan(dISO, nr, eerste){
     var vx = Number(x.volg), vy = Number(y.volg);
     if (isFinite(vx) && isFinite(vy) && vx !== vy) return vx - vy;
     if (isFinite(vx) !== isFinite(vy)) return isFinite(vx) ? -1 : 1;
-    return String(x.tijd||"99").localeCompare(String(y.tijd||"99"));
+    /* Op de echte tijd, niet als tekst: anders kwam 10:00 vóór 8:30 (Kevin, 28 okt 2026). */
+    var tx = minuten(x.tijd), ty = minuten(y.tijd);
+    return (tx == null ? 9999 : tx) - (ty == null ? 9999 : ty);
   });
 }
 
@@ -1848,7 +1850,9 @@ function koppelBord(){
       if (nieuweTijd){
         /* Op tijd: de volgorde van de route volgt de tijden. */
         rij.push(Object.assign({}, a, { tijd:nieuweTijd }));
-        rij.sort(function(x,y){ return String(x.tijd||"99").localeCompare(String(y.tijd||"99")); });
+        rij.sort(function(x,y){ /* Op de echte tijd, niet als tekst: anders kwam 10:00 vóór 8:30 (Kevin, 28 okt 2026). */
+    var tx = minuten(x.tijd), ty = minuten(y.tijd);
+    return (tx == null ? 9999 : tx) - (ty == null ? 9999 : ty); });
       } else {
         var plek = voor ? rij.findIndex(function(x){ return x.id === voor; }) : -1;
         if (plek < 0) rij.push(a); else rij.splice(plek, 0, a);

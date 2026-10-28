@@ -112,7 +112,7 @@
   function formulier(opties) {
     opties = opties || {};
     var m = opties.melding ? JSON.parse(JSON.stringify(opties.melding)) : null;
-    var v = venster('<h3>' + (m ? "Melding ITS " + esc(m.its) : opties.direct ? "Direct inplannen" : "Melding toevoegen") + '</h3><div id="svcFormRomp"></div>', { breed: true, vast: true });
+    var v = venster('<h3>' + (opties.titel ? esc(opties.titel) : m ? "Melding ITS " + esc(m.its) : opties.direct ? "Direct inplannen" : "Melding toevoegen") + '</h3><div id="svcFormRomp"></div>', { breed: true, vast: true });
     var romp = v.el.querySelector("#svcFormRomp");
     function stap1() {
       romp.innerHTML = '<div class="svc-velden"><label class="breed">ITS-nummer<input id="svcIts" inputmode="numeric" autocomplete="off" placeholder="bijvoorbeeld 48211" value="' + esc(opties.its || "") + '"></label></div>' +
@@ -173,7 +173,7 @@
         '<div class="svc-melding" id="svcMeld"></div>' +
         '<div class="svc-knoppen"><button type="button" class="svc-knop wit" id="svcTerug">Terug</button>' +
           (opties.direct ? '<button type="button" class="svc-knop groen" id="svcDirect">Opslaan en meteen inplannen</button>'
-                         : '<button type="button" class="svc-knop" id="svcBewaar">' + (nieuw ? "In de lijst zetten" : "Opslaan") + "</button>") +
+                         : '<button type="button" class="svc-knop" id="svcBewaar">' + (opties.knop || (nieuw ? "In de lijst zetten" : "Opslaan")) + "</button>") +
         "</div>";
       romp.querySelectorAll("[data-duur]").forEach(function (b) { b.onclick = function () { romp.querySelector("#fDuur").value = b.dataset.duur; romp.querySelectorAll("[data-duur]").forEach(function (x) { x.classList.toggle("aan", x === b); }); }; });
       romp.querySelector("#fDuur").oninput = function () { var w = Number(this.value); romp.querySelectorAll("[data-duur]").forEach(function (x) { x.classList.toggle("aan", Number(x.dataset.duur) === w); }); };

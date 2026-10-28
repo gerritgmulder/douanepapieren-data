@@ -51,6 +51,14 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-28", bestand: "planning-service.html", soort: "beter",
+      titel: "Zelf inplannen, slepen en verwijderen",
+      wat: "Met + Melding in deze route zet je een melding direct in een route. Een afspraak sleep je naar een andere plek of route. Met Verwijderen in het venster van een afspraak haal je hem uit de planning." },
+    {
+      datum: "2026-10-28", bestand: "mijnroute.html", soort: "hersteld",
+      titel: "Volgorde zoals in de Planning",
+      wat: "De afspraken staan in Mijn route Plaatsing weer op tijd, zoals in de Planning. 10:00 kwam eerst vóór 8:30." },
+    {
       datum: "2026-10-27", bestand: "opleverbonnen-service.html", soort: "hersteld",
       titel: "Factuur met prijzen, zonder order",
       wat: "Factuur aanmaken zet nu alleen een factuur in Logic4, met de prijzen uit Logic4. Alleen de factuur, zonder order. Adres en kilometers kun je in het venster aanpassen. Gerwin en Kevin kunnen een opleverbon weghalen en weer terugzetten." },

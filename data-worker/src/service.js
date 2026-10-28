@@ -666,7 +666,10 @@ async function svcAfspraakActie(env, H, wie, b) {
     if (!doel) return { ok: false, error: "Die route bestaat nog niet." };
     const oudeDatum = a.datum, oudeNr = a.nr;
     const x = await db.prepare("SELECT MAX(volg) AS m FROM svc_afspraak WHERE datum = ?1 AND nr = ?2 AND status IN ('voorstel','akkoord')").bind(datum, nr).first();
-    a.datum = datum; a.nr = nr; a.volg = (x && x.m ? Number(x.m) : 0) + 1;
+    /* Met b.volg (slepen in Planning Service, Kevin 28 okt 2026) komt hij vóór
+       die plek; zonder b.volg achteraan. svcHerreken nummert daarna opnieuw. */
+    const naarAchter = (x && x.m ? Number(x.m) : 0) + 1;
+    a.datum = datum; a.nr = nr; a.volg = Number(b.volg) > 0 ? Number(b.volg) - 0.5 : naarAchter;
     const mRij = await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(a.its).first();
     const zonderMail = !!svcJson(mRij && mRij.json, {}).geenMail;
     const andereDag = datum !== oudeDatum && !zonderMail;
@@ -687,6 +690,19 @@ async function svcAfspraakActie(env, H, wie, b) {
       await svcAfspraakSchrijf(db, vers);
     }
     await svcLog(db, a.its, wie, "verplaatst naar " + datum + " route " + nr + (mr ? (mr.ok && !mr.wacht ? ", klant gemaild" : ", mail wacht") : ""));
+    return { ok: true };
+  }
+  /* Verwijderen (Kevin, 28 okt 2026): de afspraak gaat uit de planning en de
+     melding uit de lijst. Niets gaat echt weg: status vervallen, met wie en
+     wanneer, en terug te halen door de melding opnieuw toe te voegen. */
+  if (actie === "weg") {
+    a.status = "vervallen"; a.json.reden = "verwijderd door " + wie; a.json.verwijderd = { door: wie, ts: Date.now() };
+    await svcAfspraakSchrijf(db, a);
+    const nogEen = await db.prepare("SELECT COUNT(*) AS n FROM svc_afspraak WHERE its = ?1 AND status IN ('voorstel','akkoord')").bind(a.its).first();
+    if (!(nogEen && nogEen.n)) await db.prepare("UPDATE svc_melding SET status = 'vervallen', ts = ?2 WHERE its = ?1").bind(a.its, Date.now()).run();
+    await nummer(await route());
+    await svcHerreken(env, H, db, a.datum, a.nr);
+    await svcLog(db, a.its, wie, "afspraak van " + a.datum + " verwijderd");
     return { ok: true };
   }
   if (actie === "terug") {
@@ -712,6 +728,36 @@ async function svcAfspraakActie(env, H, wie, b) {
     return mr.ok ? { ok: true, wacht: mr.wacht || null } : mr;
   }
   return { ok: false, error: "onbekende actie" };
+}
+
+/* ── Met de hand in een route zetten (Kevin, 28 okt 2026) ──────────────────
+   Niet via In te plannen meldingen: de planner kiest zelf de route (en de
+   plek). De melding is net opgeslagen met het formulier. Daarna hetzelfde als
+   Plannen: een voorstel en een mail aan de klant, of zonder mail meteen
+   akkoord. */
+async function svcHandInplannen(env, H, wie, b) {
+  const db = await svcDb(env);
+  const its = String(b.its || "").replace(/\D/g, ""), datum = String(b.datum || ""), nr = Number(b.nr);
+  const mRij = await db.prepare("SELECT status, json FROM svc_melding WHERE its = ?1").bind(its).first();
+  if (!mRij) return { ok: false, error: "Sla de melding eerst op." };
+  const route = await db.prepare("SELECT * FROM svc_route WHERE datum = ?1 AND nr = ?2").bind(datum, nr).first();
+  if (!route) return { ok: false, error: "Die route bestaat nog niet." };
+  if (!route.monteur) return { ok: false, error: "Zet eerst een monteur bij deze route." };
+  const m = svcJson(mRij.json, {});
+  const x = await db.prepare("SELECT MAX(volg) AS m FROM svc_afspraak WHERE datum = ?1 AND nr = ?2 AND status IN ('voorstel','akkoord')").bind(datum, nr).first();
+  const nu = new Date().toISOString();
+  const a = { id: "sa" + its + "-" + Date.now().toString(36), its, datum, nr, volg: Number(b.volg) > 0 ? Number(b.volg) - 0.5 : (x && x.m ? Number(x.m) : 0) + 1,
+              dagdeel: 1, status: "voorstel", token: svcToken(), json: { door: wie, gemaakt: nu, metDeHand: true } };
+  await svcAfspraakSchrijf(db, a);
+  await svcHerreken(env, H, db, datum, nr);
+  const vers = svcAfspraakUit(await db.prepare("SELECT * FROM svc_afspraak WHERE id = ?1").bind(a.id).first());
+  const mr = await svcMailStuur(env, db, vers, m, "voorstel");
+  if (mr.geenMail) { vers.status = "akkoord"; vers.json.akkoordDoor = wie; vers.json.akkoordTs = Date.now(); vers.json.akkoordZonderMail = true; }
+  await svcAfspraakSchrijf(db, vers);
+  await db.prepare("UPDATE svc_melding SET status = 'gepland', ts = ?2 WHERE its = ?1").bind(its, Date.now()).run();
+  await svcLog(db, its, wie, "met de hand ingepland op " + datum + " route " + nr + " (" + route.monteur + ")" +
+    (mr.geenMail ? ", zonder mail, meteen akkoord" : mr.ok && !mr.wacht ? ", klant gemaild" : mr.wacht ? ", mail wacht: " + mr.wacht : ", " + (mr.error || "mail lukte nog niet")));
+  return { ok: true, id: vers.id, gemaild: !!(mr.ok && !mr.wacht && !mr.geenMail), geenMail: !!mr.geenMail, mailFout: mr.ok ? null : mr.error };
 }
 
 /* ── De herinneringen en de mails die wachten (cron op :15) ─────────────── */
@@ -1289,6 +1335,7 @@ export async function svcHandle(request, env, url, H) {
       return H.reply(200, await svcPlannen(env, H, wie, { voorbeeld: !!body.voorbeeld, its: Array.isArray(body.its) ? body.its.map(x => String(x).replace(/\D/g, "")) : null }));
     if (p === "/service/ziek" && request.method === "POST") return H.reply(200, await svcZiek(env, H, wie, body));
     if (p === "/service/afspraak" && request.method === "POST") return H.reply(200, await svcAfspraakActie(env, H, wie, body));
+    if (p === "/service/afspraak/nieuw" && request.method === "POST") return H.reply(200, await svcHandInplannen(env, H, wie, body));
     if (p === "/service/mail/voorbeeld" && request.method === "GET") {
       const soort = ["voorstel", "herinnering", "ziek"].includes(url.searchParams.get("soort")) ? url.searchParams.get("soort") : "voorstel";
       const werkdag = (iso) => { while ([0, 6].includes(new Date(iso + "T12:00:00Z").getUTCDay())) iso = svcPlus(iso, 1); return iso; };
