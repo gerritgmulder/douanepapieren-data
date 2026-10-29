@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-29", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Stock voor de adviseurs",
+      wat: "In Voorraadbeheer staat nu ook het tabblad Stock: welke spa's er in Uddel staan en hoeveel daarvan nog vrij is, per model en kleur." },
+    {
       datum: "2026-10-28", bestand: "planning-service.html", soort: "beter",
       titel: "Zelf inplannen, slepen en verwijderen",
       wat: "Met + Melding in deze route zet je een melding direct in een route. Een afspraak sleep je naar een andere plek of route. Met Verwijderen in het venster van een afspraak haal je hem uit de planning." },

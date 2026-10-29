@@ -1319,7 +1319,9 @@ function beperkTotKlantTabs(alleenParticulier){
      Zij zagen tot nu toe Particulier én Partner. Partner gaat over dealers en
      daar hebben zij niets te zoeken; het blijft wel bij de adviseurs, want
      die bellen hun eigen dealers. */
-  const mag = alleenParticulier ? new Set(["particulier"]) : new Set(["particulier","partner"]);
+  /* De adviseurs zien ook Stock, alleen lezen (Gerrit, 29 okt 2026): wat er
+     in Uddel staat en wat nog vrij is, zonder prijzen. De spa service niet. */
+  const mag = alleenParticulier ? new Set(["particulier"]) : new Set(["particulier","partner","stock"]);
   document.querySelectorAll(".tab").forEach(t=>{
     if(!mag.has(t.dataset.tab)) t.style.display="none";
   });
