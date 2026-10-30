@@ -99,8 +99,18 @@ main{margin:14px auto;padding:0 14px 60px}
 .afmeld label{display:block;font-size:12px;font-weight:700;color:var(--grijs);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 4px}
 .afmeld input[type=text],.afmeld textarea{width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:10px 11px;font:inherit;font-size:15px}
 .afmeld textarea{min-height:70px;resize:vertical}
-.hand{position:relative;border:2px dashed #cbd5e1;border-radius:12px;background:#fff;touch-action:none}
+.hand{position:relative;border:2px dashed #cbd5e1;border-radius:12px;background:#fff;min-height:110px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hand img{display:block;max-width:100%;max-height:150px}
 .hand canvas{display:block;width:100%;height:170px;border-radius:10px}
+.tekenlaag{position:fixed;inset:0;z-index:200;background:#fff;display:flex;flex-direction:column;touch-action:none}
+.tekenkop{padding:12px 16px;font-size:16px;color:var(--groen);border-bottom:1px solid var(--rand)}
+.tekenvlak{flex:1;margin:10px;border:2px dashed #cbd5e1;border-radius:14px;overflow:hidden;touch-action:none}
+.tekenvlak canvas{display:block;touch-action:none}
+.tekenknoppen{display:flex;gap:10px;padding:10px 12px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--rand)}
+.tekenknoppen button{flex:1;padding:14px;font:inherit;font-size:16px;font-weight:700;border-radius:12px;border:1px solid var(--rand);background:#fff;cursor:pointer}
+.tekenknoppen button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
+.fotovak{position:relative;display:inline-block}
+.fotoweg{position:absolute;top:-6px;right:-6px;width:26px;height:26px;border-radius:50%;border:0;background:#b91c1c;color:#fff;font-size:17px;line-height:26px;padding:0;cursor:pointer}
 .hand .wis{position:absolute;right:6px;top:6px;border:1px solid var(--rand);background:#fff;border-radius:8px;padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer}
 .hand .hint{position:absolute;left:12px;bottom:8px;font-size:12.5px;color:#9ca3af;pointer-events:none}
 .groot{width:100%;margin-top:12px;background:var(--groen);color:#fff;border:0;border-radius:12px;padding:14px;font:inherit;font-size:16px;font-weight:700;cursor:pointer}
@@ -653,8 +663,13 @@ function fotosHtml(r, s, magToevoegen){
   var f = s.fotos || [];
   if (!f.length && !magToevoegen) return '';
   return '<div class="veld"><div class="k">Foto\'s</div><div class="fotos">' +
-    f.map(function(x){ return '<img data-foto="'+esc(x.id)+'" alt="foto" title="'+esc((x.chauffeur||naamVan(x.door)||"")+" · "+tijd(x.ts))+'"'+(fotoUrl[x.id]?' src="'+fotoUrl[x.id]+'"':'')+'>'; }).join("") +
-    (magToevoegen ? '<label class="fotoknop">📷 Foto toevoegen<input type="file" accept="image/*" capture="environment" multiple data-fotoin="'+esc(sleutel(r.id, s.order))+'"></label>' : '') +
+    f.map(function(x){ return '<span class="fotovak"><img data-foto="'+esc(x.id)+'" alt="foto" title="'+esc((x.chauffeur||naamVan(x.door)||"")+" · "+tijd(x.ts))+'"'+(fotoUrl[x.id]?' src="'+fotoUrl[x.id]+'"':'')+'>' +
+      (magToevoegen ? '<button type="button" class="fotoweg" data-fotoweg="'+esc(x.id)+'" data-fotostop="'+esc(sleutel(r.id, s.order))+'" title="Het Dashboard haalt deze foto weg bij deze stop">&times;</button>' : '') + '</span>'; }).join("") +
+    /* Manon (30 okt 2026): meer foto's tegelijk, en ook uit de galerij. De
+       camera-knop opent meteen de camera; de galerij-knop laat je meerdere
+       foto's kiezen die je al hebt gemaakt. */
+    (magToevoegen ? '<label class="fotoknop" title="Het Dashboard opent de camera">📷 Foto maken<input type="file" accept="image/*" capture="environment" data-fotoin="'+esc(sleutel(r.id, s.order))+'"></label>' +
+      '<label class="fotoknop" title="Kies een of meer foto\'s uit de galerij van je telefoon">🖼️ Uit galerij<input type="file" accept="image/*" multiple data-fotoin="'+esc(sleutel(r.id, s.order))+'"></label>' : '') +
     '</div><div class="melding" data-fotomelding="'+esc(sleutel(r.id, s.order))+'"></div></div>';
 }
 async function laadFotos(waar){
@@ -701,6 +716,20 @@ function koppelFotoKnoppen(waar, opnieuw){
     }
     try{ if (window.fpLog && gelukt) window.fpLog("bakwagen-foto", "rit " + x.r.id + " order " + x.s.order + ": " + gelukt + " foto('s)"); }catch(e){}
     if (gelukt) opnieuw();
+    inp.value = "";
+  }); });
+  waar.querySelectorAll("[data-fotoweg]").forEach(function(b){ b.addEventListener("click", async function(e){
+    e.stopPropagation();
+    var x = zoekStop(b.dataset.fotostop); if (!x) return;
+    if (!(await fpBevestig("Deze foto weghalen bij deze stop?", { knop: "Weghalen" }))) return;
+    b.disabled = true;
+    try {
+      var j = await lees("/bakwagen/foto/weg", { method: "POST", body: JSON.stringify({ id: b.dataset.fotoweg }) });
+      if (!j.ok) throw new Error(j.error || "onbekend");
+      x.s.fotos = (x.s.fotos || []).filter(function(f){ return f.id !== b.dataset.fotoweg; });
+      try{ if (window.fpLog) window.fpLog("bakwagen-foto-weg", "rit " + x.r.id + " order " + x.s.order); }catch(er){}
+      opnieuw();
+    } catch(er) { b.disabled = false; }
   }); });
   laadFotos(waar);
 }
@@ -745,10 +774,16 @@ function afmeldHtml(r, s, k){
       (a.naam ? '<br>Getekend door: '+esc(a.naam) : '')+
       (a.opmerking ? '<br><br><b style="color:#92400e">Opmerking:</b> '+esc(a.opmerking) : '')+
       handImgs(k, a)+
-      '</div><button type="button" class="klein" data-opnieuw="'+esc(k)+'">Opnieuw afmelden</button>'+bonMailHtml(k, a, s.mail)+'</div>';
+      '</div><button type="button" class="klein" data-opnieuw="'+esc(k)+'" title="Naam, opmerking of handtekening aanpassen; de handtekening blijft staan tot je hem opnieuw laat tekenen">Aanpassen</button>'+bonMailHtml(k, a, s.mail)+'</div>';
   }
   var c = concept[k] || {}, soort = c.soort || standaardSoort(r, s);
-  var vak = function(veldnaam){ return '<div class="hand" data-handveld="'+veldnaam+'"><canvas></canvas><button type="button" class="wis">Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>'; };
+  /* Manon (30 okt 2026): in het kleine vak schoof het scherm mee. Nu opent
+     een tik een groot tekenvenster over het hele scherm; hier staat daarna
+     wat er getekend is. */
+  var vak = function(veldnaam){ return '<div class="hand" data-handveld="'+veldnaam+'" title="Tik om de klant te laten tekenen in een groot venster">' +
+    (c[veldnaam] ? '<img alt="handtekening" src="'+c[veldnaam]+'">' : '') +
+    '<span class="hint"'+(c[veldnaam]?' style="display:none"':'')+'>✍️ Tik hier om de klant te laten tekenen</span>' +
+    (c[veldnaam] ? '<button type="button" class="wis">Opnieuw tekenen</button>' : '') + '</div>'; };
   return '<div class="afmeld"><h4>Afmelden bij de klant</h4>' +
     '<div class="segment"><button type="button" data-soort="levering"'+(soort==="levering"?' class="aan"':'')+'>Geleverd</button><button type="button" data-soort="retour"'+(soort==="retour"?' class="aan"':'')+'>Retour opgehaald</button><button type="button" data-soort="omruiling"'+(soort==="omruiling"?' class="aan"':'')+'>Omruiling</button></div>' +
     '<label>Naam van de klant</label><input type="text" data-veld="naam" value="'+esc(c.naam || "")+'" placeholder="Wie tekent er?">' +
@@ -796,7 +831,14 @@ function koppelDag(){
     vak.querySelectorAll("[data-veld]").forEach(function(v){ v.addEventListener("input", function(){ c[v.dataset.veld] = v.value; }); });
     vak.querySelectorAll(".hand").forEach(function(h){ koppelHandtekening(h, c, h.dataset.handveld || "hand"); });
     var af = vak.querySelector("[data-afmelden]"); if (af) af.addEventListener("click", function(){ afmelden(k, af); });
-    var op = vak.querySelector("[data-opnieuw]"); if (op) op.addEventListener("click", function(){ concept[k] = { opnieuw: true, soort: x.s.af.soort, naam: x.s.af.naam || "", opmerking: x.s.af.opmerking || "" }; open[k] = true; tekenDag(); });
+    /* Aanpassen na het afmelden (Manon, 30 okt 2026): alles blijft staan,
+       ook de handtekening; de chauffeur past alleen aan wat anders moet. */
+    var op = vak.querySelector("[data-opnieuw]"); if (op) op.addEventListener("click", async function(){
+      op.disabled = true; op.textContent = "Even ophalen…";
+      if (handCache[k] === undefined) { try { await haalHand(k); } catch(e) {} }
+      concept[k] = { opnieuw: true, soort: x.s.af.soort, naam: x.s.af.naam || "", opmerking: x.s.af.opmerking || "", hand: handCache[k] || "", hand2: handCache[k+":2"] || "" };
+      open[k] = true; tekenDag();
+    });
     var th = vak.querySelector("[data-toonhand]"); if (th) th.addEventListener("click", async function(){
       th.disabled = true; th.textContent = "Even ophalen…";
       try { await haalHand(k); tekenDag(); }
@@ -808,19 +850,37 @@ function koppelDag(){
    opleverbon in Mijn route). */
 function koppelHandtekening(h, c, veldnaam){
   veldnaam = veldnaam || "hand";
-  var cv = h.querySelector("canvas"), ctx = cv.getContext("2d");
-  var breed = h.clientWidth || 320, hoog = 170, dpr = Math.min(window.devicePixelRatio||1, 2);
-  cv.width = Math.round(breed*dpr); cv.height = Math.round(hoog*dpr); ctx.scale(dpr,dpr);
-  ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
-  var hint = h.querySelector(".hint");
-  if (c[veldnaam]){ var img = new Image(); img.onload = function(){ ctx.drawImage(img, 0, 0, breed, hoog); }; img.src = c[veldnaam]; if (hint) hint.style.display = "none"; }
-  var bezig = false, was = false;
+  h.addEventListener("click", function(e){ e.preventDefault(); tekenVenster(c[veldnaam] || "", function(png){ c[veldnaam] = png; tekenDag(); }); });
+}
+/* Het grote tekenvenster: over het hele scherm, de pagina staat stil, en de
+   klant tekent met de vinger. Klaar bewaart de handtekening; Annuleren laat
+   alles zoals het was. */
+function tekenVenster(was, klaar){
+  var laag = document.createElement("div");
+  laag.className = "tekenlaag";
+  laag.innerHTML = '<div class="tekenkop"><b>Laat de klant hier tekenen</b></div><div class="tekenvlak"><canvas></canvas></div>' +
+    '<div class="tekenknoppen"><button type="button" data-t="wis">Wissen</button><button type="button" data-t="terug">Annuleren</button><button type="button" class="doe" data-t="klaar">Klaar</button></div>';
+  document.body.appendChild(laag);
+  var oudOverflow = document.body.style.overflow; document.body.style.overflow = "hidden";
+  var vlak = laag.querySelector(".tekenvlak"), cv = laag.querySelector("canvas"), ctx = cv.getContext("2d");
+  var breed = vlak.clientWidth, hoog = vlak.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(breed * dpr); cv.height = Math.round(hoog * dpr); cv.style.width = breed + "px"; cv.style.height = hoog + "px"; ctx.scale(dpr, dpr);
+  ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+  var getekend = false;
+  if (was) { var img = new Image(); img.onload = function(){ var sch = Math.min(breed / img.width, hoog / img.height); ctx.drawImage(img, 0, 0, img.width * sch, img.height * sch); getekend = true; }; img.src = was; }
+  var bezig = false;
   function pos(e){ var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
-  cv.addEventListener("pointerdown", function(e){ e.preventDefault(); bezig = true; was = true; cv.setPointerCapture(e.pointerId); var p = pos(e); ctx.beginPath(); ctx.moveTo(p[0],p[1]); if (hint) hint.style.display = "none"; });
-  cv.addEventListener("pointermove", function(e){ if (!bezig) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p[0],p[1]); ctx.stroke(); });
-  function klaar(){ if (!bezig) return; bezig = false; if (was){ var k = document.createElement("canvas"); k.width = 600; k.height = 200; k.getContext("2d").drawImage(cv, 0, 0, 600, 200); c[veldnaam] = k.toDataURL("image/png"); } }
-  cv.addEventListener("pointerup", klaar); cv.addEventListener("pointercancel", klaar); cv.addEventListener("pointerleave", klaar);
-  h.querySelector(".wis").addEventListener("click", function(){ ctx.clearRect(0,0,breed,hoog); c[veldnaam] = ""; was = false; if (hint) hint.style.display = ""; });
+  cv.addEventListener("pointerdown", function(e){ e.preventDefault(); bezig = true; getekend = true; cv.setPointerCapture(e.pointerId); var p = pos(e); ctx.beginPath(); ctx.moveTo(p[0], p[1]); });
+  cv.addEventListener("pointermove", function(e){ if (!bezig) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p[0], p[1]); ctx.stroke(); });
+  ["pointerup", "pointercancel"].forEach(function(n){ cv.addEventListener(n, function(){ bezig = false; }); });
+  function dicht(){ document.body.style.overflow = oudOverflow; laag.remove(); }
+  laag.querySelector('[data-t="wis"]').onclick = function(){ ctx.clearRect(0, 0, breed, hoog); getekend = false; };
+  laag.querySelector('[data-t="terug"]').onclick = dicht;
+  laag.querySelector('[data-t="klaar"]').onclick = function(){
+    var png = "";
+    if (getekend) { var k = document.createElement("canvas"); k.width = 900; k.height = Math.round(900 * hoog / breed); k.getContext("2d").drawImage(cv, 0, 0, k.width, k.height); png = k.toDataURL("image/png"); }
+    dicht(); klaar(png);
+  };
 }
 async function afmelden(k, knop){
   var x = zoekStop(k); if (!x) return;

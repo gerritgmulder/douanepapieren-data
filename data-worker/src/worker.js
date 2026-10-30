@@ -17680,6 +17680,9 @@ async function bwDb(env) {
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_rit (id TEXT PRIMARY KEY, naam TEXT, datum TEXT, soort TEXT, memo TEXT, aantal INTEGER, ts INTEGER)"),
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_akkoord (rit TEXT PRIMARY KEY, chauffeur TEXT, datum TEXT, naam TEXT, soort TEXT, memo TEXT, door TEXT, ts INTEGER)"),
       db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_foto (id TEXT PRIMARY KEY, rit TEXT, orderid TEXT, door TEXT, chauffeur TEXT, ts INTEGER, grootte INTEGER)"),
+      /* Een foto weghalen (Manon, 30 okt 2026): hij blijft bewaard, maar telt
+         niet meer mee. Wie en wanneer staat erbij. */
+      db.prepare("CREATE TABLE IF NOT EXISTS bakwagen_foto_weg (id TEXT PRIMARY KEY, door TEXT, ts INTEGER)"),
     ]);
     /* Wie er op de flexwagen reed (Gerrit, 17 okt 2026); kolom erbij in een bestaande tabel. */
     try { await db.prepare("ALTER TABLE bakwagen_akkoord ADD COLUMN bestuurder TEXT").run(); } catch (e) { /* bestaat al */ }
@@ -17832,7 +17835,7 @@ async function bwStops(env, db, l4, ritten) {
   }
   const fotos = {};
   if (ritIds.length) {
-    const rs = await db.prepare("SELECT id, rit, orderid, door, chauffeur, ts FROM bakwagen_foto WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ") ORDER BY ts").bind(...ritIds).all();
+    const rs = await db.prepare("SELECT id, rit, orderid, door, chauffeur, ts FROM bakwagen_foto WHERE rit IN (" + ritIds.map((_, k) => "?" + (k + 1)).join(",") + ") AND id NOT IN (SELECT id FROM bakwagen_foto_weg) ORDER BY ts").bind(...ritIds).all();
     for (const x of rs.results || []) (fotos[x.rit + ":" + x.orderid] = fotos[x.rit + ":" + x.orderid] || []).push({ id: x.id, ts: x.ts, door: x.door, chauffeur: x.chauffeur });
   }
   for (const r of ritten) {
@@ -18041,6 +18044,16 @@ async function bakwagenFotoZet(env, wie, planner, b) {
   await bwSein(env, wie, "foto", rit);
   return { ok: true, id, ts: Date.now() };
 }
+async function bakwagenFotoWeg(env, wie, planner, b) {
+  const id = String(b.id || "").replace(/[^a-z0-9]/g, "");
+  const db = await bwDb(env);
+  const x = await db.prepare("SELECT rit FROM bakwagen_foto WHERE id = ?1").bind(id).first();
+  if (!x) return { ok: false, error: "Deze foto is er niet meer." };
+  if (!(await bwMagBijRit(env, db, wie, planner, x.rit))) return { ok: false, error: "Deze rit staat bij een andere chauffeur." };
+  await db.prepare("INSERT OR REPLACE INTO bakwagen_foto_weg (id, door, ts) VALUES (?1, ?2, ?3)").bind(id, wie, Date.now()).run();
+  await bwSein(env, wie, "foto", x.rit);
+  return { ok: true };
+}
 async function bakwagenFotoLees(env, wie, planner, id) {
   id = String(id || "").replace(/[^a-z0-9]/g, "");
   const db = await bwDb(env);
@@ -18057,7 +18070,7 @@ async function bakwagenZoek(env, q) {
   q = String(q || "").trim().toLowerCase().slice(0, 60);
   const woorden = q.split(/\s+/).filter(Boolean);
   const af = (await db.prepare("SELECT a.rit, a.orderid, a.soort, a.naam, a.opmerking, a.chauffeur, a.ts, length(a.hand) AS hl, length(a.hand2) AS hl2, a.gemaild, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_af a LEFT JOIN bakwagen_rit r ON r.id = a.rit LEFT JOIN bakwagen_order o ON o.id = a.orderid ORDER BY a.ts DESC LIMIT 2000").all()).results || [];
-  const ft = (await db.prepare("SELECT f.id, f.rit, f.orderid, f.chauffeur, f.ts, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_foto f LEFT JOIN bakwagen_rit r ON r.id = f.rit LEFT JOIN bakwagen_order o ON o.id = f.orderid ORDER BY f.ts DESC LIMIT 3000").all()).results || [];
+  const ft = (await db.prepare("SELECT f.id, f.rit, f.orderid, f.chauffeur, f.ts, r.naam AS ritnaam, r.datum, o.json FROM bakwagen_foto f LEFT JOIN bakwagen_rit r ON r.id = f.rit LEFT JOIN bakwagen_order o ON o.id = f.orderid WHERE f.id NOT IN (SELECT id FROM bakwagen_foto_weg) ORDER BY f.ts DESC LIMIT 3000").all()).results || [];
   const per = new Map();
   const stop = (x) => {
     const k = x.rit + ":" + x.orderid;
@@ -19410,7 +19423,7 @@ const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                              inlog zonder Logic4) melden hun eigen stops af en zetten er foto's bij. De worker laat dat alleen
                              toe voor een rit die voor die chauffeur klaarstaat (bwMagBijRit), en er
                              schrijft niets terug wat gefilterd is: het is een eigen nieuwe regel. */
-                          "/bakwagen/afmelden", "/bakwagen/foto", "/bakwagen/bestuurder", "/bakwagen/pak",
+                          "/bakwagen/afmelden", "/bakwagen/foto", "/bakwagen/foto/weg", "/bakwagen/bestuurder", "/bakwagen/pak",
                           /* De werkbon van de servicemonteur: service.js laat dat alleen toe
                              voor een afspraak in zijn eigen route (svcMagBijAfspraak). */
                           "/service/bon",
@@ -21099,6 +21112,8 @@ const FP_WORKER = {
           return reply(200, await bakwagenBestuurder(env, wie, planner, await request.json().catch(() => ({}))));
         if (url.pathname === "/bakwagen/foto" && request.method === "POST")
           return reply(200, await bakwagenFotoZet(env, wie, planner, await request.json().catch(() => ({}))));
+        if (url.pathname === "/bakwagen/foto/weg" && request.method === "POST")
+          return reply(200, await bakwagenFotoWeg(env, wie, planner, await request.json().catch(() => ({}))));
         if (url.pathname === "/bakwagen/foto" && request.method === "GET") return bakwagenFotoLees(env, wie, planner, url.searchParams.get("id"));
         if (url.pathname === "/bakwagen/zoek" && request.method === "GET")
           return planner ? reply(200, await bakwagenZoek(env, url.searchParams.get("q"))) : alleenPlanner();

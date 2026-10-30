@@ -51,6 +51,14 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "bakwagen.html", soort: "beter",
+      titel: "Tekenen, foto's en aanpassen",
+      wat: "De klant tekent nu in een groot venster over het hele scherm, dus het scherm schuift niet meer mee. Foto's kun je maken of uit de galerij kiezen, meerdere tegelijk, en een foto ook weer weghalen. Na het afmelden kan de chauffeur nog alles aanpassen; de handtekening blijft dan staan." },
+    {
+      datum: "2026-10-30", bestand: "retouren.html", soort: "hersteld",
+      titel: "Alle retouren van een dag",
+      wat: "Ophalen kijkt nu ook naar retouren die lang van tevoren zijn aangemaakt, en laat alle verzendmethodes zien behalve Afhalen." },
+    {
       datum: "2026-10-30", bestand: "voorraad.html", soort: "hersteld",
       titel: "ETA's van Merzario: ook 364/365",
       wat: "Containerparen die Merzario met een schuine streep schrijft (zoals 364/365 van Devine) worden nu herkend; hun ETA komt vanzelf uit Merzario. Bij Schepen & ontvangst staat in rood als een schip geen koppeling heeft en de datum met de hand is ingevuld. Komt een schip 3 dagen of meer later, of heeft het geen koppeling, dan krijgen Chantal en Manon een bericht." },

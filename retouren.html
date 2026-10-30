@@ -434,9 +434,12 @@ let returnOrders = [];        // gedetecteerde retouren (bedrag <= 0)
 let selectedMethods = null;   // Set van verzendmethode-namen die aanstaan
 
 // Standaard-AAN verzendmethodes (de DHL + Transport distributie uit Manons screenshots)
+/* Standaard alles aan behalve Afhalen (Manon, 30 okt 2026: order 3520895
+   met "Leverancier - Franco" viel weg omdat alleen DHL en Transport
+   distributie aan stonden). */
 function methodOnByDefault(name) {
   const n = (name || "").toLowerCase();
-  return n.indexOf("dhl") !== -1 || n.indexOf("transport distributie") !== -1;
+  return n.indexOf("afhalen") === -1;
 }
 
 el("fetchBtn").addEventListener("click", fetchReturns);
@@ -487,13 +490,16 @@ async function fetchReturns() {
     /* Op indicatie leverdatum (Manon, 23 okt 2026: "de aanmaakdatum, daar kijk
        ik nooit naar"). Logic4 filtert alleen op aanmaakdatum (ook een filter op
        DeliveryDate negeert hij, nagekeken 23 okt 2026). Dus: ophalen op
-       aanmaakdatum vanaf 60 dagen vóór de gekozen periode tot twee weken erna,
+       aanmaakdatum vanaf 200 dagen vóór de gekozen periode tot twee weken erna,
        en hier zelf de orders kiezen waarvan de ind. lev. dtm. in de periode
        valt. Rond de 50 orders per dag, dus een paar pagina's. */
     const plusD = (iso, n) => { const x = new Date(iso + "T12:00:00"); x.setDate(x.getDate() + n); return isoDate(x); };
     const vandaagIso = isoDate(new Date());
-    const cFrom = plusD(from, -60), cToRuw = plusD(to, 14), cTo = cToRuw > vandaagIso ? vandaagIso : cToRuw;
-    const PAGE = 500, MAXP = 30;
+    /* 200 dagen terug in plaats van 60 (Manon, 30 okt 2026): retouren 3520796
+       en 3520895 waren op 26 en 28 augustus aangemaakt en pas op 30 oktober
+       gepland, en vielen er net buiten. */
+    const cFrom = plusD(from, -200), cToRuw = plusD(to, 14), cTo = cToRuw > vandaagIso ? vandaagIso : cToRuw;
+    const PAGE = 500, MAXP = 40;
     const all = [];
     for (let p=0; p<MAXP; p++) {
       setFetch("info", "Ophalen — pagina " + (p+1) + " (" + all.length + " orders)…");
