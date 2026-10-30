@@ -210,9 +210,9 @@ async function factuur(b){
       '<table class="fac"><tr><th>Artikel</th><th>Omschrijving</th><th>Aantal</th><th style="text-align:right">Prijs excl.</th><th style="text-align:right">Totaal excl.</th></tr>' +
         p.regels.map(function(r){ return '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.oms) + '</td><td>' + esc(String(r.aantal).replace(".", ",")) + '</td><td style="text-align:right">' + (r.prijs ? euro(r.prijs) : '<b style="color:#b91c1c">geen prijs</b>') + '</td><td style="text-align:right">' + (r.prijs ? euro(r.prijs * r.aantal) : '') + '</td></tr>'; }).join("") +
         '<tr><th colspan="4" style="text-align:right">Totaal excl. btw</th><th style="text-align:right">' + euro(p.totaalExcl) + '</th></tr></table>' +
-      (p.problemen.length ? '<p class="svc-melding fout">' + p.problemen.map(esc).join("<br>") + '</p>' : '<p style="font-size:12.5px;color:#6b7280;margin-top:10px">Na de klik staat de factuur in Logic4, met deze prijzen. Er komt geen order. Op de werkbon voor de klant staan geen prijzen. Mailen van de factuur gaat vanuit Logic4.</p>') +
+      (p.problemen.length ? '<p class="svc-melding fout">' + p.problemen.map(esc).join("<br>") + '</p>' : '<p style="font-size:12.5px;color:#6b7280;margin-top:10px">Na de klik staat de factuur in Logic4 met deze prijzen, op de status Verkooporder. Je kunt hem daar nog aanpassen; verwerken en mailen doe je zelf in Logic4. Op de werkbon voor de klant staan geen prijzen.</p>') +
       '<div class="svc-melding" id="fMeld"></div><div class="svc-knoppen"><button type="button" class="svc-knop wit" id="fTerug">Terug</button>' +
-      (p.problemen.length ? '' : '<button type="button" class="svc-knop groen" id="fMaak" title="Het Dashboard maakt de factuur in Logic4 en rondt hem af">Factuur aanmaken</button>') + '</div>';
+      (p.problemen.length ? '' : '<button type="button" class="svc-knop groen" id="fMaak" title="Het Dashboard zet de factuur in Logic4 klaar op Verkooporder; verwerken doe je zelf in Logic4">Factuur aanmaken</button>') + '</div>';
     romp.querySelector("#fTerug").onclick = v.dicht;
     romp.querySelector("#fBetaal").onchange = function(){ keuze.betaal = this.value; toon(); };
     romp.querySelector("#fReken").onclick = function(){
@@ -229,7 +229,7 @@ async function factuur(b){
       var r = await svc.api("/service/bon/factuur", { id: b.id, betaal: keuze.betaal, adres: keuze.adres || undefined, km: keuze.km === "" ? undefined : keuze.km }).catch(function(e){ return { ok:false, error:e.message }; });
       try { if (window.fpLog) fpLog("service-factuur", "ITS " + b.its + (r.ok ? " factuur " + r.factuurId : " lukte nog niet")); } catch(e) {}
       if (!r.ok) { romp.querySelector("#fMeld").textContent = r.error; romp.querySelector("#fMeld").className = "svc-melding fout"; mk.textContent = "Opnieuw proberen"; mk.disabled = false; laad(); return; }
-      romp.innerHTML = '<p class="svc-melding goed">Klaar: factuur ' + esc(r.factuurId) + ' staat in Logic4 (' + euro(r.totaalExcl) + ' excl. btw).</p>' +
+      romp.innerHTML = '<p class="svc-melding goed">Klaar: factuur ' + esc(r.factuurId) + ' staat in Logic4 op Verkooporder (' + euro(r.totaalExcl) + ' excl. btw). Verwerk hem in Logic4 als alles klopt.</p>' +
         (r.oudeOrder ? '<p class="svc-melding" style="color:#c2410c">Haal in Logic4 nog de oude order ' + esc(r.oudeOrder) + ' weg; die maakte het Dashboard eerder met prijzen van € 0.</p>' : '') +
         '<div class="svc-knoppen"><button type="button" class="svc-knop" id="fOk">Klaar</button></div>';
       romp.querySelector("#fOk").onclick = function(){ v.dicht(); laad(); };

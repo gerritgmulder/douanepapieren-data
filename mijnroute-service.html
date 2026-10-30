@@ -156,6 +156,8 @@ function teken(){
     return '<div class="stop' + (klaar ? " klaar" : "") + '" data-id="' + esc(s.id) + '">' +
       '<div class="klapkop" data-klap="' + esc(s.id) + '"><span class="nr">' + (i+1) + '</span><span class="naam">' + esc(k.naam || "ITS " + s.its) + '</span>' +
         (tel ? '<a class="tel" href="' + esc(telAnoniem(tel)) + '" title="' + esc(TEL_TITEL) + '">📞 ' + esc(tel) + '</a>' : '') + '</div>' +
+      /* Beide nummers uit de klantenkaart (Kevin, 29 okt 2026); het tweede alleen als het anders is. */
+      (k.tel2 ? '<div class="blokje"><a class="tel" style="display:inline-flex" href="' + esc(telAnoniem(k.tel2)) + '" title="' + esc(TEL_TITEL) + '">📞 ' + esc(k.tel2) + '</a></div>' : '') +
       '<div class="blokje">' + (k.adres ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(k.adres) + '" target="_blank" rel="noopener">' + esc(k.adres) + '</a>' : '') +
         '<div class="pillen"><span class="pil paars">ITS ' + esc(s.its) + '</span><span class="pil grijs">' + esc(DAGDEEL[s.dagdeel]||"") + '</span>' +
         (s.status === "akkoord" ? '<span class="pil groen">klant akkoord</span>' : s.status === "voorstel" ? '<span class="pil oranje">wacht op bevestiging klant</span>' : '') +
@@ -163,8 +165,18 @@ function teken(){
         (klaar ? '<span class="pil groen">werkbon klaar</span>' : s.bon === "concept" ? '<span class="pil">werkbon bezig</span>' : '') + '</div></div>' +
       (open[s.id] ? detailsHtml(s) : '') + '</div>';
   }).join("");
-  $("lijst").querySelectorAll("[data-klap]").forEach(function(el){ el.onclick = function(e){ if (e.target.closest("a")) return; var id = el.dataset.klap; open[id] = !open[id]; if (open[id] && !bonnen[id]) haalBon(id); else teken(); }; });
+  $("lijst").querySelectorAll("[data-klap]").forEach(function(el){ el.onclick = function(e){ if (e.target.closest("a")) return; var id = el.dataset.klap; open[id] = !open[id]; if (open[id]) meldingVers(id); if (open[id] && !bonnen[id]) haalBon(id); else teken(); }; });
   $("lijst").querySelectorAll(".details").forEach(koppel);
+}
+/* Bij het openen de nieuwste versie van de melding uit Logic4 (Kevin, 29 okt
+   2026): kantoor zet er soms nog iets bij als hij al ingepland staat. */
+async function meldingVers(id){
+  var s = (data.stops||[]).find(function(x){ return x.id === id; }); if (!s) return;
+  var j = await api("/service/melding/vers?its=" + encodeURIComponent(s.its)).catch(function(){ return null; });
+  if (!j || !j.ok) return;
+  var anders = j.tekst !== s.tekst || j.titel !== s.titel || j.tel !== (s.klant||{}).tel || j.tel2 !== (s.klant||{}).tel2;
+  s.tekst = j.tekst; s.titel = j.titel; s.klant = Object.assign({}, s.klant, { tel: j.tel || (s.klant||{}).tel, tel2: j.tel2 });
+  if (anders) teken();
 }
 async function haalBon(id){
   var j = await api("/service/bon?id=" + encodeURIComponent(id)).catch(function(e){ return { ok:false, error:e.message }; });

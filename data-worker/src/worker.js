@@ -19344,7 +19344,7 @@ async function archiefVerhuis(env, prefix, max) {
 const EXTERN_LEES_GET = ["/planning/", "/herinneringen/open", "/herinneringen/log", "/vertaal/talen", "/bank/dagboeken", "/bank/grootboeken",
                          "/bakwagen/mijn", "/bakwagen/handtekening", "/bakwagen/foto",
                          // De servicemonteurs (Thieme, Patrick, Hans): hun eigen route, werkbon en artikelen zoeken.
-                         "/service/mijn", "/service/bon", "/service/artikel"];
+                         "/service/mijn", "/service/bon", "/service/artikel", "/service/melding/vers"];
 const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
                           "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo", "/extern/logic4",
                           /* De enige schrijfroutes: de bakwagenchauffeurs (Dani, Jordy, flex; eigen

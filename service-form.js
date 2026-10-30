@@ -56,27 +56,30 @@
     });
   }
 
-  var CSS = '.svc-laag{position:fixed;inset:0;background:rgba(0,0,0,.38);display:flex;align-items:flex-start;justify-content:center;z-index:60;padding:5vh 12px;overflow:auto}' +
-    '.svc-venster{background:#fff;border-radius:14px;max-width:640px;width:100%;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,.25);font-family:Montserrat,system-ui,sans-serif;color:#1f2937}' +
+  var CSS = '.svc-laag{position:fixed;inset:0;background:rgba(0,0,0,.38);display:flex;align-items:center;justify-content:center;z-index:60;padding:2vh 12px}' +
+    /* Kevin (29 okt 2026): niet meer naar beneden scrollen om de melding erin
+       te zetten. Het venster past op het scherm, en de knoppen staan altijd
+       onderaan in beeld, ook als de inhoud langer is. */
+    '.svc-venster{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:96vh;overflow:auto;padding:16px 20px 0;box-shadow:0 20px 50px rgba(0,0,0,.25);font-family:Montserrat,system-ui,sans-serif;color:#1f2937}' +
     '.svc-venster.breed{max-width:760px}' +
-    '.svc-venster h3{margin:0 0 12px;color:#144734;font-size:17px}' +
-    '.svc-velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 12px}' +
+    '.svc-venster h3{margin:0 0 8px;color:#144734;font-size:16px}' +
+    '.svc-velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:6px 12px}' +
     '.svc-velden label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:#6b7280}' +
     '.svc-velden label.breed{grid-column:1/-1}' +
-    '.svc-venster input,.svc-venster select,.svc-venster textarea{font:inherit;font-size:13.5px;border:1px solid #e0e0d8;border-radius:8px;padding:8px 9px;background:#fff;color:#1f2937;min-width:0}' +
-    '.svc-venster textarea{min-height:56px;resize:vertical}' +
+    '.svc-venster input,.svc-venster select,.svc-venster textarea{font:inherit;font-size:13.5px;border:1px solid #e0e0d8;border-radius:8px;padding:6px 9px;background:#fff;color:#1f2937;min-width:0}' +
+    '.svc-venster textarea{min-height:40px;resize:vertical}' +
     '.svc-dagen{display:flex;gap:6px;flex-wrap:wrap}' +
-    '.svc-dag{border:1px solid #e0e0d8;background:#fff;border-radius:9px;padding:8px 13px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:#1f2937}' +
+    '.svc-dag{border:1px solid #e0e0d8;background:#fff;border-radius:9px;padding:6px 11px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:#1f2937}' +
     '.svc-dag.aan{background:#144734;color:#fff;border-color:#144734}' +
     '.svc-duren{display:flex;gap:6px;flex-wrap:wrap;align-items:center}' +
-    '.svc-knoppen{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}' +
+    '.svc-knoppen{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px;position:sticky;bottom:0;background:#fff;padding:10px 0 14px;border-top:1px solid #f0efe8;z-index:2}' +
     '.svc-knop{background:#8bc53f;color:#144734;border:0;border-radius:9px;padding:9px 16px;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer;white-space:nowrap}' +
     '.svc-knop:hover{background:#72a531;color:#fff}' +
     '.svc-knop.groen{background:#144734;color:#fff}.svc-knop.groen:hover{background:#0d3325}' +
     '.svc-knop.wit{background:#fff;color:#144734;border:1px solid #e0e0d8;font-weight:600}' +
     '.svc-knop:disabled{opacity:.55;cursor:default}' +
     '.svc-melding{font-size:13px;font-weight:600;margin-top:10px;min-height:1em}.svc-melding.fout{color:#b91c1c}.svc-melding.goed{color:#15803d}' +
-    '.svc-its{background:#f7f7f2;border:1px solid #ecebe4;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;margin-bottom:12px;max-height:150px;overflow:auto;white-space:pre-wrap;overflow-wrap:break-word}' +
+    '.svc-its{background:#f7f7f2;border:1px solid #ecebe4;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;margin-bottom:8px;max-height:110px;overflow:auto;white-space:pre-wrap;overflow-wrap:break-word}' +
     '.svc-pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:#144734;white-space:nowrap}' +
     '.svc-pil.oranje{background:#ffedd5;color:#c2410c}.svc-pil.rood{background:#fee2e2;color:#b91c1c}.svc-pil.groen{background:#dcfce7;color:#14532d}.svc-pil.grijs{background:#f3f4f6;color:#6b7280}' +
     '.svc-uitslag{list-style:none;margin:8px 0 0;padding:0;font-size:13px}.svc-uitslag li{padding:6px 0;border-bottom:1px solid #f0efe8}' +

@@ -869,8 +869,12 @@ async function start(){
     var sel = $("kijkAls"), namen = {};
     var vandaagK = new Date(); vandaagK.setDate(vandaagK.getDate()-1);
     var vanK = iso(vandaagK);
-    Object.keys(plan.routes||{}).forEach(function(d){ if (d < vanK) return; (plan.routes[d]||[]).forEach(function(r){ rijders(r).forEach(function(n){ namen[n]=1; }); }); });
-    var lijst = Object.keys(namen).sort();
+    /* In de volgorde van de routes, zoals in Planning Plaatsing: eerst wie op
+       route 1 staat, dan route 2, enzovoort; eerdere dagen eerst (Kevin,
+       29 okt 2026: "niet op alfabetische volgorde"). */
+    var plek = {};
+    Object.keys(plan.routes||{}).sort().forEach(function(d){ if (d < vanK) return; (plan.routes[d]||[]).slice().sort(function(x,y){ return (Number(x.nr)||0)-(Number(y.nr)||0); }).forEach(function(r){ rijders(r).forEach(function(n){ if (!(n in namen)) { namen[n]=1; plek[n] = Object.keys(plek).length; } }); }); });
+    var lijst = Object.keys(namen).sort(function(x,y){ return plek[x]-plek[y]; });
     sel.innerHTML = '<option value="*">Alle routes</option>' + lijst.map(function(n){ return '<option value="'+esc(n)+'">Als '+esc(n)+'</option>'; }).join("");
     if (kijkAls && kijkAls !== "*" && lijst.indexOf(kijkAls) < 0) kijkAls = "*";
     sel.value = kijkAls || "*"; sel.style.display = "";

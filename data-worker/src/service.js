@@ -48,8 +48,19 @@
    toegangMag, RIJ_START, rijNorm), zodat dit bestand los te lezen is.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const SVC_START = 6 * 60;          // 6:00
-const SVC_EIND = 16 * 60;          // 16:00
+const SVC_START = 6 * 60 + 15;     // 6:15 (Kevin, 29 okt 2026; was 6:00)
+const SVC_EIND = 15 * 60;          // 15:00 (Kevin, 29 okt 2026; was 16:00)
+/* De planner (Kevin, WhatsApp 30 okt 2026: "de 2e klant is 2,5 uur
+   omrijden"; de jongens moeten 4 tot 5 klanten per dag halen). Tot nu toe
+   ging een bestaande route altijd voor een lege, hoe ver het omrijden ook
+   was. Nu telt het omrijden: tot SVC_MAX_OMRIJ minuten extra rijden past
+   een klant gewoon in een route die al klanten heeft; daarboven telt elke
+   minuut vier keer zo zwaar, en een lege route kost SVC_LEEG_KOST. Een klant
+   ver weg begint dan liever een eigen route, waar later klanten uit de buurt
+   bij komen. Elke dag later kost 3 minuten. */
+const SVC_MAX_OMRIJ = 40;
+const SVC_BUREN_KM = 60;
+const SVC_LEEG_KOST = 60;
 const SVC_MAIL_MAX = 40;           // per dag, van de 100 die Resend geeft
 const SVC_ANTWOORD = "spaplanning@fonteyn.nl";
 const SVC_INSTEL = "service-instellingen";
@@ -182,7 +193,8 @@ function svcBestePlek1(m, routes, stopsPer, thuis, vandaag, zoSnelMogelijk, zond
       if (!past) continue;
       gevonden = true;
       const kand = { R, p, leeg: stops.length === 0, extra: t.terug - oud - m.duur, dagen, aankomst: t.aankomst[p] };
-      const sleutel = (k) => zoSnelMogelijk ? [k.dagen, k.leeg ? 1 : 0, k.extra] : [k.leeg ? 1 : 0, k.leeg ? k.dagen : k.extra + k.dagen * 3, k.R.nr];
+      const kost = (k) => k.leeg ? SVC_LEEG_KOST + k.dagen * 3 : k.extra + k.dagen * 3 + Math.max(0, k.extra - SVC_MAX_OMRIJ) * 4;
+      const sleutel = (k) => zoSnelMogelijk ? [k.dagen, k.leeg ? 1 : 0, k.extra] : [kost(k), k.R.nr];
       if (!beste) { beste = kand; continue; }
       const a = sleutel(kand), b = sleutel(beste);
       for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) { beste = kand; break; } if (a[i] > b[i]) break; }
@@ -260,6 +272,8 @@ async function svcItsZoek(env, H, its) {
         adres: [[k.Street, k.HouseNumber, k.HouseNumberAddition].map(x => String(x || "").trim()).filter(Boolean).join(" "),
                 [k.Zipcode, k.City].map(x => String(x || "").trim()).filter(Boolean).join(" ")].filter(Boolean).join(", "),
         plaats: k.City || "", tel: String(k.MobileNumber || k.TelephoneNumber || "").trim(),
+        // Beide nummers uit de klantenkaart (Kevin, 29 okt 2026); dubbel = één.
+        tel2: (String(k.TelephoneNumber || "").trim() && String(k.TelephoneNumber).replace(/\D/g, "") !== String(k.MobileNumber || "").replace(/\D/g, "")) && k.MobileNumber ? String(k.TelephoneNumber).trim() : "",
         mail: String(k.EmailAddress || "").trim().toLowerCase(),
       };
     }
@@ -285,7 +299,7 @@ function svcSchoonMelding(b, oud) {
   if (b.klant) {
     const k = b.klant;
     m.klant = { debiteur: k.debiteur ? Number(k.debiteur) || null : null, naam: tekst(k.naam, 120), adres: tekst(k.adres, 200),
-                plaats: tekst(k.plaats, 80), tel: tekst(k.tel, 40),
+                plaats: tekst(k.plaats, 80), tel: tekst(k.tel, 40), tel2: tekst(k.tel2, 40),
                 mail: [...new Set(String(k.mail || "").toLowerCase().split(/[;,\s]+/).filter(Boolean))].join(", ").slice(0, 200) };
   }
   if (b.duur !== undefined) m.duur = Math.max(0, Math.min(600, Math.round(Number(b.duur) || 0)));
@@ -491,17 +505,33 @@ async function svcPlannen(env, H, wie, opts) {
   }
   // Wie het langst wacht eerst.
   lijst.sort((a, b) => String(a.gemeld || a.gemaakt || "").localeCompare(String(b.gemeld || b.gemaakt || "")));
-  const gepland = [], over = [];
-  for (const m of lijst) {
-    if (!m.duur) { over.push({ its: m.its, naam: (m.klant || {}).naam || "", reden: "De verwachte duur ontbreekt nog." }); continue; }
-    const plek = svcBestePlek(m, routes, stopsPer, thuis, vandaag, false);
-    if (plek.geen) { over.push({ its: m.its, naam: (m.klant || {}).naam || "", reden: plek.reden }); continue; }
+  const gepland = [], over = [], klaarIts = new Set();
+  const zet = (m, plek) => {
     const k = plek.R.datum + "|" + plek.R.nr;
     const stops = stopsPer[k] = stopsPer[k] || [];
     const stop = { its: m.its, geo: m.geo || null, duur: m.duur, dagdeel: svcDagdeel(plek.aankomst), nieuw: true };
     stops.splice(plek.p, 0, stop);
+    klaarIts.add(m.its);
     gepland.push({ its: m.its, naam: (m.klant || {}).naam || "", plaats: (m.klant || {}).plaats || "", datum: plek.R.datum, nr: plek.R.nr, monteur: plek.R.monteur, dagdeel: stop.dagdeel, leeg: plek.leeg,
       buitenVoorkeur: !!plek.buitenVoorkeur, zelfdeMonteur: !!plek.zelfdeMonteur, geenMail: !!m.geenMail });
+  };
+  for (const m of lijst) {
+    if (klaarIts.has(m.its)) continue;
+    if (!m.duur) { over.push({ its: m.its, naam: (m.klant || {}).naam || "", reden: "De verwachte duur ontbreekt nog." }); continue; }
+    const plek = svcBestePlek(m, routes, stopsPer, thuis, vandaag, false);
+    if (plek.geen) { over.push({ its: m.its, naam: (m.klant || {}).naam || "", reden: plek.reden }); continue; }
+    zet(m, plek);
+    /* De buren meteen erbij (Kevin, 30 okt 2026): wie binnen 60 km woont en met
+       weinig omrijden in dezelfde route past, gaat mee. Zo komen klanten uit
+       één streek op één dag, en halen de jongens 4 tot 5 klanten. Doorgerekend
+       op de planning van november: 260 naar 179 uur rijden, 53 naar 46 routes. */
+    if (!m.geo) continue;
+    const buren = lijst.filter(x => !klaarIts.has(x.its) && x.geo && x.duur && svcKm(m.geo, x.geo) <= SVC_BUREN_KM)
+      .sort((a, b) => svcKm(m.geo, a.geo) - svcKm(m.geo, b.geo));
+    for (const b of buren) {
+      const q = svcBestePlek1(b, [plek.R], stopsPer, thuis, vandaag, false, false);
+      if (!q.geen && q.extra <= SVC_MAX_OMRIJ) zet(b, q);
+    }
   }
   const vrijeRoutes = routes.filter(R => !(stopsPer[R.datum + "|" + R.nr] || []).length).length;
   if (opts.voorbeeld) return { ok: true, voorbeeld: true, gepland, over, vrijeRoutes };
@@ -908,6 +938,7 @@ const SVC_VERZEND_SERVICEMONTEUR = 11;   // "Fonteyn Servicemonteur"
 const SVC_BETAAL_REKENING14 = 6;         // "Rekening 14 dagen"
 const SVC_BETAAL_GARANTIE = 30;          // "Garantie"
 const SVC_ART_KM = "8860", SVC_ART_UUR = "8861";
+const SVC_FACTUUR_STATUS = 1;            // Verkooporder (Kevin, 29 okt 2026); verwerken doet de planning in Logic4
 const SVC_BON_ANTWOORD = "servicespa@fonteyn.nl";   // zoals bij de opleverbonnen
 function svcMonteurVanInlog(wie) {
   const w = String(wie || "").split("@")[0];
@@ -964,6 +995,54 @@ function svcBonSchoon(b, oud) {
 
 /* GET /service/mijn?datum=&als= : de route(s) van één monteur op één dag,
    plus de komende dagen waarop hij een route heeft (voor de dagkeuze). */
+/* De telefoonnummers uit de klantenkaart in Logic4, bij de melding bewaard. */
+async function svcKlantVers(env, db, its, m) {
+  const token = await _svcH.l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCustomers", { method: "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ Id: Number(m.klant.debiteur), TakeRecords: 2 }) });
+  const j = r.ok ? await r.json().catch(() => null) : null;
+  const k = ((Array.isArray(j) ? j : (j && j.Records)) || []).find(x => Number(x.Id) === Number(m.klant.debiteur));
+  if (!k) { m.klant.tel2 = ""; }
+  else {
+    const mob = String(k.MobileNumber || "").trim(), vast = String(k.TelephoneNumber || "").trim();
+    const een = mob || vast, twee = mob && vast && vast.replace(/\D/g, "") !== mob.replace(/\D/g, "") ? vast : "";
+    if (een) m.klant.tel = een;
+    m.klant.tel2 = twee;
+  }
+  await db.prepare("UPDATE svc_melding SET json = ?2 WHERE its = ?1").bind(String(its), JSON.stringify(m)).run();
+  return m;
+}
+/* De melding vers uit Logic4 (Kevin, 29 okt 2026): staat de melding al in
+   de route en zet kantoor er in Logic4 nog iets bij, dan ziet de monteur
+   bij het openen de nieuwste tekst. Een monteur alleen voor zijn eigen
+   afspraken. */
+async function svcMeldingVers(env, H, wie, planner, its) {
+  const db = await svcDb(env);
+  its = String(its || "").replace(/\D/g, "");
+  const rij = await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(its).first();
+  if (!rij) return { ok: false, error: "Deze melding is onbekend." };
+  if (!planner) {
+    const ik = svcMonteurVanInlog(wie);
+    const x = await db.prepare("SELECT r.monteur FROM svc_afspraak a JOIN svc_route r ON r.datum = a.datum AND r.nr = a.nr WHERE a.its = ?1 AND a.status IN ('voorstel','akkoord','klaar')").bind(its).all();
+    if (!((x.results || []).some(r => svcMonteurGelijk(r.monteur, ik)))) return { ok: false, error: "Deze melding staat in een route van een collega." };
+  }
+  const m = svcJson(rij.json, {});
+  const token = await H.l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/ITS/GetIssues", { method: "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ Id: Number(its), SkipRecords: 0, TakeRecords: 1 }) });
+  const j = r.ok ? await r.json().catch(() => null) : null;
+  const x = ((j && (j.Records || j)) || []).find(y => Number(y.id || y.Id) === Number(its));
+  if (x) {
+    const tekst = H.itsTekst(x.Description).slice(0, 4000);
+    if (tekst) { m.tekst = tekst; m.omschrijving = tekst.replace(/\s+/g, " ").slice(0, 300); }
+    if (x.Name) m.titel = String(x.Name).slice(0, 200);
+    m.versVanLogic4 = new Date().toISOString();
+  }
+  if (m.klant && m.klant.debiteur) await svcKlantVers(env, db, its, m).catch(() => {});
+  else await db.prepare("UPDATE svc_melding SET json = ?2 WHERE its = ?1").bind(its, JSON.stringify(m)).run();
+  const k = m.klant || {};
+  return { ok: true, its, titel: m.titel || "", tekst: m.tekst || m.omschrijving || "", tel: k.tel || "", tel2: k.tel2 || "", vers: !!x };
+}
 async function svcMijn(env, wie, planner, url) {
   const db = await svcBonDb(env);
   const ik = svcMonteurVanInlog(wie);
@@ -985,10 +1064,12 @@ async function svcMijn(env, wie, planner, url) {
     const ids = afs.map(a => a.id);
     const bonnen = {};
     if (ids.length) for (const r of ((await db.prepare("SELECT id, status FROM svc_bon WHERE id IN (" + ids.map((_, i) => "?" + (i + 1)).join(",") + ")").bind(...ids).all()).results || [])) bonnen[r.id] = r.status;
+    // Beide telefoonnummers: wie ze nog niet heeft, eenmalig uit de klantenkaart in Logic4.
+    for (const i of its) { const m = meld[i]; if (m && m.klant && m.klant.debiteur && m.klant.tel2 === undefined) await svcKlantVers(env, db, i, m).catch(() => {}); }
     stops = afs.map(a => {
       const m = meld[a.its] || {}, k = m.klant || {};
       return { id: a.id, its: a.its, nr: a.nr, volg: a.volg, dagdeel: a.dagdeel, status: a.status,
-        klant: { naam: k.naam || "", adres: k.adres || "", tel: k.tel || "" }, titel: m.titel || "", tekst: m.tekst || m.omschrijving || "",
+        klant: { naam: k.naam || "", adres: k.adres || "", tel: k.tel || "", tel2: k.tel2 || "", debiteur: k.debiteur || null }, titel: m.titel || "", tekst: m.tekst || m.omschrijving || "",
         garantie: m.garantie || null, duur: m.duur || null, opmerking: m.opmerking || "", bon: bonnen[a.id] || "" };
     });
   }
@@ -1107,7 +1188,8 @@ function svcBonHtml(bon, metHandtekening) {
     "<h2 style='color:#144734;margin:0 0 4px;font-size:19px'>Werkbon service</h2>" +
     "<p style='margin:0 0 16px;color:#6b7280;font-size:13px'>" + e(svcDatumTekst(bon.datum)) + " &middot; melding " + e(bon.its) + (/^ja/i.test(bon.garantie || "") ? " &middot; garantie" : "") + "</p>" +
     "<p style='font-size:14px;line-height:1.5'>Beste " + e(k.naam || "klant") + ",<br><br>Hieronder ziet u wat onze monteur bij u heeft gedaan.</p>" +
-    (bon.melding ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Uw melding</h3><p style='font-size:14px;line-height:1.5;white-space:pre-line'>" + e(bon.melding) + "</p>" : "") +
+    /* "Uw melding" staat er niet meer op (Kevin, 29 okt 2026): daar staat vaak
+       informatie in die voor intern is. */
     "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Wat er is gedaan</h3><p style='font-size:14px;line-height:1.5;white-space:pre-line'>" + e(bon.gedaan) + "</p>" +
     (mats.length ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Gebruikte materialen</h3><table style='border-collapse:collapse;width:100%'>" +
       mats.map(r => "<tr><td " + td + " width='56'><b>" + e(String(r.aantal).replace(".", ",")) + "x</b></td><td " + td + ">" + e(r.oms) + "</td></tr>").join("") + "</table>" : "") +
@@ -1253,22 +1335,20 @@ async function svcFactuur(env, H, wie, b) {
   };
   let factuurId = null;
   try {
-    // Status 3 is wat een factuur in Logic4 heeft; lukt dat niet, dan 1.
-    try { factuurId = nummer(await post("/v3/Orders/AddUpdateInvoice", Object.assign({ OrderStatus: { Id: 3 } }, kop))); }
-    catch (e) { if (!/status/i.test(String(e.message))) throw e; factuurId = nummer(await post("/v3/Orders/AddUpdateInvoice", Object.assign({ OrderStatus: { Id: 1 } }, kop))); }
+    /* Kevin (29 okt 2026): de factuur komt op status Verkooporder en wordt
+       NIET verwerkt. Verwerken doet de planning zelf in Logic4, zodat de
+       factuur tot dan nog aan te passen is. */
+    factuurId = nummer(await post("/v3/Orders/AddUpdateInvoice", Object.assign({ OrderStatus: { Id: SVC_FACTUUR_STATUS } }, kop)));
     if (!factuurId) throw new Error("Logic4 gaf geen factuurnummer terug");
-    bon.factuur = { factuurId, door: wie, ts: new Date().toISOString(), oudeOrder, totaalExcl: plan.totaalExcl, km: plan.km };
+    bon.factuur = { factuurId, door: wie, ts: new Date().toISOString(), oudeOrder, totaalExcl: plan.totaalExcl, km: plan.km, verwerkt: false };
     await svcBonSchrijf(db, bon);
-    await post("/v3/Orders/ProcessInvoice", Number(factuurId));
-    bon.factuur.verwerkt = true;
-    await svcBonSchrijf(db, bon);
-    await svcLog(db, bon.its, wie, "factuur " + factuurId + " aangemaakt in Logic4 (€ " + plan.totaalExcl.toFixed(2) + " excl. btw)");
+    await svcLog(db, bon.its, wie, "factuur " + factuurId + " klaargezet in Logic4 (€ " + plan.totaalExcl.toFixed(2) + " excl. btw), nog te verwerken in Logic4");
     return { ok: true, factuurId, totaalExcl: plan.totaalExcl, oudeOrder };
   } catch (e) {
     const fout = String(e.message || e).slice(0, 300);
     bon.factuur = factuurId ? Object.assign({}, bon.factuur, { fout }) : (oudeOrder ? { orderId: oudeOrder, fout } : null);
     await svcBonSchrijf(db, bon);
-    return { ok: false, error: factuurId ? "Factuur " + factuurId + " staat in Logic4, maar afronden lukte nog niet: " + fout + ". Rond hem af in Logic4." : fout };
+    return { ok: false, error: factuurId ? "Factuur " + factuurId + " staat in Logic4; het opslaan in het Dashboard lukte nog niet: " + fout : fout };
   }
 }
 
@@ -1291,6 +1371,7 @@ export async function svcHandle(request, env, url, H) {
     if (!planner && !(await H.toegangMag(env, "service-monteurs", wie))) return H.reply(403, { ok: false, error: "Deze tegel is voor de servicemonteurs." });
     try {
       if (p === "/service/mijn" && request.method === "GET") return H.reply(200, await svcMijn(env, wie, planner, url));
+      if (p === "/service/melding/vers" && request.method === "GET") return H.reply(200, await svcMeldingVers(env, H, wie, planner, url.searchParams.get("its")));
       if (p === "/service/bon" && request.method === "GET") return H.reply(200, await svcBonGet(env, wie, planner, url.searchParams.get("id")));
       if (p === "/service/bon" && request.method === "POST") return H.reply(200, await svcBonPost(env, wie, planner, body));
       if (p === "/service/artikel" && request.method === "GET") return H.reply(200, await svcArtikel(env, H, url.searchParams.get("q")));

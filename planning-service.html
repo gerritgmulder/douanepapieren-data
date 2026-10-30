@@ -169,7 +169,7 @@ function stopHtml(a, i){
   var sleep = (a.status === "voorstel" || a.status === "akkoord") && a.datum > vandaag;
   return '<li class="stop ' + a.status + '" data-id="' + esc(a.id) + '"' + (sleep ? ' draggable="true" title="Sleep naar een andere plek of route"' : '') + '><span class="nr">' + (i+1) + '</span><div class="wat">' +
     '<div class="k">' + esc(k.naam || "ITS " + a.its) + akKnop + '</div>' +
-    '<div class="p">' + esc(k.plaats || (k.adres||"").split(",").pop()) + ' · ITS ' + esc(a.its) + ' · ' + esc(svc.duurTekst(m.duur)) + '</div>' +
+    '<div class="p">' + esc(k.plaats || (k.adres||"").split(",").pop()) + ' · ITS ' + esc(a.its) + (k.debiteur ? ' · deb. ' + esc(k.debiteur) : '') + ' · ' + esc(svc.duurTekst(m.duur)) + '</div>' +
     '<div class="pillen">' + pillen + '</div></div></li>';
 }
 function teken(){
@@ -329,7 +329,7 @@ async function stopVenster(a){
   var laatsteMail = (j.mails||[]).slice(-1)[0];
   var w = j.klantWens;
   var v = svc.venster('<h3>' + esc(k.naam || "ITS " + a.its) + '</h3>' +
-    '<p style="font-size:13px;line-height:1.55;margin:0 0 10px">' + esc(k.adres||"") + (k.tel ? '<br>📞 <a href="tel:' + esc(k.tel.replace(/[^\d+]/g,"")) + '">' + esc(k.tel) + '</a>' : '') + (k.mail ? '<br>✉️ ' + esc(k.mail) : '') + '</p>' +
+    '<p style="font-size:13px;line-height:1.55;margin:0 0 10px">' + (k.debiteur ? '<b>Debiteur ' + esc(k.debiteur) + '</b><br>' : '') + esc(k.adres||"") + (k.tel ? '<br>📞 <a href="tel:' + esc(k.tel.replace(/[^\d+]/g,"")) + '">' + esc(k.tel) + '</a>' : '') + (k.mail ? '<br>✉️ ' + esc(k.mail) : '') + '</p>' +
     '<p style="font-size:13px;margin:0 0 10px"><b>' + esc(svc.datumLang(a.datum)) + '</b> · route ' + a.nr + ' · ' + esc(svc.DAGDEEL[a.dagdeel]) + ' · ' + esc(svc.duurTekst(m.duur)) + '<br>' +
       (a.status === "akkoord" ? '<span class="svc-pil groen">akkoord' + (j.akkoordDoor && j.akkoordDoor !== "klant" ? " (gezet door de planning)" : " van de klant") + '</span>'
         : j.mailFout ? '<span class="svc-pil rood">' + esc(j.mailFout) + '</span>'

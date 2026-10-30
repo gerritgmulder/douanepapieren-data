@@ -51,6 +51,26 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "planning-service.html", soort: "beter",
+      titel: "Slimmer plannen",
+      wat: "Plannen houdt nu rekening met omrijden: klanten uit dezelfde streek komen samen op één dag, en een klant ver weg begint liever een eigen route. Bij elke afspraak staat het debiteurnummer. Nieuwe routes beginnen om 6:15 en zijn om 15:00 terug." },
+    {
+      datum: "2026-10-30", bestand: "opleverbonnen-service.html", soort: "beter",
+      titel: "Factuur op Verkooporder",
+      wat: "Factuur aanmaken zet de factuur in Logic4 klaar op Verkooporder. Je kunt hem daar nog aanpassen en verwerkt hem zelf. Op de werkbon voor de klant staat de melding zelf niet meer." },
+    {
+      datum: "2026-10-30", bestand: "mijnroute-service.html", soort: "beter",
+      titel: "Altijd de nieuwste melding",
+      wat: "Open je een afspraak, dan zie je de nieuwste tekst van de melding uit Logic4. Heeft de klant twee telefoonnummers, dan staan ze er allebei." },
+    {
+      datum: "2026-10-30", bestand: "service-meldingen.html", soort: "beter",
+      titel: "Melding invoeren zonder scrollen",
+      wat: "Het venster past op het scherm en de knop om de melding op te slaan staat altijd onderaan in beeld." },
+    {
+      datum: "2026-10-30", bestand: "mijnroute.html", soort: "beter",
+      titel: "Namen in de volgorde van de routes",
+      wat: "In de keuzelijst staan de namen nu in de volgorde van de routes, zoals in Planning Plaatsing." },
+    {
       datum: "2026-10-29", bestand: "voorraad.html", soort: "nieuw",
       titel: "Stock voor de adviseurs",
       wat: "In Voorraadbeheer staat nu ook het tabblad Stock: welke spa's er in Uddel staan en hoeveel daarvan nog vrij is, per model en kleur." },
