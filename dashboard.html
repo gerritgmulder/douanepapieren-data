@@ -1239,6 +1239,27 @@ function showDashboard(email) {
     const knop = el(t.tile);
     if (knop) knop.classList.toggle("hidden", !magZien.has(t.tile));
   }
+  /* Wie heeft toegang tot deze tegel: zichtbaar bij hover, alleen voor
+     Fonteynbot (Gerrit, 31 okt 2026). Uit dezelfde lijsten als hierboven.
+     Een paar tegels houden binnen de pagina nog een eigen lijst; daar staat
+     dat bij, want dan kan het in de praktijk smaller zijn. */
+  if (fpToegang.varianten("fonteynbot").includes(lc)) {
+    const EIGEN_LIJST = ["amerika.html", "activiteit.html", "container-laden.html", "koeien.html",
+                         "partneractiviteit.html", "order-status.html", "specsheets.html"];
+    const BEHEER = ["dolf", "fonteynbot", "gerrit"];
+    const namen = new Set(fpToegang.iedereen);
+    Object.values(fpToegang.groepen).forEach(l => l.forEach(n => namen.add(n)));
+    const hoofd = n => n.charAt(0).toUpperCase() + n.slice(1);
+    for (const t of fpTegels.lijst) {
+      const knop = el(t.tile);
+      if (!knop) continue;
+      const wie = [...namen].filter(n => !BEHEER.includes(n) && fpToegang.mag(t.groep, fpToegang.varianten(n)[0]))
+        .sort().map(hoofd);
+      knop.title = "Toegang (" + wie.length + "): " + (wie.length ? wie.join(", ") : "alleen de beheerlaag") +
+        "\nPlus Dolf, Gerrit en Fonteynbot." + "\nGroep in toegang.js: " + t.groep +
+        (EIGEN_LIJST.includes(t.bestand) ? "\nLet op: deze tegel heeft in de pagina ook een eigen lijst." : "");
+    }
+  }
   // Logistiek wordt verderop ook nog gebruikt (buiten de tegels om).
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
   tegelsInEigenVenster();
