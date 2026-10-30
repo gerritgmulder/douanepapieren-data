@@ -14500,6 +14500,22 @@ async function wireRonde(env, opties) {
   // 1. Is er sinds de vorige keer een overzicht van Audrey ingelezen?
   const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
   const gezien = Date.parse(s.wireGezien || s.start) || 0;
+  // Tot waar een overzicht telt: het eind van de dag erop, maar nooit later
+  // dan het moment van inlezen, anders valt wat daarna binnenkomt tussen wal en schip.
+  const wireTot = (w) => {
+    const eindDag = w.datum && /^\d{4}-\d{2}-\d{2}$/.test(w.datum) ? w.datum + "T23:59:59Z" : w.ts;
+    return Math.min(Date.parse(eindDag) || 0, Date.parse(w.ts) || Date.now());
+  };
+  /* Het ijkpunt gaat nooit terug in de tijd. Op 17 okt 2026 las Chantal eerst
+     het overzicht van 16 okt in en daarna dat van 9 okt; het tellen begon toen
+     weer bij 9 okt en de week ertussen telde twee keer mee, waardoor het
+     verzoek van 26 okt te vroeg uitging. Elke ronde neemt daarom het laatste
+     punt van alle overzichten sinds de start; dat zet zo'n oude stand ook
+     vanzelf recht. */
+  const vanaf = Date.parse(s.start) || 0;
+  const ijkVoor = Date.parse(s.ijkpunt) || vanaf;
+  const verste = (wires.wires || []).filter(w => (Date.parse(w.ts || "") || 0) > vanaf)
+    .reduce((m, w) => Math.max(m, wireTot(w)), ijkVoor);
   const nieuw = (wires.wires || []).filter(w => (Date.parse(w.ts || "") || 0) > gezien)
     .sort((a, b) => (Date.parse(b.ts) || 0) - (Date.parse(a.ts) || 0))[0];
   if (nieuw) {
@@ -14507,12 +14523,10 @@ async function wireRonde(env, opties) {
                         verzoek: (s.verzoek && s.verzoek.op) || null, herinnering: (s.herinnering && s.herinnering.op) || null },
                       ...(s.geschiedenis || [])].slice(0, 20);
     s.wireGezien = nieuw.ts;
-    const eindDag = nieuw.datum && /^\d{4}-\d{2}-\d{2}$/.test(nieuw.datum) ? nieuw.datum + "T23:59:59Z" : nieuw.ts;
-    // Nooit later dan het moment van inlezen, anders valt wat daarna binnenkomt tussen wal en schip.
-    const tot = Math.min(Date.parse(eindDag) || 0, Date.parse(nieuw.ts) || Date.now());
-    s.ijkpunt = new Date(Math.max(Date.parse(s.start), tot)).toISOString();
-    s.verzoek = null; s.herinnering = null;
+    // Een later ingelezen ouder overzicht verandert niets aan verzoek of herinnering.
+    if (verste > ijkVoor) { s.verzoek = null; s.herinnering = null; }
   }
+  s.ijkpunt = new Date(Math.max(vanaf, verste)).toISOString();
 
   // 2. Tellen wat er sinds het ijkpunt is bijgekomen.
   const t = await wireTel(env, s.ijkpunt);
