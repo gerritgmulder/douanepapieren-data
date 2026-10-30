@@ -667,6 +667,13 @@
        opgehaald (vervoerder + status) en wat er al lag uit de oude
        schepenlijst - het kale antwoord van Merzario, met een voortgang in
        procenten en de laatste gebeurtenis. Allebei laten zien wat ze hebben. */
+    /* Geen koppeling met Merzario (30 okt 2026, Devine 364-365): de datum is
+       met de hand ingevuld en wordt niet bijgewerkt. Dat moet je zien. */
+    if (!s.track && !s.binnenGemeld) {
+      links.appendChild(el("div", "so-meta klein so-geenlive",
+        s.trackRef ? "Geen live ETA: Merzario vindt \u201c" + s.trackRef + "\u201d niet. Deze datum is met de hand ingevuld en wordt niet bijgewerkt. Vul de referentie in zoals Merzario hem kent, bijvoorbeeld het SC-nummer."
+                   : "Geen live ETA: er staat nog geen trackingreferentie. Deze datum is met de hand ingevuld en wordt niet bijgewerkt."));
+    }
     if (s.track) {
       var t = s.track;
       var stukjes = [];

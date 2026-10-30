@@ -7464,9 +7464,14 @@ async function dpRefreshShipEtas(env) {
   const res = await merzarioTrack(env, kandidaten.map(s => String(s.trackRef).trim()), { force: ochtend });
   delete res.__error;
   let nieuw = 0, gewijzigd = 0, afwijkend = 0;
+  const nu = new Date().toISOString();
   for (const s of kandidaten) {
     const rec = res[String(s.trackRef).trim()];
-    if (!rec) continue;
+    /* Geen koppeling: onthouden sinds wanneer, zodat het scherm en een bericht
+       het kunnen zeggen. Een met de hand ingevulde ETA wordt dan nooit
+       bijgewerkt, en dat moet zichtbaar zijn (30 okt 2026, Devine 364-365). */
+    if (!rec) { s.trackGeen = { sinds: (s.trackGeen && s.trackGeen.sinds) || nu, laatst: nu }; continue; }
+    delete s.trackGeen;
     s.track = rec;
     s.etaNagekeken = new Date().toISOString();
     if (!rec.eta) continue;
@@ -7476,7 +7481,11 @@ async function dpRefreshShipEtas(env) {
        kreeg 2019). Niet overnemen. */
     if (rec.eta < new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)) continue;
     if (!s.eta) { s.eta = rec.eta; nieuw++; }
-    else if (s.eta !== rec.eta) { s.eta = rec.eta; gewijzigd++; }
+    else if (s.eta !== rec.eta) {
+      // De verschuiving bewaren: daar komt het bericht aan Chantal en Manon uit.
+      s.etaHistorie = [{ van: s.eta, naar: rec.eta, ts: nu, bron: "Merzario" }, ...(s.etaHistorie || [])].slice(0, 20);
+      s.eta = rec.eta; gewijzigd++;
+    }
   }
   await putAlsAnders(env, "voorraad-schepen", { ...data, ships, updated: new Date().toISOString() });
   return { ok: true, schepen: kandidaten.length, nieuw, gewijzigd, afwijkend };
@@ -10013,6 +10022,34 @@ async function berichtenRonde(env) {
           tekst: "De ETA was " + pcDatum(eta) + ", zes werkdagen geleden of langer. Heb je de container vrijgegeven?" })) nieuw++;
     }
   } catch (e) { console.log("[berichten] vrijgave: " + (e.message || e)); }
+  /* 5. ETA's (30 okt 2026, Devine 364-365: in het Dashboard 11 nov, bij
+        Merzario 4 dec, en klanten hadden een datum gekregen).
+        a) Een schip komt 3 dagen of meer later dan eerst: bericht aan Chantal
+           en Manon, met hoeveel klanten op die datum staan.
+        b) Een schip onderweg zonder koppeling met Merzario: één keer een
+           bericht, want die ETA wordt nooit vanzelf bijgewerkt. */
+  try {
+    const sch = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+    const res = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+    const klantenOp = (datum) => { let n = 0; for (const l of Object.values(res.byModel || {})) for (const r of (l || [])) if (r.verwacht === datum) n++; return n; };
+    for (const s of (sch.ships || [])) {
+      if (s.binnenGemeld || s.alleenDocumenten) continue;
+      const sid = String(s.ref || s.trackRef || s.file || "").replace(/\s+/g, " ").trim();
+      const naam = String(s.trackRef || s.ref || s.file || sid).replace(/\s+/g, " ").trim().slice(0, 80);
+      const h = (s.etaHistorie || [])[0];
+      if (h && h.van && h.naar && pcPlusDagen(h.van, 3) <= h.naar && h.ts >= new Date(Date.now() - 14 * 86400000).toISOString()) {
+        const n = klantenOp(h.naar);
+        if (berichtErbij(d, { id: "eta-later:" + sid + ":" + h.naar, aan: [BERICHT_CHANTAL, BERICHT_MANON], soort: "eta-later", ref: { schip: sid, naam, van: h.van, naar: h.naar },
+            titel: "Later binnen: " + naam,
+            tekst: "Merzario meldt nu " + pcDatum(h.naar) + " in plaats van " + pcDatum(h.van) + "." + (n ? " In Voorraadbeheer staan " + n + " reservering(en) op deze nieuwe datum; laat de klanten weten dat het later wordt." : " Kijk in Voorraadbeheer welke klanten dit raakt.") })) nieuw++;
+      }
+      if (s.eta && !s.track && s.trackGeen && s.trackGeen.sinds <= new Date(Date.now() - 86400000).toISOString() && pcPlusDagen(s.eta, 30) >= vandaag) {
+        if (berichtErbij(d, { id: "eta-geen:" + sid, aan: [BERICHT_CHANTAL, BERICHT_MANON], soort: "eta-geen", ref: { schip: sid, naam },
+            titel: "Geen koppeling met Merzario: " + naam,
+            tekst: "De ETA van " + pcDatum(s.eta) + " is met de hand ingevuld en wordt niet bijgewerkt. Zet bij Schepen & ontvangst de referentie zoals Merzario hem kent (bijvoorbeeld het SC-nummer of 364/365); dan haalt het Dashboard de ETA vanzelf op." })) nieuw++;
+      }
+    }
+  } catch (e) { console.log("[berichten] eta: " + (e.message || e)); }
   /* 4. Opleverbonnen die de dag erna nog open staan (Kevin, 12 okt 2026). */
   try { nieuw += await bonOpenRonde(env, d); } catch (e) { console.log("[berichten] opleverbonnen: " + (e.message || e)); }
   /* 3. Passion Partners: containerbestellingen zonder aanbetaling. */
@@ -11387,7 +11424,15 @@ function normalizeTrackRecord(rec) {
 // en proberen we elk deel + de hele string. (min. 3 tekens tegen ruis)
 function merzarioCandidates(ref) {
   const parts = String(ref || "").split(/[&,;/\s]+/).map(s => s.trim()).filter(s => s.length >= 3);
-  return [...new Set([String(ref || "").trim(), ...parts])].filter(Boolean);
+  /* Merzario schrijft containerparen met een schuine streep: "364/365"
+     (Devine). Het Dashboard kende ze als "364-365 Devine" en vond ze nooit,
+     waardoor de met de hand ingevulde ETA van 11 nov bleef staan terwijl
+     Merzario al 4 dec meldde (30 okt 2026). Twee getallen van 3 of meer
+     cijfers met een streepje ertussen proberen we dus ook met een /. Een
+     fabrieksorder als 3352-4 (één cijfer na het streepje) blijft zoals hij is. */
+  const varianten = [];
+  for (const p of parts) { const m = p.match(/^(\d{3,})-(\d{3,})$/); if (m) varianten.push(m[1] + "/" + m[2]); }
+  return [...new Set([String(ref || "").trim(), ...parts, ...varianten])].filter(Boolean);
 }
 
 // Vraag tracking op voor een lijst referenties, met KV-cache. Geeft een map

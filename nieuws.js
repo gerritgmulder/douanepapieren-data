@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "voorraad.html", soort: "hersteld",
+      titel: "ETA's van Merzario: ook 364/365",
+      wat: "Containerparen die Merzario met een schuine streep schrijft (zoals 364/365 van Devine) worden nu herkend; hun ETA komt vanzelf uit Merzario. Bij Schepen & ontvangst staat in rood als een schip geen koppeling heeft en de datum met de hand is ingevuld. Komt een schip 3 dagen of meer later, of heeft het geen koppeling, dan krijgen Chantal en Manon een bericht." },
+    {
       datum: "2026-10-30", bestand: "planning-service.html", soort: "nieuw",
       titel: "Zoeken in Planning Service",
       wat: "Bovenaan staat een zoekvak: zoek op klant, plaats, ITS-nummer, debiteurnummer, telefoon of mail. Klik op een afspraak in de uitkomst, dan ga je naar die week en licht de afspraak op." },
