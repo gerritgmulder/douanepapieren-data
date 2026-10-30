@@ -306,6 +306,17 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
     <span style="font-size:12.5px;color:var(--muted)">Bestaat de relatie al in Logic4? Dan zoek je hem in de kaart op en koppel je het debiteurnummer.</span>
   </div>
 
+  <!-- Aanmeldingen van de openbare pagina partner.passionspas.com/become-partner
+       (Gerrit, 30 okt 2026: keuze b, "een nieuwe relatie in Passion Partners
+       Beheer, met Arno als adviseur"). Een aanmelding wordt nooit vanzelf een
+       account; Maak relatie opent het gewone venster, al ingevuld. Het blok is
+       alleen te zien als er iets klaarstaat. -->
+  <div class="card hidden" id="aanmeldKaart">
+    <h3>Nieuwe aanmeldingen via de website (<span id="aanmeldAantal">0</span>)</h3>
+    <p class="lead" style="margin-bottom:10px">Bedrijven die op <b>partner.passionspas.com/become-partner</b> lieten weten dat ze partner willen worden. Met <b>Maak relatie</b> open je het venster voor een nieuwe partner, al ingevuld en met Arno als adviseur. Daar koppel je de debiteur in Logic4 en nodig je hem uit.</p>
+    <div id="aanmeldLijst"></div>
+  </div>
+
   <div class="card klap" id="kaartLeads">
     <h3><span class="kopTekst">Aanvragen zonder aanbetaling - leads (<span id="leadCount">0</span>)</span></h3>
     <p class="lead" style="margin-bottom:10px">Partners die een reservering startten en nog op de <b>aanbetaling</b> staan. Dit zijn aanvragen: ze claimen voorraad zodra de aanbetaling binnen is en staan dan in Logic4. Bel na of archiveer ze.
@@ -1207,9 +1218,20 @@ function veld(pad, label, waarde, opties){
     (o.verplicht?' <span title="verplicht" style="color:var(--bad)">*</span>':'')+'</label>'+inv+'</div>';
 }
 
-function relatieKaart(index){
+/* Een nieuwe relatie die al deels is ingevuld, bijvoorbeeld uit een aanmelding
+   via de website. Alleen bekende velden; de rest blijft leeg. */
+function metVoorvul(d, v){
+  if (!v) return d;
+  ["company", "email", "taal", "adviseur", "adviseurSinds", "bronKlant"].forEach(k => { if (v[k]) d[k] = v[k]; });
+  Object.assign(d.contact, v.contact || {});
+  Object.assign(d.facturatie, v.facturatie || {});
+  return d;
+}
+function relatieKaart(index, voorvul){
   const nieuw = index === null || index === undefined;
-  const d = vulAan(nieuw ? leegRelatie() : JSON.parse(JSON.stringify(accounts.dealers[index])));
+  const d = vulAan(nieuw ? metVoorvul(leegRelatie(), voorvul) : JSON.parse(JSON.stringify(accounts.dealers[index])));
+  // Kwam deze nieuwe relatie uit een aanmelding? Dan gaat die na het bewaren uit de lijst.
+  const aanmeldId = nieuw && voorvul && voorvul.aanmeldId || null;
 
   const laag = document.createElement("div");
   laag.className = "kaartlaag";
@@ -1748,6 +1770,7 @@ function relatieKaart(index){
     try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
     await save("dealer-accounts", accounts);
     laag.remove(); renderPartners();
+    if (aanmeldId) aanmeldingAfhandelen(aanmeldId, "verwerkt", d.email);
     /* De afspraken gingen hier naar Logic4, Vrij veld 1. Gerrit (16 okt 2026):
        "we vullen geen afspraken in bij partners/dealers". Het veld is uit het
        venster, en dus gaat er ook niets meer naar Logic4: anders zou een lege
@@ -2033,6 +2056,62 @@ document.querySelectorAll(".card.klap").forEach(kaart => {
 });
 $("nieuweRelatie").addEventListener("click", ()=>relatieKaart(null));
 $("partnerZoek").addEventListener("input", partnerFilter);
+
+/* ── Aanmeldingen via de website (partner.passionspas.com/become-partner) ── */
+const BP_ADMIN = "https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/";
+let aanmeldingen = [];
+async function aanmeldingenLaden(){
+  try {
+    const r = await fetch(BP_ADMIN + "aanmeldingen", { headers: beheerKoppen() });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    aanmeldingen = j.aanmeldingen || [];
+  } catch (e) { aanmeldingen = []; }
+  aanmeldingenTekenen();
+}
+function aanmeldingenTekenen(){
+  $("aanmeldKaart").classList.toggle("hidden", !aanmeldingen.length);
+  $("aanmeldAantal").textContent = aanmeldingen.length;
+  $("aanmeldLijst").innerHTML = aanmeldingen.map((a, i) => {
+    const land = a.land === "XX" ? "ander land" : a.land;
+    const datum = new Date(a.ts).toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+    return '<div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border)">'
+      + '<div style="min-width:0;flex:1 1 280px;overflow-wrap:break-word">'
+      +   '<b>' + esc(a.bedrijf) + '</b> <span style="color:var(--muted);font-size:12.5px">' + esc(land) + ' · ' + esc(datum) + ' · taal ' + esc(String(a.taal || "").toUpperCase()) + '</span>'
+      +   '<div style="font-size:13px">' + esc(a.naam) + ' · <a href="mailto:' + esc(a.email) + '">' + esc(a.email) + '</a>' + (a.telefoon ? ' · ' + esc(a.telefoon) : '') + '</div>'
+      +   (a.bericht ? '<div style="font-size:12.5px;color:var(--muted);margin-top:4px;white-space:pre-wrap">' + esc(a.bericht) + '</div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +   '<button class="btn solid sm amMaak" data-i="' + i + '" type="button" title="Opent het venster voor een nieuwe partner, al ingevuld met deze gegevens en Arno als adviseur">Maak relatie</button>'
+      +   '<button class="btn sm amWeg" data-i="' + i + '" type="button" title="Haalt deze aanmelding uit de lijst zonder er een relatie van te maken">Archiveren</button>'
+      + '</div></div>';
+  }).join("");
+}
+async function aanmeldingAfhandelen(id, status, relatie){
+  try {
+    await fetch(BP_ADMIN + "aanmelding", { method: "POST", headers: { "Content-Type": "application/json", ...beheerKoppen() },
+      body: JSON.stringify({ id, status, relatie: relatie || null }) });
+    try{ if(window.fpLog) window.fpLog("aanmelding-" + status, relatie || id); }catch(e){}
+  } catch (e) {}
+  aanmeldingen = aanmeldingen.filter(a => a.id !== id);
+  aanmeldingenTekenen();
+}
+$("aanmeldLijst").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-i]");
+  if (!b) return;
+  const a = aanmeldingen[Number(b.dataset.i)];
+  if (!a) return;
+  if (b.classList.contains("amWeg")) { aanmeldingAfhandelen(a.id, "weg"); return; }
+  // De naam zoals ingevuld: het eerste woord als voornaam, de rest als achternaam.
+  const delen = String(a.naam || "").trim().split(/\s+/);
+  const voornaam = delen.length > 1 ? delen.shift() : "";
+  // Het portaal kent vijf talen; Spaans opent voorlopig in het Engels.
+  const taal = (PP_TALEN || []).some(t => t[0] === a.taal) ? a.taal : "en";
+  relatieKaart(null, { aanmeldId: a.id, company: a.bedrijf, email: a.email, taal, bronKlant: "Website",
+    adviseur: a.adviseur || "arno@fonteyn.nl", adviseurSinds: new Date().toISOString(),
+    contact: { voornaam, achternaam: delen.join(" "), telefoon: a.telefoon || "" },
+    facturatie: a.land && a.land !== "XX" ? { land: a.land } : {} });
+});
 
 /* ── Welkomstmail aan bestaande relaties ── */
 const WQ_URL = "https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/uitnodig-wachtrij";
@@ -2827,6 +2906,7 @@ async function init(){
     laadKoers();
     kleurfotosStart();
     welkomStand();
+    aanmeldingenLaden();
     document.getElementById("mgmt").classList.remove("hidden");
     // De mailcontrole hoort bij het beheer en niet bij het inlogscherm.
     document.getElementById("mailCard").classList.remove("hidden");

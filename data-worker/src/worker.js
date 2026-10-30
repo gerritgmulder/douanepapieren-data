@@ -5039,6 +5039,130 @@ async function handlePibRoutes(request, env, url) {
   return reply(404, { ok: false, error: "onbekend" });
 }
 
+/* ═══ BECOME-PARTNER: openbare pagina voor nieuwe partners ═══════════════
+   Gerrit (30 okt 2026): Dolf mailt een flyer naar ongeveer 10.000 bedrijven.
+   In die mail staat geen bijlage maar een link naar deze pagina, op
+   partner.passionspas.com/become-partner, zonder inlog. Het formulier
+   onderaan ("Ik word partner") gaat hierheen.
+
+   Veiligheid (Gerrit: "zorg dat het veilig is"):
+   - Een aanmelding maakt NOOIT zelf een account. Hij komt in een aparte lijst
+     (pp-aanmeldingen) en Arno maakt er in Passion Partners Beheer een relatie
+     van, met de gewone stappen (Logic4-debiteur, partner of dealer). Zo kan
+     niemand van buiten iets in dealer-accounts schrijven of overschrijven.
+   - Alles wordt ingekort en schoongemaakt; in de mail gaat alles ge-escaped.
+   - Een onzichtbaar veld en een minimale invultijd vangen robots, zonder dat
+     een mens iets merkt (de robot krijgt "ok" en er gebeurt niets).
+   - Hooguit 3 aanmeldingen per uur per IP-adres, en hooguit BP_PER_DAG per dag
+     in totaal, want de mail deelt de 100 per dag met Passion Partners.
+   - Hetzelfde adres binnen een dag nog eens: geen tweede mail.
+   - Geen IP-adres bewaard; alleen wat de bezoeker zelf invulde. */
+const BP_SLEUTEL = "pp-aanmeldingen";
+const BP_TALEN = ["en", "nl", "de", "fr", "it", "es"];
+const BP_PER_DAG = 40;
+const BP_AAN = "info@passionspas.com";
+const BP_ADVISEUR = "arno@fonteyn.nl";
+const BP_RAW = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/partnerpagina/";
+const bpEsc = (x) => String(x == null ? "" : x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const BP_FLYER_NAAM = { en: "Become a Partner (EN)", nl: "Word partner (NL)", de: "Partner werden (DE)", fr: "Devenez partenaire (FR)", it: "Diventate partner (IT)", es: "Hagase partner (ES)" };
+
+async function bpPagina() {
+  const cb = Math.floor(Date.now() / 60000);
+  const r = await fetch(BP_RAW + "become-partner.html?cb=" + cb, { cf: { cacheTtl: 60, cacheEverything: true } });
+  if (!r.ok) return new Response("Please try again in a minute.", { status: 503, headers: { "Content-Type": "text/plain" } });
+  return new Response(await r.text(), { headers: {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "public, max-age=60",
+    "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+  } });
+}
+
+// Alleen de vaste namen uit de route; er kan dus nooit een ander bestand uit de repo mee.
+async function bpBestandDoorgeven(m) {
+  const flyer = m[2], foto = m[3];
+  const bron = flyer ? "flyer-" + flyer + ".pdf" : "img/" + foto + ".jpg";
+  const r = await fetch(BP_RAW + bron, { cf: { cacheTtl: 3600, cacheEverything: true } });
+  if (!r.ok) return new Response("Not found", { status: 404 });
+  const koppen = { "Content-Type": flyer ? "application/pdf" : "image/jpeg", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff" };
+  if (flyer) koppen["Content-Disposition"] = 'inline; filename="Passion Spas - ' + BP_FLYER_NAAM[flyer] + '.pdf"';
+  return new Response(r.body, { status: 200, headers: koppen });
+}
+
+async function bpAanmelding(request, env, url) {
+  const tekst = await request.text().catch(() => "");
+  if (tekst.length > 8000) return reply(413, { ok: false, error: "te-groot" });
+  let b = null; try { b = JSON.parse(tekst); } catch {}
+  if (!b || typeof b !== "object") return reply(400, { ok: false, error: "velden" });
+  // Robot: het onzichtbare veld is ingevuld, of het formulier is binnen 3 seconden verstuurd.
+  if (String(b.website || "").trim() || !(Number(b.duur) >= 3000)) return reply(200, { ok: true });
+  const schoon = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  const naam = schoon(b.naam, 100), bedrijf = schoon(b.bedrijf, 120), land = schoon(b.land, 2).toUpperCase();
+  const email = schoon(b.email, 160).toLowerCase(), telefoon = schoon(b.telefoon, 40);
+  const taal = BP_TALEN.includes(b.taal) ? b.taal : "en";
+  const bericht = String(b.bericht == null ? "" : b.bericht).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").replace(/\r\n?/g, "\n").trim().slice(0, 1500);
+  if (naam.length < 2 || bedrijf.length < 2 || !/^[A-Z]{2}$/.test(land)) return reply(400, { ok: false, error: "velden" });
+  if (!/^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i.test(email)) return reply(400, { ok: false, error: "email" });
+  const tel = /^[0-9+()\-.\s\/]{5,40}$/.test(telefoon) ? telefoon : "";
+  if (await rateLimited(env, request, "bp-aanmelding", 3, 3600)) return reply(429, { ok: false, error: "te-vaak" });
+
+  const lijst = (await env.FONTEYN_DATA.get(BP_SLEUTEL, { type: "json" })) || { aanmeldingen: [] };
+  lijst.aanmeldingen = Array.isArray(lijst.aanmeldingen) ? lijst.aanmeldingen : [];
+  const nu = new Date();
+  if (lijst.aanmeldingen.some(a => a.email === email && nu - Date.parse(a.ts || 0) < 86400000)) return reply(200, { ok: true });
+  const vandaag = nu.toISOString().slice(0, 10);
+  if (lijst.aanmeldingen.filter(a => String(a.ts || "").startsWith(vandaag)).length >= BP_PER_DAG) {
+    console.log("[become-partner] dagmaximum bereikt, aanmelding van " + email + " niet bewaard");
+    return reply(429, { ok: false, error: "dagmax" });
+  }
+  const a = { id: crypto.randomUUID(), ts: nu.toISOString(), naam, bedrijf, land, email, telefoon: tel, bericht, taal,
+              adviseur: BP_ADVISEUR, status: "nieuw" };
+  lijst.aanmeldingen = [a, ...lijst.aanmeldingen].slice(0, 500);
+  await env.FONTEYN_DATA.put(BP_SLEUTEL, JSON.stringify(lijst));
+
+  /* De mail naar info@ (Gerrit: "als reacties maar binnenkomen bij
+     info@passionspas.com"), Arno in cc als adviseur. Beantwoorden gaat
+     rechtstreeks naar de aanmelder. */
+  const regel = (k, v) => v ? '<tr><td style="padding:4px 14px 4px 0;color:#6b7280;vertical-align:top;white-space:nowrap">' + k + '</td><td style="padding:4px 0">' + v + '</td></tr>' : "";
+  const binnen =
+    "<p style='margin:0 0 14px'><b>Nieuwe aanmelding via de website</b></p>" +
+    "<p style='margin:0 0 16px'>Iemand wil partner worden en vulde het formulier op partner.passionspas.com/become-partner in.</p>" +
+    "<table role='presentation' cellpadding='0' cellspacing='0' border='0' style='font-size:14px;line-height:20px'>" +
+    regel("Naam", bpEsc(naam)) + regel("Bedrijf", bpEsc(bedrijf)) + regel("Land", bpEsc(land === "XX" ? "anders" : land)) +
+    regel("E-mail", '<a href="mailto:' + bpEsc(email) + '" style="color:#c8102e">' + bpEsc(email) + "</a>") +
+    regel("Telefoon", bpEsc(tel)) + regel("Taal", bpEsc(taal)) +
+    regel("Bericht", bericht ? bpEsc(bericht).replace(/\n/g, "<br>") : "") +
+    "</table>" +
+    "<p style='margin:18px 0 0'>Hij staat klaar in Passion Partners Beheer, bovenaan bij <b>Nieuwe aanmeldingen</b>, met Arno als adviseur. Beantwoorden van deze mail gaat rechtstreeks naar de aanmelder.</p>";
+  const m = await dpSendEmail(env, BP_AAN, "Nieuwe aanmelding partner: " + bedrijf + " (" + land + ")", dpMailShell(env, url, binnen), email, BP_ADVISEUR, "Passion Spas website")
+    .catch(e => ({ ok: false, reden: String(e.message || e) }));
+  if (!m.ok) console.log("[become-partner] mail naar info@ vraagt nog een poging: " + (m.reden || m.status));
+  // De aanmelding staat bewaard, ook als de mail even niet lukt; dus voor de bezoeker is het gelukt.
+  return reply(200, { ok: true });
+}
+
+async function bpAdminLijst(env) {
+  const lijst = (await env.FONTEYN_DATA.get(BP_SLEUTEL, { type: "json" })) || { aanmeldingen: [] };
+  return reply(200, { ok: true, aanmeldingen: (lijst.aanmeldingen || []).filter(a => a.status === "nieuw") });
+}
+
+// Een aanmelding afhandelen: "verwerkt" (er is een relatie van gemaakt) of "weg" (niets mee doen).
+async function bpAdminZet(request, env) {
+  const b = await request.json().catch(() => ({}));
+  if (!["verwerkt", "weg"].includes(b.status)) return reply(400, { ok: false, error: "status" });
+  const lijst = (await env.FONTEYN_DATA.get(BP_SLEUTEL, { type: "json" })) || { aanmeldingen: [] };
+  const a = (lijst.aanmeldingen || []).find(x => x.id === String(b.id || ""));
+  if (!a) return reply(404, { ok: false, error: "onbekend" });
+  a.status = b.status; a.afgehandeld = new Date().toISOString();
+  a.door = String(request.headers.get("X-Fonteyn-User") || "").slice(0, 80) || null;
+  if (b.relatie) a.relatie = String(b.relatie).slice(0, 160);
+  await env.FONTEYN_DATA.put(BP_SLEUTEL, JSON.stringify(lijst));
+  return reply(200, { ok: true });
+}
+
 async function handleDealerRoutes(request, env, url) {
   const p = url.pathname.replace(/\/+$/, "");
   if (p === "/dealers" && request.method === "GET") return dpHandlePage(env);
@@ -5060,6 +5184,12 @@ async function handleDealerRoutes(request, env, url) {
   }
   if (p === "/dealers/welkom" && (request.method === "GET" || request.method === "POST")) return dpHandleWelkom(request, env, url);
 
+  // Openbare pagina "Become a Partner" voor de flyer-mailing (zie BECOME-PARTNER).
+  if (p === "/dealers/become-partner" && request.method === "GET") return bpPagina();
+  if (p === "/dealers/become-partner/send" && request.method === "POST") return bpAanmelding(request, env, url);
+  const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate)\.jpg)$/);
+  if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);
+
   if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env, url);
 
   // Admin (interne beheertegel, shared secret — géén dealer-sessie)
@@ -5070,6 +5200,8 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
     if (p === "/dealers/admin/uitnodigen" && request.method === "POST") return dpAdminUitnodigen(request, env, url);
     if (p === "/dealers/admin/uitnodig-wachtrij" && request.method === "POST") return ppWachtrijHandle(request, env);
+    if (p === "/dealers/admin/aanmeldingen" && request.method === "GET") return bpAdminLijst(env);
+    if (p === "/dealers/admin/aanmelding" && request.method === "POST") return bpAdminZet(request, env);
     if (p === "/dealers/admin/wachtwoord" && request.method === "POST") return dpAdminSetPassword(request, env);
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
     /* Een portaaldocument ophalen met de beheersleutel. Er was alleen een weg

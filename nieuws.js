@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Aanmeldingen via de website",
+      wat: "Bedrijven die op partner.passionspas.com/become-partner laten weten dat ze partner willen worden, staan bovenaan in het blok Nieuwe aanmeldingen. Met Maak relatie opent het venster voor een nieuwe partner al ingevuld, met Arno als adviseur." },
+    {
       datum: "2026-10-30", bestand: "voorraad.html", soort: "beter",
       titel: "Rode ETA: met de hand ingevuld",
       wat: "Bij Overzicht > Binnenkomende schepen staat een ETA nu rood als hij met de hand is ingevuld en Merzario de referentie nog niet kent. Zo'n datum blijft staan tot iemand hem aanpast. Vul bij Schepen het SC-nummer van Merzario in, dan haalt het Dashboard de datum voortaan zelf op." },

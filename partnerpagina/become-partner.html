@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Become a Passion Spas Partner</title>
+<meta name="description" content="Passion Spas: more than 50 models, a sales programme your team learns in one day and 1,000+ spas in stock in Europe. Become a partner.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<!--
+  Passion Spas - Become a Partner (openbare pagina, geen inlog)
+  ═══════════════════════════════════════════════════════════════════════
+  Gerrit (30 okt 2026): de flyer-mailing van Dolf (ongeveer 10.000 adressen)
+  linkt hierheen in plaats van een pdf als bijlage. "Je kunt die flyer toch
+  niet bekijken op partner.passionspas.com als je geen inlog hebt? Dus dan
+  lijkt het me dat je daar een aparte landingspagina voor moet maken."
+
+  Adres: partner.passionspas.com/become-partner (?lang=fr enz. voor een vaste
+  taal). De worker geeft deze pagina, de flyers (partnerpagina/flyer-xx.pdf)
+  en de foto's (partnerpagina/img/) door vanaf GitHub main.
+
+  Het formulier gaat naar /become-partner/send. De worker bewaart de
+  aanmelding (Passion Partners Beheer, blok Nieuwe aanmeldingen, met Arno als
+  adviseur) en mailt info@passionspas.com. Er komt nooit direct een account
+  uit; dat maakt Arno in Beheer (Gerrit, 30 okt 2026: keuze b, "zorg dat het
+  veilig is").
+
+  De teksten komen uit de flyer (Flyer dealers Lyon 2026/bron/teksten.json,
+  goedgekeurd 26 okt 2026), aangevuld met die van het formulier. Taal: ?lang=,
+  dan wat de bezoeker eerder koos, dan de browser, dan Engels.
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--rood:#d6232f;--rood-d:#b71c27;--zwart:#141414;--grijs:#6b6b6b;--tekst:#2b2b2b;--licht:#f4f2ef;--lijn:#e4e1dc;--blauw:#3f6fb6;--oranje:#ee7a1c;--groen:#2f5d3a;--wit:#fff}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{font-family:Montserrat,"Avenir Next","Helvetica Neue",Arial,sans-serif;color:var(--zwart);background:var(--wit);line-height:1.5;overflow-x:hidden}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit}
+.binnen{max-width:1160px;margin:0 auto;padding:0 24px}
+button,.knop{font:inherit;cursor:pointer}
+.knop{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 26px;border-radius:999px;font-weight:700;font-size:15px;text-decoration:none;border:2px solid var(--rood);background:var(--rood);color:#fff;white-space:nowrap;transition:background .15s,border-color .15s}
+.knop:hover{background:var(--rood-d);border-color:var(--rood-d)}
+.knop.licht{background:transparent;color:var(--zwart);border-color:var(--zwart)}
+.knop.licht:hover{background:var(--zwart);color:#fff}
+.knop.wit{background:#fff;color:var(--rood);border-color:#fff}
+.knop.wit:hover{background:var(--licht);border-color:var(--licht)}
+
+/* Kopbalk */
+.top{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.96);border-bottom:1px solid var(--lijn);backdrop-filter:saturate(1.4) blur(6px)}
+.top .binnen{display:flex;align-items:center;gap:18px;min-height:72px}
+.top .logo img{height:44px;width:auto}
+.talen{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.talen button{border:1px solid var(--lijn);background:#fff;color:var(--zwart);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.talen button:hover{border-color:var(--zwart)}
+.talen button.aan{background:var(--zwart);border-color:var(--zwart);color:#fff}
+.top .knop{padding:10px 18px;font-size:14px}
+
+/* Opening */
+.held{padding:56px 0 40px}
+.held .binnen{display:grid;grid-template-columns:1.05fr 1fr;gap:40px;align-items:center}
+.beurs{display:inline-block;border-left:4px solid var(--rood);padding:2px 0 2px 12px;font-size:13px;font-weight:600;line-height:1.45;margin-bottom:22px}
+.beurs b{display:block;color:var(--rood);text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+.kicker{color:var(--rood);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:13px;margin-bottom:12px}
+h1{font-size:clamp(32px,5vw,54px);line-height:1.05;letter-spacing:-.015em;font-weight:700;margin-bottom:20px}
+h1 span{color:var(--rood)}
+.intro{font-size:17px;color:var(--tekst);max-width:560px;margin-bottom:28px}
+.knoppen{display:flex;flex-wrap:wrap;gap:12px}
+
+/* Cijfers */
+.cijfers{background:var(--zwart);color:#fff;padding:34px 0}
+.cijfers .binnen{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
+.cijfers div div{border-top:3px solid var(--rood);padding-top:12px}
+.cijfers b{display:block;font-size:clamp(28px,3.6vw,40px);line-height:1.05;font-weight:700}
+.cijfers span{display:block;color:#d4d4d4;font-size:14px;margin-top:6px}
+
+/* Waarom */
+section.blok{padding:64px 0}
+h2{font-size:clamp(24px,3vw,34px);line-height:1.15;font-weight:700;margin-bottom:28px}
+h2 i{font-style:normal;color:var(--rood)}
+.kaarten{display:grid;grid-template-columns:repeat(3,1fr);gap:28px 32px}
+.kaart{border-top:4px solid var(--c);padding-top:14px}
+.kaart h3{font-size:18px;margin-bottom:6px}
+.kaart p{color:var(--tekst);font-size:15px}
+
+/* Citaat */
+.citaat{background:var(--licht);padding:56px 0}
+.citaat .binnen{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+.citaat .q{font-size:clamp(28px,3.8vw,44px);font-weight:700;line-height:1.1}
+.citaat .q span{color:var(--rood)}
+.citaat p{font-size:17px;color:var(--tekst);margin-top:16px}
+.strook{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:end}
+
+/* Zes P's */
+.ps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.p{background:var(--licht);border-left:5px solid var(--c);padding:20px 20px 22px}
+.p small{display:block;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--grijs);font-weight:600;margin-bottom:4px}
+.p h3{font-size:17px;margin-bottom:6px}
+.p p{font-size:14.5px;color:var(--tekst)}
+
+/* Portaal en stappen */
+.twee{display:grid;grid-template-columns:1.1fr 1fr;gap:48px}
+h4{font-size:22px;margin-bottom:16px}
+.portaal ul{list-style:none}
+.portaal li{position:relative;padding:11px 0 11px 24px;border-bottom:1px solid var(--lijn);font-size:15px}
+.portaal li:before{content:"";position:absolute;left:0;top:18px;width:10px;height:10px;border-radius:50%;background:var(--rood)}
+.stap{display:grid;grid-template-columns:40px 1fr;gap:14px;margin-bottom:20px}
+.stap b.n{width:40px;height:40px;border-radius:50%;background:var(--zwart);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px}
+.stap h5{font-size:16px;margin-bottom:2px}
+.stap p{font-size:14.5px;color:var(--tekst)}
+
+/* Flyer */
+.flyer{background:var(--zwart);color:#fff;padding:48px 0}
+.flyer .binnen{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap}
+.flyer h2{margin-bottom:8px}
+.flyer p{color:#d4d4d4;max-width:620px}
+
+/* Lyon en formulier */
+.aanmeld .binnen{display:grid;grid-template-columns:1fr 1.25fr;gap:40px;align-items:start}
+.lyon{background:var(--rood);color:#fff;padding:32px;border-radius:4px}
+.lyon h4{font-size:26px;margin-bottom:10px}
+.lyon p{font-size:16px;line-height:1.6;margin-bottom:22px}
+.lyon img{max-width:260px;margin:28px auto 0;background:#fff;border-radius:4px}
+form{background:#fff;border:1px solid var(--lijn);border-radius:4px;padding:32px}
+form h2{margin-bottom:8px}
+form .uitleg{color:var(--tekst);margin-bottom:22px}
+.velden{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.velden .breed{grid-column:1/-1}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+label .ster{color:var(--rood)}
+input,select,textarea{width:100%;font:inherit;font-size:15px;color:var(--zwart);padding:12px 14px;border:1px solid #cfcac3;border-radius:4px;background:#fff}
+textarea{min-height:110px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--zwart);outline-offset:1px;border-color:var(--zwart)}
+.verstopt{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+.privacy{font-size:12.5px;color:var(--grijs);margin:16px 0 18px}
+#melding{margin-top:14px;font-size:14.5px;font-weight:600}
+#melding.fout{color:var(--rood)}
+.dank{display:none;text-align:center;padding:30px 10px}
+.dank b{display:block;font-size:22px;margin-bottom:10px}
+form.klaar .velden,form.klaar .privacy,form.klaar .verzend,form.klaar .uitleg,form.klaar #melding{display:none}
+form.klaar .dank{display:block}
+
+/* Voet */
+footer{background:var(--zwart);color:#fff;padding:44px 0 36px}
+footer .binnen{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:flex-end}
+footer h4{margin-bottom:8px}
+footer p{color:#d4d4d4;font-size:15px;line-height:1.7}
+footer a{text-decoration:none}
+footer a:hover{text-decoration:underline}
+footer .klein{font-size:13px;color:#a8a8a8}
+
+@media (max-width:900px){
+  .held .binnen,.citaat .binnen,.twee,.aanmeld .binnen{grid-template-columns:1fr}
+  .held .foto{order:-1;max-width:520px}
+  .cijfers .binnen{grid-template-columns:1fr 1fr}
+  .kaarten,.ps{grid-template-columns:1fr 1fr}
+}
+@media (max-width:640px){
+  .binnen{padding:0 16px}
+  .top .binnen{flex-wrap:wrap;gap:10px;padding-top:10px;padding-bottom:10px}
+  .top .logo img{height:36px}
+  .top .knop{margin-left:auto}
+  .talen{order:3;width:100%;margin-left:0}
+  .talen button{padding:5px 10px;font-size:12px}
+  .held{padding:28px 0 32px}
+  .held .foto{max-width:300px;margin:0 auto}
+  section.blok{padding:44px 0}
+  .kaarten,.ps,.velden{grid-template-columns:1fr}
+  .knoppen .knop{width:100%}
+  .knop{white-space:normal;text-align:center}
+  form,.lyon{padding:22px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="binnen">
+    <a class="logo" href="#" title="Passion Spas"><img id="logo" alt="Passion Spas" width="140" height="44"></a>
+    <div class="talen" id="talen" role="group" aria-label="Language"></div>
+    <a class="knop" href="#aanmelden" data-t="cta1"></a>
+  </div>
+</header>
+
+<main>
+<section class="held">
+  <div class="binnen">
+    <div>
+      <div class="beurs"><b data-t="beursKop"></b><span data-h="beursRegel"></span></div>
+      <div class="kicker" data-t="kicker"></div>
+      <h1 data-h="h1"></h1>
+      <p class="intro" data-t="intro"></p>
+      <div class="knoppen">
+        <a class="knop" href="#aanmelden" data-t="cta1"></a>
+        <a class="knop licht flyerLink" target="_blank" rel="noopener" data-t="cta2"></a>
+      </div>
+    </div>
+    <div class="foto"><img data-img="held" alt="Passion Spas" width="1400" height="1032"></div>
+  </div>
+</section>
+
+<section class="cijfers"><div class="binnen" id="cijfers"></div></section>
+
+<section class="blok">
+  <div class="binnen">
+    <h2 data-h="waarom"></h2>
+    <div class="kaarten" id="kaarten"></div>
+  </div>
+</section>
+
+<section class="citaat">
+  <div class="binnen">
+    <div>
+      <div class="q" data-h="citaat"></div>
+      <p data-t="citaatSub"></p>
+    </div>
+    <div class="strook">
+      <img data-img="excite" alt="Passion Spas" width="1400" height="1030">
+      <img data-img="bliss" alt="Passion Spas" width="1400" height="1055">
+      <img data-img="exhilarate" alt="Passion Spas" width="1400" height="1032">
+    </div>
+  </div>
+</section>
+
+<section class="blok">
+  <div class="binnen">
+    <h2 data-h="psKop"></h2>
+    <div class="ps" id="ps"></div>
+  </div>
+</section>
+
+<section class="blok" style="padding-top:0">
+  <div class="binnen twee">
+    <div class="portaal"><h4 data-t="portaalKop"></h4><ul id="portaal"></ul></div>
+    <div><h4 data-t="stappenKop"></h4><div id="stappen"></div></div>
+  </div>
+</section>
+
+<section class="flyer">
+  <div class="binnen">
+    <div><h2 data-t="flyerKop"></h2><p data-t="flyerTekst"></p></div>
+    <a class="knop wit flyerLink" target="_blank" rel="noopener" data-t="flyerKnop"></a>
+  </div>
+</section>
+
+<section class="blok aanmeld" id="aanmelden">
+  <div class="binnen">
+    <div class="lyon">
+      <h4 data-t="lyonKop"></h4>
+      <p data-h="lyon"></p>
+      <a class="knop wit" href="https://pass.piscine-global.com" target="_blank" rel="noopener" data-t="lyonKnop"></a>
+      <img data-img="soulmate" alt="Passion Spas" width="1142" height="1400">
+    </div>
+    <form id="formulier" novalidate>
+      <h2 data-t="formKop"></h2>
+      <p class="uitleg" data-t="formIntro"></p>
+      <div class="velden">
+        <div><label for="fNaam"><span data-t="naam"></span> <span class="ster">*</span></label><input id="fNaam" name="naam" autocomplete="name" maxlength="100" required></div>
+        <div><label for="fBedrijf"><span data-t="bedrijf"></span> <span class="ster">*</span></label><input id="fBedrijf" name="bedrijf" autocomplete="organization" maxlength="120" required></div>
+        <div><label for="fLand"><span data-t="land"></span> <span class="ster">*</span></label><select id="fLand" name="land" autocomplete="country" required></select></div>
+        <div><label for="fTelefoon" data-t="telefoon"></label><input id="fTelefoon" name="telefoon" type="tel" autocomplete="tel" maxlength="40"></div>
+        <div class="breed"><label for="fEmail"><span data-t="email"></span> <span class="ster">*</span></label><input id="fEmail" name="email" type="email" autocomplete="email" maxlength="160" required></div>
+        <div class="breed"><label for="fBericht" data-t="bericht"></label><textarea id="fBericht" name="bericht" maxlength="1500"></textarea></div>
+        <!-- Een veld dat mensen nooit zien; vult iets het toch in, dan is het een robot. -->
+        <div class="verstopt" aria-hidden="true"><label for="fWebsite">Website</label><input id="fWebsite" name="website" tabindex="-1" autocomplete="off"></div>
+      </div>
+      <p class="privacy" data-t="privacy"></p>
+      <button class="knop verzend" type="submit" data-t="verstuur"></button>
+      <div id="melding" role="status" aria-live="polite"></div>
+      <div class="dank"><b>✓</b><span data-t="dank"></span></div>
+    </form>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="binnen">
+    <div>
+      <h4 data-t="contactKop"></h4>
+      <p><a href="mailto:info@passionspas.com">info@passionspas.com</a><br><a href="tel:+31577456040">+31 577 456 040</a><br><a href="https://passionspas.com" target="_blank" rel="noopener">passionspas.com</a></p>
+    </div>
+    <p class="klein" data-t="adres"></p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var FLYER = {"en":{"beursKop":"Meet us in Lyon","beursRegel":"Piscine Global Europe<br>17-20 November 2026 · Hall 6 · Stand 6G16","kicker":"Become a Passion Spas Partner","h1":"The easiest spas to sell.<br><span>At the best margin.<\/span>","intro":"We believe Passion Spas has the finest sales system in the world for selling spas. More than 50 models and a presentation full of unique features speak to every buying motive. Whatever brings a customer into your store, you always have the right story.","cijfers":[["12,000","spas sold worldwide every year"],["1,500","spas a year in our own showroom in the Netherlands"],["1,000+","spas in stock in Uddel, the Netherlands"],["35+","years of experience in spa retail"]],"waarom":"Why partners choose <i>Passion Spas<\/i>","kaarten":[["A spa for every customer","More than 50 models in the Pure, Modern, Signature and Exclusive collections, plus swim spas for sport and fitness. Every buying motive, every budget."],["Easy to learn, easy to sell","Our programme teaches your team to present 50 spas in one day. We train your salespeople with the experience of our own showroom, which we proudly call the world's largest spa showroom."],["More sales, better margin","Unique features your customers will only find with you. So you sell on value, the way it should be."],["Stock you can see","In the Passion Partners portal you see live stock per model and colour, the containers on their way and your own price list. Order 24/7, in your own language."],["Fast, from Europe","1,000+ spas in stock in Uddel, the Netherlands. Collect or have them delivered, or fill a full container straight from the factory."],["With you for the long run","Original parts, product support for as long as your customer owns the spa, and 35+ years of experience behind every Passion Spas."]],"citaat":"If you place 10,<br><span>you can sell 100.<\/span>","citaatSub":"A good partner sells 10 spas per showroom model. The best partners sell 20. We show you how.","psKop":"Six reasons your customers <i>say yes<\/i>","ps":[["Pleasing Massage","Massage that makes the difference","Soft Tissue Massage, Lumbar Support and Aquarolling, developed with physiotherapists. River Swim System in our swim spas."],["Planet Friendly","Low running costs","Hybrid Heating, three layers of insulation and a heavy-duty cover keep energy use low, all year round."],["Perfect Water","Clear water, little effort","100% water filtration, ozone and the Synergy water care system. Your customer simply enjoys."],["Professional Design","A spa to be proud of","Surrounding LED lights, waterfalls, the sleek lines of the Modern collection and Bluetooth sound."],["Precision Made","Built to last","A laminated acrylic shell, an All-Weather framework that stays strong in moist conditions and an Everlasting bottom."],["Protection for you","A brand that stays","The Protection Plan: the assurance of a strong brand and a company with 35+ years in spas."]],"portaalKop":"Passion Partners: your own portal","portaal":["Live stock per model and colour, with the arrival date of what is on its way","Your own partner price list and all product documentation","Reserve with a 30% deposit; the rest follows when your spa arrives","Build a full container that ships straight from the factory to you","Follow every order under My spas","In English, French, German, Italian and Dutch"],"stappenKop":"Become a partner in three steps","stappen":[["Meet us","At our stand in Lyon, or in our showroom in Uddel, the Netherlands."],["Choose your showroom","We help you pick the models that fit your market and your customers."],["Learn and sell","We train your team, and you order online in Passion Partners from day one."]],"lyonKop":"Meet us in Lyon","lyon":"<b>Piscine Global Europe<\/b> · Eurexpo Lyon<br>17-20 November 2026<br><b>Hall 6 · Stand 6G16<\/b><br>Your free badge: pass.piscine-global.com","contactKop":"Let's talk","adres":"Passion Spas · Meervelderweg 52 · 3888 NK Uddel · The Netherlands"},"fr":{"beursKop":"Rendez-vous à Lyon","beursRegel":"Piscine Global Europe<br>17-20 novembre 2026 · Hall 6 · Stand 6G16","kicker":"Devenez partenaire Passion Spas","h1":"Les spas les plus faciles à vendre.<br><span>Avec la meilleure marge.<\/span>","intro":"Nous sommes convaincus que Passion Spas possède le meilleur système de vente de spas au monde. Plus de 50 modèles et une présentation riche en caractéristiques uniques répondent à chaque motivation d'achat. Quelle que soit la raison qui amène un client dans votre magasin, vous avez toujours le bon argument.","cijfers":[["12 000","spas vendus chaque année dans le monde"],["1 500","spas par an dans notre propre showroom aux Pays-Bas"],["1 000+","spas en stock à Uddel, aux Pays-Bas"],["35+","ans d'expérience dans la vente de spas"]],"waarom":"Pourquoi nos partenaires choisissent <i>Passion Spas<\/i>","kaarten":[["Un spa pour chaque client","Plus de 50 modèles dans les collections Pure, Modern, Signature et Exclusive, ainsi que des spas de nage pour le sport et le fitness. Chaque motivation d'achat, chaque budget."],["Facile à apprendre, facile à vendre","Notre programme apprend à votre équipe à présenter 50 spas en une journée. Nous formons vos vendeurs grâce à l'expérience de notre propre showroom, que nous appelons fièrement le plus grand showroom de spas au monde."],["Plus de ventes, une meilleure marge","Des caractéristiques uniques que vos clients trouvent uniquement chez vous. Vous vendez sur la valeur, comme il se doit."],["Un stock visible en temps réel","Dans le portail Passion Partners, vous voyez le stock par modèle et par couleur, les conteneurs en route et votre propre liste de prix. Commandez 24h/24, dans votre langue."],["Rapide, depuis l'Europe","Plus de 1 000 spas en stock à Uddel, aux Pays-Bas. Enlèvement ou livraison, ou un conteneur complet directement depuis l'usine."],["À vos côtés sur le long terme","Pièces d'origine, assistance produit aussi longtemps que votre client possède son spa, et plus de 35 ans d'expérience derrière chaque Passion Spas."]],"citaat":"Exposez-en 10,<br><span>vendez-en 100.<\/span>","citaatSub":"Un bon partenaire vend 10 spas par modèle d'exposition. Les meilleurs en vendent 20. Nous vous montrons comment.","psKop":"Six raisons pour lesquelles vos clients <i>disent oui<\/i>","ps":[["Pleasing Massage","Un massage qui fait la différence","Soft Tissue Massage, Lumbar Support et Aquarolling, développés avec des kinésithérapeutes. River Swim System dans nos spas de nage."],["Planet Friendly","Des coûts d'utilisation maîtrisés","Hybrid Heating, triple isolation et couverture renforcée : une consommation d'énergie réduite, toute l'année."],["Perfect Water","Une eau limpide, sans effort","Filtration de l'eau à 100 %, ozone et système d'entretien Synergy. Votre client profite, tout simplement."],["Professional Design","Un spa dont on est fier","Éclairage LED périphérique, cascades, lignes épurées de la collection Modern et son Bluetooth."],["Precision Made","Conçu pour durer","Cuve en acrylique stratifié, structure All-Weather qui reste solide en milieu humide et fond Everlasting."],["Protection for you","Une marque qui reste","Le Protection Plan : l'assurance d'une marque forte et d'une entreprise forte de plus de 35 ans d'expérience."]],"portaalKop":"Passion Partners : votre propre portail","portaal":["Stock en temps réel par modèle et par couleur, avec la date d'arrivée de ce qui est en route","Votre liste de prix partenaire et toute la documentation produit","Réservez avec un acompte de 30 % ; le solde à l'arrivée de votre spa","Composez un conteneur complet, expédié directement de l'usine chez vous","Suivez chaque commande dans My spas","En français, anglais, allemand, italien et néerlandais"],"stappenKop":"Devenez partenaire en trois étapes","stappen":[["Rencontrons-nous","Sur notre stand à Lyon, ou dans notre showroom à Uddel, aux Pays-Bas."],["Composez votre showroom","Nous vous aidons à choisir les modèles adaptés à votre marché et à vos clients."],["Apprenez et vendez","Nous formons votre équipe, et vous commandez en ligne dans Passion Partners dès le premier jour."]],"lyonKop":"Rendez-vous à Lyon","lyon":"<b>Piscine Global Europe<\/b> · Eurexpo Lyon<br>17-20 novembre 2026<br><b>Hall 6 · Stand 6G16<\/b><br>Votre badge gratuit : pass.piscine-global.com","contactKop":"Parlons-en","adres":"Passion Spas · Meervelderweg 52 · 3888 NK Uddel · Pays-Bas"},"nl":{"beursKop":"Ontmoet ons in Lyon","beursRegel":"Piscine Global Europe<br>17-20 november 2026 · Hal 6 · Stand 6G16","kicker":"Word partner van Passion Spas","h1":"De makkelijkst verkopende spa's.<br><span>Met de beste marge.<\/span>","intro":"Wij geloven dat Passion Spas het beste verkoopsysteem voor spa's ter wereld heeft. Meer dan 50 modellen en een presentatie vol unieke features spreken elk koopmotief aan. Wat een klant ook naar uw winkel brengt, u heeft altijd het juiste verhaal.","cijfers":[["12.000","spa's per jaar verkocht, wereldwijd"],["1.500","spa's per jaar in onze eigen showroom in Nederland"],["1.000+","spa's op voorraad in Uddel"],["35+","jaar ervaring in de verkoop van spa's"]],"waarom":"Waarom partners kiezen voor <i>Passion Spas<\/i>","kaarten":[["Een spa voor elke klant","Meer dan 50 modellen in de collecties Pure, Modern, Signature en Exclusive, plus zwemspa's voor sport en fitness. Voor elk koopmotief en elk budget."],["Makkelijk te leren, makkelijk te verkopen","Met ons programma leert uw team in één dag 50 spa's te presenteren. Wij trainen uw verkopers met de ervaring van onze eigen showroom, die wij met trots de grootste spashowroom ter wereld noemen."],["Meer verkoop, betere marge","Unieke features die uw klanten alleen bij u vinden. Zo verkoopt u op waarde, zoals het hoort."],["Voorraad die u ziet","In het portaal Passion Partners ziet u live de voorraad per model en kleur, de containers die onderweg zijn en uw eigen prijslijst. Bestel 24/7, in uw eigen taal."],["Snel, vanuit Europa","1.000+ spa's op voorraad in Uddel. Zelf ophalen of laten bezorgen, of een volle container rechtstreeks vanuit de fabriek."],["Voor de lange termijn","Originele onderdelen, productsupport zolang uw klant de spa heeft, en 35+ jaar ervaring achter elke Passion Spas."]],"citaat":"Plaats er 10,<br><span>verkoop er 100.<\/span>","citaatSub":"Een goede partner verkoopt 10 spa's per showroommodel. De beste partners verkopen er 20. Wij laten u zien hoe.","psKop":"Zes redenen waarom uw klanten <i>ja zeggen<\/i>","ps":[["Pleasing Massage","Massage die het verschil maakt","Soft Tissue Massage, Lumbar Support en Aquarolling, ontwikkeld met fysiotherapeuten. River Swim System in onze zwemspa's."],["Planet Friendly","Lage gebruikskosten","Hybrid Heating, drie lagen isolatie en een extra dikke cover houden het energieverbruik laag, het hele jaar."],["Perfect Water","Helder water, weinig moeite","100% waterfiltratie, ozon en het Synergy-waterbehandelingssysteem. Uw klant geniet gewoon."],["Professional Design","Een spa om trots op te zijn","Rondom LED-verlichting, watervallen, de strakke lijnen van de Modern-collectie en Bluetooth-geluid."],["Precision Made","Gebouwd om lang mee te gaan","Een gelamineerde acryl kuip, een All-Weather-frame dat sterk blijft in vochtige omstandigheden en een Everlasting-bodem."],["Protection for you","Een merk dat blijft","Het Protection Plan: de zekerheid van een sterk merk en een bedrijf met 35+ jaar ervaring in spa's."]],"portaalKop":"Passion Partners: uw eigen portaal","portaal":["Live voorraad per model en kleur, met de aankomstdatum van wat onderweg is","Uw eigen partnerprijslijst en alle productdocumentatie","Reserveer met 30% aanbetaling; de rest volgt als uw spa binnen is","Stel een volle container samen die rechtstreeks van de fabriek naar u komt","Volg elke bestelling onder My spas","In het Nederlands, Engels, Frans, Duits en Italiaans"],"stappenKop":"In drie stappen partner","stappen":[["Maak kennis","Op onze stand in Lyon, of in onze showroom in Uddel."],["Kies uw showroom","Wij helpen u de modellen te kiezen die passen bij uw markt en uw klanten."],["Leer en verkoop","Wij trainen uw team, en u bestelt vanaf dag één online in Passion Partners."]],"lyonKop":"Ontmoet ons in Lyon","lyon":"<b>Piscine Global Europe<\/b> · Eurexpo Lyon<br>17-20 november 2026<br><b>Hal 6 · Stand 6G16<\/b><br>Uw gratis badge: pass.piscine-global.com","contactKop":"Laten we kennismaken","adres":"Passion Spas · Meervelderweg 52 · 3888 NK Uddel · Nederland"},"de":{"beursKop":"Treffen Sie uns in Lyon","beursRegel":"Piscine Global Europe<br>17.-20. November 2026 · Halle 6 · Stand 6G16","kicker":"Werden Sie Passion Spas Partner","h1":"Spas, die sich am leichtesten verkaufen.<br><span>Mit der besten Marge.<\/span>","intro":"Wir sind überzeugt: Passion Spas hat das beste Verkaufssystem für Spas weltweit. Mehr als 50 Modelle und eine Präsentation voller einzigartiger Features sprechen jedes Kaufmotiv an. Was auch immer einen Kunden in Ihr Geschäft führt, Sie haben immer die passende Geschichte.","cijfers":[["12.000","Spas pro Jahr weltweit verkauft"],["1.500","Spas pro Jahr in unserem eigenen Showroom in den Niederlanden"],["1.000+","Spas auf Lager in Uddel, Niederlande"],["35+","Jahre Erfahrung im Spa-Handel"]],"waarom":"Warum Partner sich für <i>Passion Spas<\/i> entscheiden","kaarten":[["Ein Spa für jeden Kunden","Mehr als 50 Modelle in den Kollektionen Pure, Modern, Signature und Exclusive, dazu Swim Spas für Sport und Fitness. Für jedes Kaufmotiv und jedes Budget."],["Leicht zu lernen, leicht zu verkaufen","Mit unserem Programm lernt Ihr Team, 50 Spas an einem Tag zu präsentieren. Wir schulen Ihre Verkäufer mit der Erfahrung aus unserem eigenen Showroom, den wir stolz den größten Spa-Showroom der Welt nennen."],["Mehr Umsatz, bessere Marge","Einzigartige Features, die Ihre Kunden nur bei Ihnen finden. So verkaufen Sie über den Wert, wie es sein soll."],["Lagerbestand auf einen Blick","Im Portal Passion Partners sehen Sie den Live-Bestand pro Modell und Farbe, die Container auf dem Weg und Ihre eigene Preisliste. Bestellen Sie rund um die Uhr, in Ihrer Sprache."],["Schnell, aus Europa","Über 1.000 Spas auf Lager in Uddel, Niederlande. Abholung oder Lieferung, oder ein kompletter Container direkt ab Werk."],["Ein Partner auf lange Sicht","Originalersatzteile, Produktsupport, solange Ihr Kunde den Spa besitzt, und über 35 Jahre Erfahrung hinter jedem Passion Spas."]],"citaat":"Stellen Sie 10 aus,<br><span>verkaufen Sie 100.<\/span>","citaatSub":"Ein guter Partner verkauft 10 Spas pro Ausstellungsmodell. Die besten Partner verkaufen 20. Wir zeigen Ihnen, wie.","psKop":"Sechs Gründe, warum Ihre Kunden <i>Ja sagen<\/i>","ps":[["Pleasing Massage","Massage, die den Unterschied macht","Soft Tissue Massage, Lumbar Support und Aquarolling, entwickelt mit Physiotherapeuten. River Swim System in unseren Swim Spas."],["Planet Friendly","Niedrige Betriebskosten","Hybrid Heating, dreifache Isolierung und eine extra starke Abdeckung halten den Energieverbrauch niedrig, das ganze Jahr."],["Perfect Water","Klares Wasser, wenig Aufwand","100 % Wasserfiltration, Ozon und das Synergy-Wasserpflegesystem. Ihr Kunde genießt einfach."],["Professional Design","Ein Spa, auf den man stolz ist","Umlaufende LED-Beleuchtung, Wasserfälle, die klaren Linien der Modern-Kollektion und Bluetooth-Sound."],["Precision Made","Gebaut für lange Zeit","Eine laminierte Acrylwanne, ein All-Weather-Rahmen, der auch bei Feuchtigkeit stabil bleibt, und ein Everlasting-Boden."],["Protection for you","Eine Marke, die bleibt","Der Protection Plan: die Sicherheit einer starken Marke und eines Unternehmens mit über 35 Jahren Spa-Erfahrung."]],"portaalKop":"Passion Partners: Ihr eigenes Portal","portaal":["Live-Bestand pro Modell und Farbe, mit dem Ankunftsdatum der Ware unterwegs","Ihre eigene Partner-Preisliste und alle Produktunterlagen","Reservieren mit 30 % Anzahlung; der Rest folgt bei Ankunft Ihres Spas","Stellen Sie einen kompletten Container zusammen, der direkt ab Werk zu Ihnen kommt","Verfolgen Sie jede Bestellung unter My spas","Auf Deutsch, Englisch, Französisch, Italienisch und Niederländisch"],"stappenKop":"In drei Schritten zum Partner","stappen":[["Lernen wir uns kennen","An unserem Stand in Lyon oder in unserem Showroom in Uddel, Niederlande."],["Wählen Sie Ihren Showroom","Wir helfen Ihnen, die Modelle zu wählen, die zu Ihrem Markt und Ihren Kunden passen."],["Lernen und verkaufen","Wir schulen Ihr Team, und Sie bestellen ab dem ersten Tag online in Passion Partners."]],"lyonKop":"Treffen Sie uns in Lyon","lyon":"<b>Piscine Global Europe<\/b> · Eurexpo Lyon<br>17.-20. November 2026<br><b>Halle 6 · Stand 6G16<\/b><br>Ihr kostenloses Ticket: pass.piscine-global.com","contactKop":"Sprechen wir","adres":"Passion Spas · Meervelderweg 52 · 3888 NK Uddel · Niederlande"},"it":{"beursKop":"Incontriamoci a Lione","beursRegel":"Piscine Global Europe<br>17-20 novembre 2026 · Padiglione 6 · Stand 6G16","kicker":"Diventate partner Passion Spas","h1":"Le spa più facili da vendere.<br><span>Con il margine migliore.<\/span>","intro":"Crediamo che Passion Spas abbia il miglior sistema di vendita di spa al mondo. Oltre 50 modelli e una presentazione ricca di caratteristiche uniche rispondono a ogni motivazione d'acquisto. Qualunque sia il motivo che porta un cliente nel vostro negozio, avete sempre la storia giusta.","cijfers":[["12.000","spa vendute ogni anno nel mondo"],["1.500","spa all'anno nel nostro showroom nei Paesi Bassi"],["1.000+","spa in magazzino a Uddel, Paesi Bassi"],["35+","anni di esperienza nella vendita di spa"]],"waarom":"Perché i partner scelgono <i>Passion Spas<\/i>","kaarten":[["Una spa per ogni cliente","Oltre 50 modelli nelle collezioni Pure, Modern, Signature ed Exclusive, più swim spa per sport e fitness. Per ogni motivazione d'acquisto e ogni budget."],["Facile da imparare, facile da vendere","Il nostro programma insegna al vostro team a presentare 50 spa in un giorno. Formiamo i vostri venditori con l'esperienza del nostro showroom, che chiamiamo con orgoglio il più grande showroom di spa al mondo."],["Più vendite, margine migliore","Caratteristiche uniche che i vostri clienti trovano solo da voi. Così vendete sul valore, come deve essere."],["Magazzino sempre visibile","Nel portale Passion Partners vedete in tempo reale le scorte per modello e colore, i container in arrivo e il vostro listino prezzi. Ordinate 24 ore su 24, nella vostra lingua."],["Veloce, dall'Europa","Oltre 1.000 spa in magazzino a Uddel, nei Paesi Bassi. Ritiro o consegna, oppure un container completo direttamente dalla fabbrica."],["Al vostro fianco nel tempo","Ricambi originali, assistenza sul prodotto per tutta la vita della spa del vostro cliente e oltre 35 anni di esperienza dietro ogni Passion Spas."]],"citaat":"Esponetene 10,<br><span>vendetene 100.<\/span>","citaatSub":"Un buon partner vende 10 spa per ogni modello esposto. I migliori ne vendono 20. Vi mostriamo come.","psKop":"Sei motivi per cui i vostri clienti <i>dicono sì<\/i>","ps":[["Pleasing Massage","Un massaggio che fa la differenza","Soft Tissue Massage, Lumbar Support e Aquarolling, sviluppati con fisioterapisti. River Swim System nelle nostre swim spa."],["Planet Friendly","Costi di gestione contenuti","Hybrid Heating, tre strati di isolamento e una copertura rinforzata mantengono bassi i consumi, tutto l'anno."],["Perfect Water","Acqua limpida, senza fatica","Filtrazione dell'acqua al 100%, ozono e il sistema di trattamento Synergy. Il vostro cliente pensa solo a godersela."],["Professional Design","Una spa di cui andare fieri","Illuminazione LED perimetrale, cascate, le linee pulite della collezione Modern e audio Bluetooth."],["Precision Made","Costruita per durare","Vasca in acrilico laminato, telaio All-Weather che resta solido in ambienti umidi e fondo Everlasting."],["Protection for you","Un marchio che resta","Il Protection Plan: la sicurezza di un marchio forte e di un'azienda con oltre 35 anni di esperienza nelle spa."]],"portaalKop":"Passion Partners: il vostro portale","portaal":["Scorte in tempo reale per modello e colore, con la data di arrivo della merce in viaggio","Il vostro listino prezzi partner e tutta la documentazione di prodotto","Prenotate con un acconto del 30%; il saldo all'arrivo della vostra spa","Componete un container completo, spedito direttamente dalla fabbrica a voi","Seguite ogni ordine in My spas","In italiano, inglese, francese, tedesco e olandese"],"stappenKop":"Diventate partner in tre passi","stappen":[["Incontriamoci","Al nostro stand a Lione, o nel nostro showroom a Uddel, Paesi Bassi."],["Scegliete il vostro showroom","Vi aiutiamo a scegliere i modelli adatti al vostro mercato e ai vostri clienti."],["Imparate e vendete","Formiamo il vostro team e ordinate online in Passion Partners fin dal primo giorno."]],"lyonKop":"Incontriamoci a Lione","lyon":"<b>Piscine Global Europe<\/b> · Eurexpo Lione<br>17-20 novembre 2026<br><b>Padiglione 6 · Stand 6G16<\/b><br>Il vostro badge gratuito: pass.piscine-global.com","contactKop":"Parliamone","adres":"Passion Spas · Meervelderweg 52 · 3888 NK Uddel · Paesi Bassi"},"es":{"beursKop":"Visítenos en Lyon","beursRegel":"Piscine Global Europe<br>17-20 de noviembre de 2026 · Pabellón 6 · Stand 6G16","kicker":"Hágase partner de Passion Spas","h1":"Los spas más fáciles de vender.<br><span>Con el mejor margen.<\/span>","intro":"Creemos que Passion Spas tiene el mejor sistema de venta de spas del mundo. Más de 50 modelos y una presentación llena de características únicas responden a cada motivo de compra. Sea cual sea el motivo que trae a un cliente a su tienda, usted siempre tiene la historia adecuada.","cijfers":[["12.000","spas vendidos cada año en todo el mundo"],["1.500","spas al año en nuestro propio showroom en los Países Bajos"],["1.000+","spas en stock en Uddel, Países Bajos"],["35+","años de experiencia en la venta de spas"]],"waarom":"Por qué los partners eligen <i>Passion Spas<\/i>","kaarten":[["Un spa para cada cliente","Más de 50 modelos en las colecciones Pure, Modern, Signature y Exclusive, además de spas de nado para deporte y fitness. Para cada motivo de compra y cada presupuesto."],["Fácil de aprender, fácil de vender","Nuestro programa enseña a su equipo a presentar 50 spas en un día. Formamos a sus vendedores con la experiencia de nuestro propio showroom, que con orgullo llamamos el mayor showroom de spas del mundo."],["Más ventas, mejor margen","Características únicas que sus clientes solo encuentran en su tienda. Así vende por valor, como debe ser."],["Un stock siempre a la vista","En el portal Passion Partners ve en tiempo real el stock por modelo y color, los contenedores en camino y su propia lista de precios. Haga sus pedidos 24/7, en su idioma."],["Rápido, desde Europa","Más de 1.000 spas en stock en Uddel, Países Bajos. Recogida o entrega, o un contenedor completo directamente desde la fábrica."],["A su lado a largo plazo","Recambios originales, soporte de producto mientras su cliente tenga el spa y más de 35 años de experiencia detrás de cada Passion Spas."]],"citaat":"Exponga 10,<br><span>venda 100.<\/span>","citaatSub":"Un buen partner vende 10 spas por cada modelo expuesto. Los mejores venden 20. Le mostramos cómo.","psKop":"Seis razones por las que sus clientes <i>dicen sí<\/i>","ps":[["Pleasing Massage","Un masaje que marca la diferencia","Soft Tissue Massage, Lumbar Support y Aquarolling, desarrollados con fisioterapeutas. River Swim System en nuestros spas de nado."],["Planet Friendly","Bajos costes de uso","Hybrid Heating, triple aislamiento y una cubierta reforzada mantienen bajo el consumo de energía, todo el año."],["Perfect Water","Agua cristalina, sin esfuerzo","Filtración del agua al 100 %, ozono y el sistema de tratamiento Synergy. Su cliente simplemente disfruta."],["Professional Design","Un spa del que sentirse orgulloso","Iluminación LED perimetral, cascadas, las líneas limpias de la colección Modern y sonido Bluetooth."],["Precision Made","Hecho para durar","Vaso de acrílico laminado, estructura All-Weather que se mantiene firme en ambientes húmedos y fondo Everlasting."],["Protection for you","Una marca que permanece","El Protection Plan: la seguridad de una marca fuerte y de una empresa con más de 35 años de experiencia en spas."]],"portaalKop":"Passion Partners: su propio portal","portaal":["Stock en tiempo real por modelo y color, con la fecha de llegada de lo que está en camino","Su propia lista de precios de partner y toda la documentación del producto","Reserve con un anticipo del 30 %; el resto cuando llegue su spa","Componga un contenedor completo que va directamente de la fábrica a usted","Siga cada pedido en My spas","En inglés, francés, alemán, italiano y neerlandés"],"stappenKop":"Hágase partner en tres pasos","stappen":[["Conozcámonos","En nuestro stand en Lyon o en nuestro showroom en Uddel, Países Bajos."],["Elija su showroom","Le ayudamos a elegir los modelos que encajan con su mercado y sus clientes."],["Aprenda y venda","Formamos a su equipo y usted hace sus pedidos online en Passion Partners desde el primer día."]],"lyonKop":"Visítenos en Lyon","lyon":"<b>Piscine Global Europe<\/b> · Eurexpo Lyon<br>17-20 de noviembre de 2026<br><b>Pabellón 6 · Stand 6G16<\/b><br>Su acreditación gratuita: pass.piscine-global.com","contactKop":"Hablemos","adres":"Passion Spas · Meervelderweg 52 · 3888 NK Uddel · Países Bajos"}};
+  var FORM = {"en":{"taalnaam":"English","cta1":"Become a partner","cta2":"View the flyer (PDF)","flyerKop":"All the details in one flyer","flyerTekst":"Two pages with everything you want to know: the collections, the sales programme and how Passion Partners works.","flyerKnop":"Open the flyer (PDF)","formKop":"Become a Passion Spas partner","formIntro":"Leave your details and we will contact you soon to get to know you.","naam":"Your name","bedrijf":"Company","land":"Country","email":"E-mail","telefoon":"Phone","bericht":"Your message (optional)","kiesLand":"Choose your country","anderLand":"Other country","privacy":"We use your details only to contact you about a partnership with Passion Spas.","verstuur":"Send","bezig":"Sending…","dank":"Thank you! We have received your details and will contact you soon.","mist":"Please fill in your name, company, country and e-mail address.","emailFout":"Please check your e-mail address.","fout":"Sending needs another try. Please try again in a minute, or e-mail us at info@passionspas.com.","teVaak":"We have already received your details. We will contact you soon.","lyonKnop":"Get your free badge"},"nl":{"taalnaam":"Nederlands","cta1":"Word partner","cta2":"Bekijk de flyer (pdf)","flyerKop":"Alles in één flyer","flyerTekst":"Twee pagina's met alles wat u wilt weten: de collecties, het verkoopprogramma en hoe Passion Partners werkt.","flyerKnop":"Open de flyer (pdf)","formKop":"Word partner van Passion Spas","formIntro":"Laat uw gegevens achter en we nemen snel contact met u op om kennis te maken.","naam":"Uw naam","bedrijf":"Bedrijf","land":"Land","email":"E-mail","telefoon":"Telefoon","bericht":"Uw bericht (optioneel)","kiesLand":"Kies uw land","anderLand":"Ander land","privacy":"We gebruiken uw gegevens alleen om contact met u op te nemen over een samenwerking met Passion Spas.","verstuur":"Versturen","bezig":"Bezig met versturen…","dank":"Dank u wel! We hebben uw gegevens ontvangen en nemen snel contact met u op.","mist":"Vul uw naam, bedrijf, land en e-mailadres in.","emailFout":"Kijk uw e-mailadres nog even na.","fout":"Het versturen vraagt nog een poging. Probeer het over een minuut opnieuw, of mail ons op info@passionspas.com.","teVaak":"We hebben uw gegevens al ontvangen. We nemen snel contact met u op.","lyonKnop":"Vraag uw gratis badge aan"},"de":{"taalnaam":"Deutsch","cta1":"Partner werden","cta2":"Flyer ansehen (PDF)","flyerKop":"Alles in einem Flyer","flyerTekst":"Zwei Seiten mit allem, was Sie wissen möchten: die Kollektionen, das Verkaufsprogramm und wie Passion Partners funktioniert.","flyerKnop":"Flyer öffnen (PDF)","formKop":"Werden Sie Partner von Passion Spas","formIntro":"Hinterlassen Sie Ihre Daten, und wir melden uns bald bei Ihnen, um Sie kennenzulernen.","naam":"Ihr Name","bedrijf":"Firma","land":"Land","email":"E-Mail","telefoon":"Telefon","bericht":"Ihre Nachricht (optional)","kiesLand":"Wählen Sie Ihr Land","anderLand":"Anderes Land","privacy":"Wir verwenden Ihre Daten ausschließlich, um Sie zu einer Partnerschaft mit Passion Spas zu kontaktieren.","verstuur":"Senden","bezig":"Wird gesendet…","dank":"Vielen Dank! Wir haben Ihre Daten erhalten und melden uns bald bei Ihnen.","mist":"Bitte geben Sie Ihren Namen, Ihre Firma, Ihr Land und Ihre E-Mail-Adresse an.","emailFout":"Bitte prüfen Sie Ihre E-Mail-Adresse.","fout":"Das Senden braucht einen neuen Versuch. Bitte versuchen Sie es in einer Minute erneut oder schreiben Sie uns an info@passionspas.com.","teVaak":"Wir haben Ihre Daten bereits erhalten. Wir melden uns bald bei Ihnen.","lyonKnop":"Gratis-Badge anfordern"},"fr":{"taalnaam":"Français","cta1":"Devenir partenaire","cta2":"Voir la brochure (PDF)","flyerKop":"Tout dans une brochure","flyerTekst":"Deux pages avec tout ce que vous voulez savoir : les collections, le programme de vente et le fonctionnement de Passion Partners.","flyerKnop":"Ouvrir la brochure (PDF)","formKop":"Devenez partenaire de Passion Spas","formIntro":"Laissez vos coordonnées et nous vous contacterons rapidement pour faire connaissance.","naam":"Votre nom","bedrijf":"Société","land":"Pays","email":"E-mail","telefoon":"Téléphone","bericht":"Votre message (facultatif)","kiesLand":"Choisissez votre pays","anderLand":"Autre pays","privacy":"Nous utilisons vos coordonnées uniquement pour vous contacter au sujet d'un partenariat avec Passion Spas.","verstuur":"Envoyer","bezig":"Envoi en cours…","dank":"Merci ! Nous avons bien reçu vos coordonnées et nous vous contacterons rapidement.","mist":"Veuillez indiquer votre nom, votre société, votre pays et votre adresse e-mail.","emailFout":"Veuillez vérifier votre adresse e-mail.","fout":"L'envoi demande un nouvel essai. Réessayez dans une minute ou écrivez-nous à info@passionspas.com.","teVaak":"Nous avons déjà reçu vos coordonnées. Nous vous contacterons rapidement.","lyonKnop":"Obtenez votre badge gratuit"},"it":{"taalnaam":"Italiano","cta1":"Diventate partner","cta2":"Vedi la brochure (PDF)","flyerKop":"Tutto in una brochure","flyerTekst":"Due pagine con tutto ciò che volete sapere: le collezioni, il programma di vendita e come funziona Passion Partners.","flyerKnop":"Apri la brochure (PDF)","formKop":"Diventate partner di Passion Spas","formIntro":"Lasciateci i vostri dati e vi contatteremo presto per conoscervi.","naam":"Il vostro nome","bedrijf":"Azienda","land":"Paese","email":"E-mail","telefoon":"Telefono","bericht":"Il vostro messaggio (facoltativo)","kiesLand":"Scegliete il vostro paese","anderLand":"Altro paese","privacy":"Usiamo i vostri dati solo per contattarvi riguardo a una collaborazione con Passion Spas.","verstuur":"Invia","bezig":"Invio in corso…","dank":"Grazie! Abbiamo ricevuto i vostri dati e vi contatteremo presto.","mist":"Indicate il vostro nome, l'azienda, il paese e l'indirizzo e-mail.","emailFout":"Controllate il vostro indirizzo e-mail.","fout":"L'invio richiede un nuovo tentativo. Riprovate tra un minuto oppure scriveteci a info@passionspas.com.","teVaak":"Abbiamo già ricevuto i vostri dati. Vi contatteremo presto.","lyonKnop":"Richiedete il badge gratuito"},"es":{"taalnaam":"Español","cta1":"Hágase partner","cta2":"Ver el folleto (PDF)","flyerKop":"Todo en un folleto","flyerTekst":"Dos páginas con todo lo que quiere saber: las colecciones, el programa de ventas y cómo funciona Passion Partners.","flyerKnop":"Abrir el folleto (PDF)","formKop":"Hágase partner de Passion Spas","formIntro":"Déjenos sus datos y nos pondremos en contacto con usted muy pronto para conocernos.","naam":"Su nombre","bedrijf":"Empresa","land":"País","email":"Correo electrónico","telefoon":"Teléfono","bericht":"Su mensaje (opcional)","kiesLand":"Elija su país","anderLand":"Otro país","privacy":"Utilizamos sus datos solo para contactarle sobre una colaboración con Passion Spas.","verstuur":"Enviar","bezig":"Enviando…","dank":"¡Gracias! Hemos recibido sus datos y nos pondremos en contacto con usted muy pronto.","mist":"Indique su nombre, empresa, país y correo electrónico.","emailFout":"Revise su dirección de correo electrónico.","fout":"El envío necesita otro intento. Vuelva a intentarlo en un minuto o escríbanos a info@passionspas.com.","teVaak":"Ya hemos recibido sus datos. Nos pondremos en contacto con usted muy pronto.","lyonKnop":"Solicite su acreditación gratuita"}};
+  var TALEN = ["en","nl","de","fr","it","es"];
+  var LANDEN = ["AT","BE","BG","CH","CY","CZ","DE","DK","EE","ES","FI","FR","GB","GR","HR","HU","IE","IS","IT","LI","LT","LU","LV","MC","MT","NL","NO","PL","PT","RO","RS","SE","SI","SK","TR","UA","AD","AE","AU","CA","IL","MA","NZ","SA","US","ZA"];
+
+  /* Waar de pagina staat: partner.passionspas.com/become-partner, of op het
+     workers.dev-adres onder /dealers. De flyers, foto's en het formulier
+     hangen daar steeds onder. */
+  var basis = location.pathname.replace(/\/+$/, "");
+  var voor = /^\/dealers(\/|$)/.test(location.pathname) ? "/dealers" : "";
+
+  function bewaard(){ try { return localStorage.getItem("bp_taal") || ""; } catch(e){ return ""; } }
+  function bewaar(t){ try { localStorage.setItem("bp_taal", t); } catch(e){} }
+  var vraag = (new URLSearchParams(location.search).get("lang") || "").toLowerCase().slice(0,2);
+  var browser = String((navigator.languages && navigator.languages[0]) || navigator.language || "").toLowerCase().slice(0,2);
+  var taal = TALEN.indexOf(vraag) >= 0 ? vraag : TALEN.indexOf(bewaard()) >= 0 ? bewaard() : TALEN.indexOf(browser) >= 0 ? browser : "en";
+
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+  var KLEUREN = ["var(--rood)","var(--blauw)","var(--oranje)","var(--groen)","var(--zwart)","var(--rood)"];
+
+  function teken(){
+    var t = Object.assign({}, FLYER[taal] || FLYER.en, FORM[taal] || FORM.en);
+    document.documentElement.lang = taal;
+    document.title = t.kicker + " - Passion Spas";
+    document.querySelectorAll("[data-t]").forEach(function(el){ el.textContent = t[el.getAttribute("data-t")] || ""; });
+    // Elke knop zegt bij aanwijzen wat hij doet, in de taal van de bezoeker.
+    document.querySelectorAll(".knop[data-t]").forEach(function(el){ el.title = el.textContent; });
+    // Teksten uit de flyer met opmaak (een rood woord, een regelafbreking); vaste bron, geen invoer van bezoekers.
+    document.querySelectorAll("[data-h]").forEach(function(el){ el.innerHTML = t[el.getAttribute("data-h")] || ""; });
+    document.getElementById("cijfers").innerHTML = t.cijfers.map(function(c){ return "<div><div><b>" + esc(c[0]) + "</b><span>" + esc(c[1]) + "</span></div></div>"; }).join("");
+    document.getElementById("kaarten").innerHTML = t.kaarten.map(function(k, i){ return '<div class="kaart" style="--c:' + KLEUREN[i] + '"><h3>' + esc(k[0]) + "</h3><p>" + esc(k[1]) + "</p></div>"; }).join("");
+    document.getElementById("ps").innerHTML = t.ps.map(function(p, i){ return '<div class="p" style="--c:' + KLEUREN[i] + '"><small>' + esc(p[0]) + "</small><h3>" + esc(p[1]) + "</h3><p>" + esc(p[2]) + "</p></div>"; }).join("");
+    document.getElementById("portaal").innerHTML = t.portaal.map(function(r){ return "<li>" + esc(r) + "</li>"; }).join("");
+    document.getElementById("stappen").innerHTML = t.stappen.map(function(s, i){ return '<div class="stap"><b class="n">' + (i + 1) + "</b><div><h5>" + esc(s[0]) + "</h5><p>" + esc(s[1]) + "</p></div></div>"; }).join("");
+    document.querySelectorAll(".flyerLink").forEach(function(a){ a.href = basis + "/flyer/" + taal + ".pdf"; });
+    document.getElementById("talen").innerHTML = TALEN.map(function(c){
+      return '<button type="button" data-taal="' + c + '" class="' + (c === taal ? "aan" : "") + '" lang="' + c + '" title="' + esc(FORM[c].taalnaam) + '">' + esc(FORM[c].taalnaam) + "</button>";
+    }).join("");
+    landen(t);
+  }
+
+  function landen(t){
+    var sel = document.getElementById("fLand"), was = sel.value;
+    var namen = null;
+    try { namen = new Intl.DisplayNames([taal], { type: "region" }); } catch(e){}
+    var lijst = LANDEN.map(function(c){ var n = c; try { n = (namen && namen.of(c)) || c; } catch(e){} return { c: c, n: n }; });
+    lijst.sort(function(a, b){ return a.n.localeCompare(b.n, taal); });
+    sel.innerHTML = '<option value="">' + esc(t.kiesLand) + "</option>" +
+      lijst.map(function(x){ return '<option value="' + x.c + '">' + esc(x.n) + "</option>"; }).join("") +
+      '<option value="XX">' + esc(t.anderLand) + "</option>";
+    sel.value = was;
+  }
+
+  document.getElementById("logo").src = voor + "/logo.png";
+  document.querySelectorAll("[data-img]").forEach(function(img){ img.src = basis + "/img/" + img.getAttribute("data-img") + ".jpg"; img.loading = "lazy"; });
+  document.getElementById("talen").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-taal]");
+    if (!b) return;
+    taal = b.getAttribute("data-taal"); bewaar(taal); teken();
+  });
+  teken();
+
+  // Het formulier
+  var begin = Date.now(), bezig = false;
+  var form = document.getElementById("formulier"), melding = document.getElementById("melding");
+  function zeg(tekst, fout){ melding.textContent = tekst || ""; melding.className = fout ? "fout" : ""; }
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    if (bezig) return;
+    var t = Object.assign({}, FORM.en, FORM[taal] || {});
+    var v = function(id){ return document.getElementById(id).value.trim(); };
+    var gegevens = { naam: v("fNaam"), bedrijf: v("fBedrijf"), land: v("fLand"), email: v("fEmail"), telefoon: v("fTelefoon"),
+                     bericht: v("fBericht"), website: v("fWebsite"), taal: taal, duur: Date.now() - begin };
+    if (!gegevens.naam || !gegevens.bedrijf || !gegevens.land || !gegevens.email) { zeg(t.mist, true); return; }
+    if (!/^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i.test(gegevens.email)) { zeg(t.emailFout, true); document.getElementById("fEmail").focus(); return; }
+    bezig = true;
+    var knop = form.querySelector(".verzend"); knop.disabled = true; knop.textContent = t.bezig; zeg("");
+    fetch(basis + "/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gegevens) })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return { status: r.status, j: j }; }); })
+      .then(function(a){
+        if (a.status === 200 && a.j.ok) { form.classList.add("klaar"); form.scrollIntoView({ block: "center" }); return; }
+        if (a.status === 429) { form.classList.add("klaar"); form.querySelector(".dank span").textContent = t.teVaak; return; }
+        if (a.j && a.j.error === "email") { zeg(t.emailFout, true); return; }
+        if (a.j && a.j.error === "velden") { zeg(t.mist, true); return; }
+        zeg(t.fout, true);
+      })
+      .catch(function(){ zeg(t.fout, true); })
+      .then(function(){ bezig = false; knop.disabled = false; knop.textContent = t.verstuur; });
+  });
+})();
+</script>
+</body>
+</html>
