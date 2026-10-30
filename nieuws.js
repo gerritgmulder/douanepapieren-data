@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "voorraad.html", soort: "beter",
+      titel: "Schip volgens Merzario",
+      wat: "Bij Binnenkomende schepen staat nu ook het schip als de invoice het niet noemt, zoals bij 364-365 Devine (EVER GENIUS)." },
+    {
       datum: "2026-10-30", bestand: "bakwagen.html", soort: "beter",
       titel: "Tekenen, foto's en aanpassen",
       wat: "De klant tekent nu in een groot venster over het hele scherm, dus het scherm schuift niet meer mee. Foto's kun je maken of uit de galerij kiezen, meerdere tegelijk, en een foto ook weer weghalen. Na het afmelden kan de chauffeur nog alles aanpassen; de handtekening blijft dan staan." },

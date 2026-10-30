@@ -2354,7 +2354,8 @@ function renderOvShips(){
        blijft ernaast staan voor wie ermee belt. */
     html+="<tr class='ovShipRow' data-k='"+esc(key)+"' style='cursor:pointer'>"+
       "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(ref||"-")+"</b></td>"+
-      "<td style='font-size:12px;color:var(--muted)'>"+esc(s.vessel||"-")+"</td>"+
+      /* Noemt de invoice geen schip, dan het schip volgens Merzario (30 okt 2026, Devine 364-365). */
+      "<td style='font-size:12px;color:var(--muted)'>"+esc(s.vessel||(s.track&&s.track.vessel?s.track.vessel+(s.track.voyage?" / "+s.track.voyage:""):"")||"-")+"</td>"+
       "<td>"+(s.eta?esc(datumNL(s.eta)):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
       "<td>"+n+" spa's</td></tr>";
     if(open){
