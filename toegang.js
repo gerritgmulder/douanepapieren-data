@@ -165,16 +165,19 @@
       "dolf", "fonteynbot", "gerrit",
     ],
     /* Voorstel maken (Gerrit, 30 okt 2026): een voorstel begint in het
-       Dashboard en de klant bevestigt eerst zijn gegevens. "Alle adviseurs":
-       iedereen die tussen mei en oktober 2026 offertes maakte in Logic4,
-       plus de spa-adviseurs van Passion Partners. Julia logt in als
-       julia.de.nijs, Niels als niels_vdl, Bart als bart.vdb.
+       Dashboard en de klant bevestigt eerst zijn gegevens. Straks alle
+       adviseurs: iedereen die tussen mei en oktober 2026 offertes maakte in
+       Logic4, plus de spa-adviseurs. Julia logt in als julia.de.nijs, Niels
+       als niels_vdl, Bart als bart.vdb.
        voorstel-beheer ziet de voorstellen van iedereen. */
     "voorstel-maken": [
-      "ahmed", "andre", "arno", "bart.vdb", "bert", "bertjan", "chantal", "dali",
-      "danique", "dolf", "don", "edwin", "fonteynbot", "gerrit", "gretha", "joppe",
-      "julia", "julia.de.nijs", "kevin", "kim", "luis", "luuk", "melissa", "niels_vdl",
-      "patrick", "rosalie", "sidney", "tim", "yamen", "yves",
+      /* Eerst alleen de beheerlaag (Gerrit, 31 okt 2026: "laat hem eerst
+         alleen voor mij werken"). Daarna de adviseurs, zie de lijst in de
+         memory voorstel-maken-tegel: ahmed, andre, arno, bart.vdb, bert,
+         bertjan, chantal, dali, danique, don, edwin, gretha, joppe, julia,
+         julia.de.nijs, kevin, kim, luis, luuk, melissa, niels_vdl, patrick,
+         rosalie, sidney, tim, yamen, yves. */
+      "dolf", "fonteynbot", "gerrit",
     ],
     "voorstel-beheer": [
       "dolf", "fonteynbot", "gerrit",

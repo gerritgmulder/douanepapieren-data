@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-31", bestand: "voorstel-maken.html", soort: "nieuw",
+      titel: "Voorstel maken",
+      wat:   "Een voorstel begint nu in het Dashboard. Je vult de gegevens van de klant in en stuurt de mail Bevestig je gegevens. Zodra de klant op Klopt klikt, staat het voorstel in Logic4 en vul je de regels, prijzen en levering in."
+    },
+    {
       datum: "2026-10-30", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "Aanmeldingen via de website",
       wat: "Bedrijven die op partner.passionspas.com/become-partner laten weten dat ze partner willen worden, staan bovenaan in het blok Nieuwe aanmeldingen. Met Maak relatie opent het venster voor een nieuwe partner al ingevuld, met Arno als adviseur." },
