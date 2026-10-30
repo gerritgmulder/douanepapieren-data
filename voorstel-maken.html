@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("voorstel-maken", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Voorstel maken</h2><p style="color:#6b7280">Deze tegel is voor de adviseurs.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voorstel maken - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ═════════════════════════════════════════════════════════════════
+     VOORSTEL MAKEN - de plek waar een voorstel voor een klant ontstaat
+
+     Gerrit (30 okt 2026): niemand maakt nog een offerte in Logic4. Een
+     voorstel begint hier: klantgegevens, dan de mail "Bevestig je gegevens",
+     en pas als de klant op "Klopt" heeft geklikt (of het zelf heeft
+     aangepast) komt de offerte in Logic4 en kunnen er regels bij. Alles wat
+     het offertescherm van Logic4 heeft, kan hier ook.
+
+     De motor staat in data-worker/src/voorstel.js (routes /voorstel/...),
+     de pagina voor de klant op /bevestig.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ═════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --rood:#b91c1c; --oranje:#b45309; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1100px;margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.kaart h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--groen);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.kaart h2 .rechts{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.stappen{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stap{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:9px 12px;font-size:12.5px;color:var(--grijs)}
+.stap b{display:block;color:var(--ink);font-size:13px;white-space:nowrap}
+.stap.nu{border-color:var(--lime);box-shadow:0 0 0 2px #8bc53f33}.stap.klaar{background:#f0f7e8;border-color:#cfe4b5}
+.raster{display:grid;grid-template-columns:repeat(6,1fr);gap:8px 10px}
+.raster > div{min-width:0}
+.s1{grid-column:span 1}.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s6{grid-column:span 6}
+@media(max-width:760px){.raster{grid-template-columns:repeat(2,1fr)}.s1,.s2,.s3{grid-column:span 1}.s4,.s6{grid-column:span 2}.stappen{grid-template-columns:1fr}}
+label.l{display:block;font-size:11px;color:var(--grijs);margin:0 0 3px;white-space:nowrap}
+input,select,textarea{width:100%;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--rand);border-radius:8px;background:#fff;color:var(--ink)}
+input:disabled,select:disabled,textarea:disabled{background:#f7f7f4;color:#4b5563}
+textarea{min-height:64px;resize:vertical}
+.vink{display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0}.vink input{width:auto}
+.knoppen{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+button{font:inherit;font-size:13px;border-radius:9px;padding:8px 14px;cursor:pointer;border:1px solid var(--rand);background:#fff;color:var(--ink);white-space:nowrap}
+button.doe{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+button.klein{padding:4px 9px;font-size:12px}
+button:disabled{opacity:.5;cursor:default}
+.melding{font-size:12.5px;min-height:16px}.melding.fout{color:var(--rood)}.melding.goed{color:#15803d}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.chip.concept{background:#f3f4f6;color:#4b5563}.chip.wacht{background:#fef3c7;color:#92400e}
+.chip.bevestigd{background:#dbeafe;color:#1d4ed8}.chip.in-logic4{background:#dcfce7;color:#15803d}.chip.gesloten{background:#f3f4f6;color:#9ca3af}
+.lijst{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+.lijst th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs);padding:6px 8px;border-bottom:1px solid var(--rand);white-space:nowrap}
+.lijst td{padding:7px 8px;border-bottom:1px solid #f0f0ea;vertical-align:middle;overflow-wrap:break-word}
+.lijst tr.rij{cursor:pointer}.lijst tr.rij:hover td{background:#f8faf5}
+.regels{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+.regels th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--grijs);padding:5px 4px;border-bottom:1px solid var(--rand);white-space:nowrap}
+.regels td{padding:5px 4px;border-bottom:1px solid #f0f0ea;vertical-align:middle;overflow-wrap:break-word}
+.regels td input{padding:5px 6px;font-size:12.5px}
+.regels .getal{text-align:right}
+.regels tr.weg td{color:#9ca3af;text-decoration:line-through}
+.regels tr.weg td:last-child{text-decoration:none}
+@media(max-width:760px){.regels .smal{display:none}}
+.slot{border:1px dashed #d1d5db;border-radius:10px;padding:16px;text-align:center;color:var(--grijs);background:#fafaf7}
+.zoek{position:relative}
+.treffers{position:absolute;left:0;right:0;top:100%;z-index:5;background:#fff;border:1px solid var(--rand);border-radius:8px;box-shadow:0 8px 24px #0002;max-height:300px;overflow:auto}
+.treffers div{padding:7px 10px;cursor:pointer;border-bottom:1px solid #f3f3ef}.treffers div:hover{background:#f0f7e8}
+.treffers small{color:var(--grijs)}
+.totaal{display:grid;grid-template-columns:auto auto;gap:3px 18px;justify-content:end;font-size:13px;margin-top:10px}
+.totaal span:nth-child(odd){color:var(--grijs);text-align:right}.totaal span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+.totaal .groot{font-weight:700;font-size:14px;color:var(--ink)}
+.log{font-size:12px;color:var(--grijs);line-height:1.6;max-height:180px;overflow:auto}
+.verschil{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:12.5px}
+.verschil b{color:var(--oranje)}
+.verberg{display:none}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>📝 Voorstel maken</h1>
+  <button type="button" class="fp-kop-knop" id="lijstKnop" title="Het Dashboard laat al je voorstellen zien">Mijn voorstellen</button>
+  <button type="button" class="fp-kop-knop" id="nieuwKnop" title="Het Dashboard begint een nieuw voorstel met lege klantgegevens">+ Nieuw voorstel</button>
+</header>
+<main id="vak"></main>
+
+<script>
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+/* Lokaal proberen kan met ?w=http://localhost:8787 (alleen op localhost). */
+var W = (location.hostname === "localhost" && new URLSearchParams(location.search).get("w")) || "https://fonteyn-data-store.g-mulder.workers.dev";
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function $(id){ return document.getElementById(id); }
+function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function geld(v){ return "€ "+(Number(v)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function wanneer(ts){ if(!ts) return ""; var d=new Date(ts); return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
+async function api(pad, body){
+  var r = await fetch(W+pad, { method: body ? "POST" : "GET", headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" }, body: body ? JSON.stringify(body) : undefined });
+  var j = await r.json().catch(function(){ return null; });
+  if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("Het Dashboard wacht nog op antwoord (" + r.status + "). Probeer het zo nog eens."));
+  return j;
+}
+function log(actie, detail){ try{ if (window.fpLog) window.fpLog(actie, detail||""); }catch(e){} }
+var STATUS = { "concept":"Concept", "wacht":"Wacht op de klant", "bevestigd":"Bevestigd", "in-logic4":"Bezig", "gesloten":"Gesloten" };
+
+/* ── Overzicht ───────────────────────────────────────────────────────── */
+var alleTonen = false;
+async function overzicht(){
+  history.replaceState(null, "", location.pathname + (location.search.indexOf("w=")>=0 ? "?w="+encodeURIComponent(W) : ""));
+  $("vak").innerHTML = '<div class="kaart"><p class="lead">Even laden…</p></div>';
+  try{
+    var j = await api("/voorstel/lijst" + (alleTonen ? "?alle=1" : ""));
+    var l = j.voorstellen || [];
+    $("vak").innerHTML = '<div class="kaart"><h2>Voorstellen' +
+      (j.beheer ? '<span class="rechts"><label class="vink"><input type="checkbox" id="alleV"'+(alleTonen?' checked':'')+'> Van iedereen</label></span>' : '') + '</h2>' +
+      '<p class="lead">Een voorstel begint met de gegevens van de klant. De klant bevestigt ze via een mail; daarna vul je het voorstel verder in.</p>' +
+      (l.length ? '<table class="lijst"><colgroup><col style="width:28%"><col style="width:16%"><col style="width:18%"><col style="width:14%"><col style="width:12%"><col style="width:12%"></colgroup>' +
+        '<thead><tr><th>Klant</th><th>Plaats</th><th>Status</th><th>Logic4</th><th>Adviseur</th><th>Gewijzigd</th></tr></thead><tbody>' +
+        l.map(function(v){ return '<tr class="rij" data-id="'+esc(v.id)+'"><td><b>'+esc(v.klant||"(nog zonder naam)")+'</b><br><small style="color:#6b7280">'+esc(v.email)+'</small></td><td>'+esc(v.plaats)+'</td>' +
+          '<td><span class="chip '+esc(v.status)+'">'+esc(STATUS[v.status]||v.status)+'</span>'+(v.aangepast?' <span title="De klant heeft de gegevens zelf aangepast">✎</span>':'')+'</td>' +
+          '<td>'+(v.orderid?esc(v.orderid):'')+'</td><td>'+esc(String(v.adviseur||"").replace(/@.*/,""))+'</td><td>'+esc(wanneer(v.gewijzigd))+'</td></tr>'; }).join("") + '</tbody></table>'
+        : '<div class="slot">Nog geen voorstellen. Begin met <b>+ Nieuw voorstel</b>.</div>') + '</div>';
+    Array.prototype.forEach.call(document.querySelectorAll("tr.rij"), function(tr){ tr.onclick = function(){ openen(tr.dataset.id); }; });
+    if ($("alleV")) $("alleV").onchange = function(){ alleTonen = this.checked; overzicht(); };
+  }catch(e){ $("vak").innerHTML = '<div class="kaart"><p class="melding fout">'+esc(e.message)+'</p></div>'; }
+}
+
+/* ── Eén voorstel ─────────────────────────────────────────────────────── */
+var V = null, ORDER = null, KEUZES = null, IKMW = null, EERDER = null;
+async function keuzesLaden(){
+  if (KEUZES) return KEUZES;
+  try { var j = await api("/voorstel/keuzes"); KEUZES = j.keuzes || {}; IKMW = j.ikMedewerker; } catch(e){ KEUZES = {}; }
+  return KEUZES;
+}
+async function openen(id){
+  $("vak").innerHTML = '<div class="kaart"><p class="lead">Even laden…</p></div>';
+  try{
+    var j = await api("/voorstel?id="+encodeURIComponent(id));
+    V = j.voorstel; ORDER = j.order && !j.order.fout ? j.order : null; EERDER = j.eerder || null;
+    history.replaceState(null, "", "?id="+encodeURIComponent(id) + (location.search.indexOf("w=")>=0 ? "&w="+encodeURIComponent(W) : ""));
+    await keuzesLaden();
+    teken();
+    if (j.order && j.order.fout) melding("regelMelding", "Logic4 reageert even traag: " + j.order.fout, true);
+  }catch(e){ $("vak").innerHTML = '<div class="kaart"><p class="melding fout">'+esc(e.message)+'</p></div>'; }
+}
+function nieuw(){
+  V = { id: null, status: "concept", klant: { land: "NL", aflevering: {} }, kop: {}, log: [] }; ORDER = null; EERDER = null;
+  history.replaceState(null, "", location.pathname + (location.search.indexOf("w=")>=0 ? "?w="+encodeURIComponent(W) : ""));
+  keuzesLaden().then(teken);
+  log("nieuw", "");
+}
+function melding(id, t, fout){ var m=$(id); if(!m) return; m.textContent=t||""; m.className="melding"+(t?(fout?" fout":" goed"):""); }
+
+function veld(naam, label, waarde, cls, extra){
+  return '<div class="'+(cls||"s2")+'"><label class="l" for="k_'+naam+'">'+esc(label)+'</label><input id="k_'+naam+'" data-k="'+naam+'" value="'+esc(waarde||"")+'"'+(extra||"")+'></div>';
+}
+function keuze(naam, label, lijst, waarde, cls, leeg){
+  return '<div class="'+(cls||"s2")+'"><label class="l" for="o_'+naam+'">'+esc(label)+'</label><select id="o_'+naam+'" data-o="'+naam+'"><option value="">'+esc(leeg||"")+'</option>' +
+    (lijst||[]).map(function(x){ return '<option value="'+esc(x.id)+'"'+(String(x.id)===String(waarde)?' selected':'')+'>'+esc(x.naam)+'</option>'; }).join("") + '</select></div>';
+}
+
+function teken(){
+  var k = V.klant || {}, a = k.aflevering || {};
+  var vast = V.status === "bevestigd" || V.status === "in-logic4";
+  var stap = V.status === "concept" ? 1 : V.status === "wacht" ? 2 : 3;
+  var h = '';
+  h += '<div class="stappen">' +
+    '<div class="stap '+(stap===1?'nu':'klaar')+'"><b>1. Klantgegevens</b>De adviseur vult ze in</div>' +
+    '<div class="stap '+(stap===2?'nu':stap>2?'klaar':'')+'"><b>2. De klant bevestigt</b>Via de mail "Bevestig je gegevens"</div>' +
+    '<div class="stap '+(stap===3?'nu':'')+'"><b>3. Voorstel invullen</b>Regels, prijzen en levering</div></div>';
+
+  /* Klant */
+  h += '<div class="kaart"><h2>Klant' + (V.debiteur ? '<span class="rechts">Debiteur '+esc(V.debiteur)+'</span>' : '') + '</h2>';
+  if (V.bevestigd && V.bevestigd.aangepast && (V.bevestigd.verschil||[]).length) {
+    h += '<div class="verschil"><b>De klant heeft zijn gegevens aangepast:</b><br>' + V.bevestigd.verschil.map(function(x){ return esc(x.veld)+': '+(x.was?'<s>'+esc(x.was)+'</s> ':'')+'<b>'+esc(x.wordt||"(leeg)")+'</b>'; }).join("<br>") + '</div>';
+  }
+  if (!vast) {
+    h += '<div class="raster" style="margin-bottom:10px"><div class="s3 zoek"><label class="l" for="klantZoek">Bestaande klant uit Logic4</label><input id="klantZoek" placeholder="E-mailadres of debiteurnummer" autocomplete="off"><div class="treffers verberg" id="klantTreffers"></div></div>' +
+      '<div class="s3" style="align-self:end"><span class="lead" id="klantZoekUitleg">'+(V.debiteur?'Gekoppeld aan debiteur '+esc(V.debiteur)+'. <button type="button" class="klein" id="ontkoppel" title="Het Dashboard maakt bij de bevestiging een nieuwe debiteur aan">Nieuwe klant</button>':'Nieuwe klant? Vul dan hieronder alles in.')+'</span></div></div>';
+  }
+  h += '<div class="raster">' +
+    '<div class="s1"><label class="l" for="k_aanhef">Aanhef</label><select id="k_aanhef" data-k="aanhef"><option value=""></option><option value="1"'+(k.aanhef==="1"?" selected":"")+'>De heer</option><option value="2"'+(k.aanhef==="2"?" selected":"")+'>Mevrouw</option></select></div>' +
+    veld("voornaam","Voornaam",k.voornaam,"s2") + veld("tussenvoegsel","Tussenv.",k.tussenvoegsel,"s1") + veld("achternaam","Achternaam",k.achternaam,"s2") +
+    veld("bedrijf","Bedrijfsnaam (als het een bedrijf is)",k.bedrijf,"s3") + veld("btw","Btw-nummer",k.btw,"s3") +
+    veld("straat","Straat",k.straat,"s3") + veld("huisnummer","Huisnr.",k.huisnummer,"s1") + veld("toevoeging","Toev.",k.toevoeging,"s1") + veld("land","Land",k.land||"NL","s1",' maxlength="2"') +
+    veld("postcode","Postcode",k.postcode,"s2") + veld("plaats","Plaats",k.plaats,"s4") +
+    veld("email","E-mailadres",k.email,"s2",' type="email"') + veld("telefoon","Telefoon",k.telefoon,"s2",' type="tel"') + veld("mobiel","Mobiel",k.mobiel,"s2",' type="tel"') +
+    '<div class="s6"><label class="vink"><input type="checkbox" id="k_afwijkend"'+(k.afwijkend?" checked":"")+'> Afleveren op een ander adres</label></div>' +
+    '<div class="s6 '+(k.afwijkend?'':'verberg')+'" id="aflBlok"><div class="raster">' +
+      '<div class="s2"><label class="l">Naam</label><input data-a="naam" value="'+esc(a.naam||"")+'"></div>' +
+      '<div class="s2"><label class="l">Straat</label><input data-a="straat" value="'+esc(a.straat||"")+'"></div>' +
+      '<div class="s1"><label class="l">Huisnr.</label><input data-a="huisnummer" value="'+esc(a.huisnummer||"")+'"></div>' +
+      '<div class="s1"><label class="l">Toev.</label><input data-a="toevoeging" value="'+esc(a.toevoeging||"")+'"></div>' +
+      '<div class="s2"><label class="l">Postcode</label><input data-a="postcode" value="'+esc(a.postcode||"")+'"></div>' +
+      '<div class="s3"><label class="l">Plaats</label><input data-a="plaats" value="'+esc(a.plaats||"")+'"></div>' +
+      '<div class="s1"><label class="l">Land</label><input data-a="land" maxlength="2" value="'+esc(a.land||"")+'"></div>' +
+    '</div></div></div>';
+  if (!vast) {
+    if (EERDER && !EERDER.anders) h += '<p class="lead" style="margin-top:10px">✅ Deze klant heeft precies deze gegevens al bevestigd op <b>'+esc(wanneer(EERDER.ts))+'</b>. Je kunt meteen verder.</p>';
+    else if (EERDER && EERDER.anders) h += '<p class="lead" style="margin-top:10px">De klant bevestigde op '+esc(wanneer(EERDER.ts))+' andere gegevens. Na een wijziging bevestigt de klant opnieuw.</p>';
+    h += '<div class="knoppen"><button type="button" id="klantBewaar" title="Het Dashboard bewaart de klantgegevens bij dit voorstel">Opslaan</button>' +
+      (EERDER && !EERDER.anders ? '<button type="button" class="doe" id="eerderKnop" title="Het Dashboard zet het voorstel meteen in Logic4, zonder nieuwe mail aan de klant">Al bevestigd, ga verder</button>' : '') +
+      '<button type="button" class="'+(EERDER && !EERDER.anders ? '' : 'doe')+'" id="verstuur" title="Het Dashboard stuurt de klant de mail Bevestig je gegevens, met een link naar een pagina van Fonteyn">'+(V.status==="wacht"?"Opnieuw versturen":"Verstuur ‘Bevestig je gegevens’")+'</button>' +
+      '<span class="melding" id="klantMelding"></span></div>';
+    if (V.status === "wacht" && V.verstuurd) h += '<p class="lead" style="margin-top:10px">📨 Verstuurd naar <b>'+esc(V.verstuurd.naar)+'</b> op '+esc(wanneer(V.verstuurd.ts))+'. Zodra de klant bevestigt, zie je dat hier en krijg je een bericht in je Dashboard.</p>';
+  } else {
+    h += '<p class="lead" style="margin-top:10px">✅ Bevestigd door de klant op '+esc(wanneer(V.bevestigd && V.bevestigd.ts))+'.</p>';
+  }
+  h += '</div>';
+
+  /* Kop: alles uit het bovenste deel van het offertescherm */
+  var kop = Object.assign({}, V.kop||{}, ORDER ? ORDER.kop : {});
+  var K = KEUZES || {}, T = K.types || {};
+  if (!kop.medewerker && IKMW) kop.medewerker = IKMW;
+  h += '<div class="kaart"><h2>Gegevens van het voorstel' + (V.orderid ? '<span class="rechts">Nummer in Logic4: <b>'+esc(V.orderid)+'</b></span>' : '') + '</h2>' +
+    (V.orderid ? '' : '<p class="lead">Wat je hier invult, gaat mee zodra het voorstel in Logic4 komt.</p>') +
+    '<div class="raster">' +
+    '<div class="s2"><label class="l" for="o_referentie">Uw referentie</label><input id="o_referentie" data-o="referentie" value="'+esc(kop.referentie||"")+'"></div>' +
+    '<div class="s4"><label class="l" for="o_omschrijving">Omschrijving</label><input id="o_omschrijving" data-o="omschrijving" value="'+esc(kop.omschrijving||"")+'"></div>' +
+    keuze("filiaal","Filiaal",K.filialen,kop.filiaal,"s2") + keuze("medewerker","Medewerker",K.medewerkers,kop.medewerker,"s2") +
+    keuze("transporteur","Transporteur",K.transporteurs,kop.transporteur,"s2") +
+    '<div class="s1"><label class="l" for="o_verzendkosten">Verzending (ex)</label><input id="o_verzendkosten" data-o="verzendkosten" inputmode="decimal" value="'+esc(kop.verzendkosten!=null?kop.verzendkosten:"")+'"></div>' +
+    keuze("betaalmethode","Betaalmethode",K.betaalmethoden,kop.betaalmethode,"s2") +
+    keuze("btwcode","Btw-code",K.btwcodes,kop.btwcode,"s2","Zoals bij het artikel") +
+    '<div class="s1"><label class="l" for="o_leverdatum">Ind. leverdatum</label><input id="o_leverdatum" data-o="leverdatum" type="date" value="'+esc(kop.leverdatum||"")+'"></div>' +
+    '<div class="s1"><label class="l" for="o_vervaldatum">Vervaldatum</label><input id="o_vervaldatum" data-o="vervaldatum" type="date" value="'+esc(V.vervaldatum||kop.vervaldatum||"")+'"></div>' +
+    [1,2,3,4].map(function(n){ var t = T[n] || { naam: "Type "+n, keuzes: [] }; return keuze("type"+n, t.naam, t.keuzes, kop["type"+n], "s1"); }).join("") +
+    '<div class="s6"><label class="l" for="o_memo">Order memo</label><textarea id="o_memo" data-o="memo">'+esc(kop.memo||"")+'</textarea></div>' +
+    '</div><div class="knoppen"><button type="button" id="kopBewaar" title="Het Dashboard bewaart deze gegevens'+(V.orderid?' en zet ze meteen in Logic4':'')+'">Opslaan</button><span class="melding" id="kopMelding"></span></div></div>';
+
+  /* Regels */
+  h += '<div class="kaart"><h2>Regels</h2>';
+  if (V.status !== "in-logic4") {
+    h += '<div class="slot">' + (V.status === "bevestigd"
+      ? 'De klant heeft bevestigd. Het voorstel gaat nu naar Logic4. ' + (V.logic4Fout ? '<br><span style="color:#b91c1c">'+esc(V.logic4Fout)+'</span><br><button type="button" class="doe" id="naarL4" style="margin-top:8px" title="Het Dashboard maakt de debiteur en het voorstel aan in Logic4">Opnieuw proberen</button>' : '')
+      : '🔒 Regels toevoegen kan zodra de klant zijn gegevens heeft bevestigd.') + '</div>';
+  } else {
+    h += '<div class="raster" style="margin-bottom:10px"><div class="s4 zoek"><label class="l" for="artZoek">Artikel toevoegen</label><input id="artZoek" placeholder="Artikelcode of naam" autocomplete="off"><div class="treffers verberg" id="artTreffers"></div></div>' +
+      '<div class="s1"><label class="l" for="artAantal">Aantal</label><input id="artAantal" value="1" inputmode="decimal"></div>' +
+      '<div class="s1" style="align-self:end"><span class="melding" id="regelMelding"></span></div></div>';
+    var rg = ORDER ? ORDER.regels : [];
+    h += rg.length ? '<table class="regels"><colgroup><col style="width:11%"><col><col style="width:8%"><col class="smal" style="width:11%"><col style="width:8%"><col style="width:11%"><col class="smal" style="width:6%"><col style="width:11%"><col style="width:12%"></colgroup>' +
+      '<thead><tr><th>Code</th><th>Omschrijving</th><th class="getal">Aantal</th><th class="getal smal">Bruto</th><th class="getal">Korting %</th><th class="getal">Netto</th><th class="getal smal">Btw</th><th class="getal">Totaal</th><th></th></tr></thead><tbody>' +
+      rg.map(function(r){ var w = r.vervallen;
+        return '<tr data-r="'+esc(r.id)+'" class="'+(w?'weg':'')+'"><td>'+esc(r.code)+'</td>' +
+          '<td>'+(w?esc(r.oms):'<input data-f="oms" value="'+esc(r.oms)+'">')+'</td>' +
+          '<td class="getal">'+(w?'0':'<input data-f="aantal" class="getal" inputmode="decimal" value="'+esc(r.aantal)+'">')+'</td>' +
+          '<td class="getal smal">'+esc(geld(r.bruto))+'</td>' +
+          '<td class="getal">'+(w?'':'<input data-f="korting" class="getal" inputmode="decimal" value="'+esc(r.bruto&&r.netto<r.bruto?Math.round((1-r.netto/r.bruto)*10000)/100:"")+'">')+'</td>' +
+          '<td class="getal">'+(w?'':'<input data-f="netto" class="getal" inputmode="decimal" value="'+esc(Math.round(r.netto*100)/100)+'">')+'</td>' +
+          '<td class="getal smal">'+esc(r.btw)+'%</td><td class="getal">'+esc(geld(r.netto*r.aantal))+'</td>' +
+          '<td>'+(w?'':'<button type="button" class="klein" data-bewaar title="Het Dashboard zet deze regel zo in Logic4">Opslaan</button> <button type="button" class="klein" data-weg title="Het Dashboard laat deze regel vervallen (aantal 0)">✕</button>')+'</td></tr>'; }).join("") + '</tbody></table>'
+      : '<div class="slot">Nog geen regels. Zoek hierboven een artikel.</div>';
+    if (ORDER) {
+      var t = ORDER.totaal || {};
+      h += '<div class="totaal"><span>Verzendkosten ex</span><span>'+esc(geld(t.verzend))+'</span><span>Totaal ex btw</span><span>'+esc(geld(t.ex))+'</span><span>Btw</span><span>'+esc(geld(t.btw))+'</span><span class="groot">Totaal incl. btw</span><span class="groot">'+esc(geld(t.incl))+'</span></div>';
+    }
+  }
+  h += '</div>';
+
+  /* Sluiten (zoals Verwijderen in het offertescherm van Logic4) */
+  if (V.id && V.status !== "gesloten") h += '<div class="kaart"><h2>Klaar met dit voorstel?</h2><div class="knoppen" style="margin-top:0"><input id="sluitReden" placeholder="Reden (mag leeg)" style="max-width:320px">' +
+    '<button type="button" id="sluitKnop" title="Het Dashboard sluit dit voorstel; in Logic4 komt het op Offerte gesloten">Voorstel sluiten</button><span class="melding" id="sluitMelding"></span></div></div>';
+  if (V.status === "gesloten") h += '<div class="kaart"><p class="lead" style="margin:0">Dit voorstel is gesloten.</p></div>';
+
+  /* Geschiedenis */
+  if ((V.log||[]).length) h += '<div class="kaart"><h2>Wat er gebeurde</h2><div class="log">' + V.log.slice().reverse().map(function(x){ return esc(wanneer(x.ts))+' - '+esc(String(x.wie).replace(/@.*/,""))+': '+esc(x.wat); }).join("<br>") + '</div></div>';
+
+  $("vak").innerHTML = h;
+  koppel(vast || V.status === "gesloten");
+  sluitKoppel();
+}
+
+function klantUitScherm(){
+  var k = {};
+  Array.prototype.forEach.call(document.querySelectorAll("[data-k]"), function(x){ k[x.dataset.k] = x.value; });
+  k.afwijkend = $("k_afwijkend").checked;
+  k.aflevering = {};
+  Array.prototype.forEach.call(document.querySelectorAll("[data-a]"), function(x){ k.aflevering[x.dataset.a] = x.value; });
+  return k;
+}
+function kopUitScherm(){
+  var o = {};
+  Array.prototype.forEach.call(document.querySelectorAll("[data-o]"), function(x){ o[x.dataset.o] = x.value; });
+  return o;
+}
+async function klantBewaren(){
+  var j = await api("/voorstel/klant", { id: V.id, klant: klantUitScherm(), debiteur: V.debiteur || null });
+  var nieuwId = !V.id;
+  V = j.voorstel; EERDER = j.eerder || null;
+  if (nieuwId) { history.replaceState(null, "", "?id="+encodeURIComponent(V.id) + (location.search.indexOf("w=")>=0 ? "&w="+encodeURIComponent(W) : "")); log("begonnen", V.id); }
+  return V;
+}
+
+function koppel(vast){
+  Array.prototype.forEach.call(document.querySelectorAll("[data-k],[data-a]"), function(x){ x.disabled = vast; });
+  $("k_afwijkend").disabled = vast;
+  $("k_afwijkend").onchange = function(){ $("aflBlok").classList.toggle("verberg", !this.checked); };
+
+  if (!vast) {
+    $("klantBewaar").onclick = async function(){
+      this.disabled = true;
+      try { await klantBewaren(); teken(); melding("klantMelding", "Opgeslagen."); }
+      catch(e){ melding("klantMelding", e.message, true); }
+      this.disabled = false;
+    };
+    $("verstuur").onclick = async function(){
+      this.disabled = true; melding("klantMelding", "Versturen…");
+      try {
+        await klantBewaren();
+        if (V.mist && V.mist.length) throw new Error("Vul nog in: " + V.mist.join(", ") + ".");
+        var j = await api("/voorstel/verstuur", { id: V.id, opnieuw: V.status === "wacht" });
+        V = j.voorstel; log("bevestig-verstuurd", V.id); teken();
+        melding("klantMelding", "De mail is verstuurd.");
+      } catch(e){ melding("klantMelding", e.message, true); this.disabled = false; }
+    };
+    if ($("eerderKnop")) $("eerderKnop").onclick = async function(){
+      this.disabled = true; melding("klantMelding", "Even bezig…");
+      try {
+        await klantBewaren();
+        if (!EERDER || EERDER.anders) throw new Error("De gegevens zijn net veranderd. Stuur de klant de mail Bevestig je gegevens.");
+        var j = await api("/voorstel/eerder", { id: V.id });
+        log("eerder-bevestigd", V.id);
+        openen(V.id);
+      } catch(e){ melding("klantMelding", e.message, true); this.disabled = false; }
+    };
+    if ($("ontkoppel")) $("ontkoppel").onclick = function(){ V.debiteur = null; V.klant = klantUitScherm(); teken(); };
+    zoeker($("klantZoek"), $("klantTreffers"), function(q){ return "/voorstel/klant-zoek?q="+encodeURIComponent(q); }, function(j){
+      if (j.uitleg) return '<div><small>'+esc(j.uitleg)+'</small></div>';
+      return (j.treffers||[]).map(function(t, i){ var kk=t.klant; return '<div data-i="'+i+'"><b>'+esc([kk.voornaam,kk.tussenvoegsel,kk.achternaam].filter(Boolean).join(" ")||kk.bedrijf)+'</b> <small>'+esc(t.debiteur)+' · '+esc(kk.email)+' · '+esc(kk.plaats)+'</small></div>'; }).join("") || '<div><small>Geen klant met dit adres of nummer. Vul de gegevens hieronder in.</small></div>';
+    }, function(j, i){ var t = j.treffers[i]; V.debiteur = t.debiteur; V.klant = t.klant; teken(); melding("klantMelding", "Gegevens uit Logic4 overgenomen. Kijk ze na en verstuur de mail."); });
+  }
+  $("kopBewaar").onclick = async function(){
+    this.disabled = true;
+    try {
+      if (!V.id) await klantBewaren();
+      var j = await api("/voorstel/kop", { id: V.id, kop: kopUitScherm() });
+      V = j.voorstel; if (j.order) ORDER = j.order; log("kop", V.id); teken(); melding("kopMelding", V.orderid ? "Opgeslagen en in Logic4 gezet." : "Opgeslagen.");
+    } catch(e){ melding("kopMelding", e.message, true); this.disabled = false; }
+  };
+  if ($("naarL4")) $("naarL4").onclick = async function(){
+    this.disabled = true;
+    try { await api("/voorstel/logic4", { id: V.id }); openen(V.id); } catch(e){ alertIn(e.message); this.disabled = false; }
+  };
+  if ($("artZoek")) {
+    zoeker($("artZoek"), $("artTreffers"), function(q){ return "/voorstel/artikel?q="+encodeURIComponent(q)+"&debiteur="+encodeURIComponent(V.debiteur||""); }, function(j){
+      return (j.artikelen||[]).map(function(a, i){ return '<div data-i="'+i+'"><b>'+esc(a.code)+'</b> '+esc(a.oms)+(a.prijs?' <small>'+esc(geld(a.prijs))+'</small>':'')+'</div>'; }).join("") || '<div><small>Geen artikel gevonden.</small></div>';
+    }, async function(j, i){
+      var a = j.artikelen[i];
+      melding("regelMelding", "Toevoegen…");
+      try { var r = await api("/voorstel/regel", { id: V.id, regel: { code: a.code, aantal: Number(String($("artAantal").value).replace(",", ".")) || 1 } });
+        ORDER = r.order; log("regel-erbij", a.code); teken(); melding("regelMelding", a.code + " staat erop."); }
+      catch(e){ melding("regelMelding", e.message, true); }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("tr[data-r]"), function(tr){
+      var b = tr.querySelector("[data-bewaar]"), w = tr.querySelector("[data-weg]");
+      if (b) b.onclick = async function(){
+        var r = { id: tr.dataset.r };
+        Array.prototype.forEach.call(tr.querySelectorAll("[data-f]"), function(x){ r[x.dataset.f] = x.dataset.f === "oms" ? x.value : String(x.value).replace(",", "."); });
+        var oud = (ORDER.regels||[]).find(function(x){ return String(x.id) === String(r.id); }) || {};
+        // Korting alleen gebruiken als de netto prijs zelf niet is aangepast.
+        if (r.netto === "" || Math.abs(Number(r.netto) - Number(oud.netto)) < 0.005) r.netto = ""; else r.korting = "";
+        b.disabled = true;
+        try { var j = await api("/voorstel/regel", { id: V.id, regel: r }); ORDER = j.order; log("regel-aangepast", oud.code||""); teken(); melding("regelMelding", "Opgeslagen."); }
+        catch(e){ melding("regelMelding", e.message, true); b.disabled = false; }
+      };
+      if (w) w.onclick = async function(){
+        w.disabled = true;
+        try { var j = await api("/voorstel/regel", { id: V.id, regel: { id: tr.dataset.r }, weg: true }); ORDER = j.order; log("regel-vervallen", tr.dataset.r); teken(); }
+        catch(e){ melding("regelMelding", e.message, true); w.disabled = false; }
+      };
+    });
+  }
+}
+function sluitKoppel(){
+  if (!$("sluitKnop")) return;
+  $("sluitKnop").onclick = async function(){
+    var k = this;
+    if (k.dataset.zeker !== "1") { k.dataset.zeker = "1"; k.textContent = "Ja, sluiten"; melding("sluitMelding", "Klik nog een keer om het voorstel te sluiten."); return; }
+    k.disabled = true;
+    try { var j = await api("/voorstel/sluiten", { id: V.id, reden: $("sluitReden").value }); V = j.voorstel; log("gesloten", V.id); teken(); }
+    catch(e){ melding("sluitMelding", e.message, true); k.disabled = false; }
+  };
+}
+function alertIn(t){ melding("regelMelding", t, true); }
+
+/* Zoekveld met een lijstje eronder. Wacht even tot er niet meer getypt wordt. */
+function zoeker(inp, lijst, pad, html, kies){
+  var tik = null, laatste = null;
+  inp.oninput = function(){
+    clearTimeout(tik);
+    var q = inp.value.trim();
+    if (q.length < 2) { lijst.classList.add("verberg"); return; }
+    tik = setTimeout(async function(){
+      try { var j = await api(pad(q)); laatste = j; lijst.innerHTML = html(j); lijst.classList.remove("verberg");
+        Array.prototype.forEach.call(lijst.querySelectorAll("[data-i]"), function(d){ d.onclick = function(){ lijst.classList.add("verberg"); kies(laatste, Number(d.dataset.i)); }; }); }
+      catch(e){ lijst.innerHTML = '<div><small>'+esc(e.message)+'</small></div>'; lijst.classList.remove("verberg"); }
+    }, 350);
+  };
+  inp.onblur = function(){ setTimeout(function(){ lijst.classList.add("verberg"); }, 250); };
+}
+
+$("lijstKnop").onclick = overzicht;
+$("nieuwKnop").onclick = nieuw;
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  var id = new URLSearchParams(location.search).get("id");
+  if (id) openen(id); else overzicht();
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"voorstel-maken",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

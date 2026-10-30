@@ -815,6 +815,11 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <h3>Logic4</h3>
         <p>Logic4 nagebouwd in het Dashboard: dezelfde modules, live gegevens, en per functie wat er al is en wat er nog komt.</p>
       </a>
+      <a href="voorstel-maken.html" class="tile hidden" id="tileVoorstelMaken">
+        <div class="icon">📝</div>
+        <h3>Voorstel maken</h3>
+        <p>Een voorstel begint hier. De klant bevestigt eerst zijn gegevens via een mail; daarna vul je het voorstel in en staat het in Logic4.</p>
+      </a>
       <a href="maandcontrole.html" class="tile hidden" id="tileMaandcontrole">
         <div class="icon">🧮</div>
         <h3>Maandcontrole</h3>
@@ -1532,6 +1537,9 @@ async function startBerichten(email){
           } else if (m.soort === "bakwagen-opm") {
             // Een opmerking van een bakwagenchauffeur bij levering of retour (Gerrit, 16 okt 2026).
             acties = '<a href="bakwagen.html" style="background:#144734;color:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap">Naar Bakwagenroute</a>' + knop2("brAct", "Gezien", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"');
+          } else if (m.soort === "voorstel") {
+            // De klant bevestigde (of paste aan) via "Bevestig je gegevens" (30 okt 2026).
+            acties = '<a href="' + relEsc((m.ref && m.ref.link) || "voorstel-maken.html") + '" style="background:#144734;color:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap" title="Naar het voorstel in de tegel Voorstel maken">Naar het voorstel</a>' + knop2("brAct", "Gezien", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"');
           } else if (m.soort === "pp-bellen") {
             if (m.telefoon) onder = '<div style="margin-top:4px;font-size:14px"><a href="tel:' + relEsc(String(m.telefoon).replace(/[^0-9+]/g,"")) + '" style="color:#144734;font-weight:700">' + relEsc(m.telefoon) + '</a></div>';
             acties = knop("brAct", "Gebeld", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"') + knop2("brAct", "Morgen weer", 'data-id="' + relEsc(m.id) + '" data-a="later"');

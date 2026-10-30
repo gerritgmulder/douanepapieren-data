@@ -114,6 +114,8 @@
       uit:"Wie moet een herinnering krijgen, welke stap, één knop", mobiel:"krap", tile:"tileDebiteuren" },
     { bestand:"logic4.html",         groep:"administratie-proef", ic:"📦", naam:"Logic4",
       uit:"Logic4 nagebouwd in het Dashboard: dezelfde modules, live gegevens, en wat er nog moet komen", mobiel:"pc", tile:"tileLogicVier" },
+    { bestand:"voorstel-maken.html", groep:"voorstel-maken",    ic:"📝", naam:"Voorstel maken",
+      uit:"Klant bevestigt eerst zijn gegevens, daarna het voorstel in Logic4", mobiel:"krap", tile:"tileVoorstelMaken" },
     { bestand:"maandcontrole.html",  groep:"maandcontrole", ic:"🧮", naam:"Maandcontrole",
       uit:"Elke tussenrekening op nul, aansluiting, banksaldi; rood is een lijst", mobiel:"krap", tile:"tileMaandcontrole" },
     { bestand:"herinneringen.html",  groep:"herinneringen",    ic:"✉️",  naam:"Herinneringen",

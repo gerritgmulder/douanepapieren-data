@@ -22,6 +22,7 @@
 import { ppMailVertaal, PP_MAIL_TALEN } from "./pp-mailteksten.js";
 // Service planning (Kevin, 23 okt 2026): meldingen, routes en de klantmails.
 import { svcHandle, svcRonde } from "./service.js";
+import { vsHandle } from "./voorstel.js";
 const SVC_HULP = (env) => ({ reply, l4Token, RIJ_START, rijNorm, itsTekst, ewsVerstuur,
   // DEV_OPEN bestaat alleen bij een lokale proefdraai, nooit in de uitrol.
   toegangMag: env && env.DEV_OPEN ? async (e, g, w) => !(g === "service-planning" && /thieme|kroes|putten/.test(String(w))) : toegangMag });
@@ -21211,6 +21212,9 @@ const FP_WORKER = {
        voor de klant (het token in de link is de sleutel); de rest vraagt de
        teamsleutel en de groep service-planning. Zie service.js. */
     if (url.pathname.startsWith("/service/")) return svcHandle(request, env, url, SVC_HULP(env));
+    /* Voorstel maken: de tegel en de pagina "Bevestig je gegevens" voor de klant. */
+    if (url.pathname === "/bevestig" || url.pathname === "/voorstel" || url.pathname.startsWith("/voorstel/"))
+      return vsHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij }));
     if (url.pathname.startsWith("/bakwagen/")) {
       if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);
