@@ -234,6 +234,7 @@ function teken(){
   var kop = Object.assign({}, V.kop||{}, ORDER ? ORDER.kop : {});
   var K = KEUZES || {}, T = K.types || {};
   if (!kop.medewerker && IKMW) kop.medewerker = IKMW;
+  if (!kop.type4) kop.type4 = 1;   // Magazijn: zo maakt het Dashboard het voorstel ook aan (Marcel)
   h += '<div class="kaart"><h2>Gegevens van het voorstel' + (V.orderid ? '<span class="rechts">Nummer in Logic4: <b>'+esc(V.orderid)+'</b></span>' : '') + '</h2>' +
     (kopOpen ? '' : '<div class="slot" style="margin-bottom:10px">🔒 Invullen kan zodra de klant zijn gegevens heeft bevestigd.</div>') +
     '<div class="raster">' +
