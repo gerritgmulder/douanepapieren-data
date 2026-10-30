@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Rondleiding door Voorraadbeheer",
+      wat: "Met de knop Rondleiding bovenaan loop je stap voor stap langs alle tabbladen; per stap licht het Dashboard uit wat je daar doet. Er verandert niets. Een order van € 0 (retour of omruiling) heet nu \"€ 0, niets te betalen\" in plaats van \"betaald 0%\"." },
+    {
       datum: "2026-10-30", bestand: "voorraad.html", soort: "beter",
       titel: "Schip volgens Merzario",
       wat: "Bij Binnenkomende schepen staat nu ook het schip als de invoice het niet noemt, zoals bij 364-365 Devine (EVER GENIUS)." },

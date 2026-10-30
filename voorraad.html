@@ -293,6 +293,14 @@
 /* ETA voorbij en nog niet binnen gemeld: dat moet opvallen, want zo'n
    container verdween vroeger stilletjes uit het overzicht. */
 .so-meta.so-eta-laat{color:#b45309;font-style:normal;font-weight:600}
+.rl-licht{position:fixed;z-index:9998;border-radius:12px;box-shadow:0 0 0 9999px rgba(15,23,42,.55);transition:all .25s ease;pointer-events:none;outline:3px solid #8bc53f}
+.rl-kaart{position:fixed;z-index:9999;left:50%;bottom:20px;transform:translateX(-50%);width:min(520px,calc(100vw - 32px));background:#fff;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.35);padding:16px 18px}
+.rl-kaart .rl-stap{font-size:11.5px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
+.rl-kaart h4{margin:4px 0 6px;color:#144734;font-size:16px}
+.rl-kaart p{margin:0;font-size:13.5px;line-height:1.5;color:#1f2937}
+.rl-knoppen{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+.rl-knoppen button{font:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:8px 14px;border:1px solid #d1d5db;background:#fff;color:#144734;cursor:pointer;white-space:nowrap}
+.rl-knoppen button.rl-verder{background:#144734;color:#fff;border-color:#144734}
 .so-meta.so-geenlive{color:#b91c1c;font-style:normal;font-weight:600;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 7px;margin-top:5px}
 .so-rechts{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .so-pillen{display:flex;gap:5px;flex-wrap:wrap}
@@ -495,7 +503,7 @@ mark.zoekRaak{background:#fde68a;color:inherit;padding:0 2px;border-radius:3px}
   <h1>Voorraadbeheer</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">-</b></div>
-  <button class="logout hidden" id="demoBtn" type="button" title="Laad voorbeeld-spa-orders om de tegel te demonstreren (alles blijft zoals het was)">🎬 Demo</button>
+  <button class="logout" id="demoBtn" type="button" title="Een rondleiding langs alle tabbladen: per stap licht het Dashboard uit wat je waar doet. Er verandert niets.">🎬 Rondleiding</button>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -2583,6 +2591,9 @@ function verwachtCel(r){
   return verwachtLabel(w.v, w.hand ? (w.schip ? "schip" : null) : r.verwachtBron)+(w.schip?" <span style='color:var(--muted);font-size:11px'>("+esc(w.schip)+(w.hand?", handmatig":"")+")</span>":"");
 }
 function betaalBadge(r){
+  /* Een order van € 0 (retour of omruiling, zoals 3523800) heeft niets te
+     betalen; "betaald 0%" las alsof er geld ontbrak (Gerrit, 30 okt 2026). */
+  if(r.totaal!=null && Number(r.totaal)<=0) return "<span class='pill' style='background:#f3f4f6;color:#6b7280' title='Deze order heeft een totaal van € 0, bijvoorbeeld een retour of omruiling: er is niets te betalen'>€ 0, niets te betalen</span>";
   if(r.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d'>betaald "+(r.betaaldPct!=null?r.betaaldPct+"%":"")+"</span>";
   return "<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>";
 }
@@ -6520,55 +6531,72 @@ function renderDealerResv(){
 
 
 // ─────────────────────────────────────────────────────────────────
-// 🎬 DEMO — alleen zichtbaar voor fonteynbot. Vult de Ophalen-tab met
-// voorbeeld-spa-orders + de twee overzichten met voorbeeld-reserveringen.
-// Alles in-memory: saveVoorraadState is in demo-modus uitgeschakeld,
-// dus markeren/spelen kan veilig. Verversen = echte data terug.
+// 🎬 RONDLEIDING (Gerrit, 30 okt 2026): "een echt werkende demo om uit te
+// leggen hoe die totale tegel werkt, per tabblad wat je daar exact doet,
+// voor nieuwe Fonteyn medewerkers". De rondleiding klikt alleen tabbladen
+// open en licht een stuk van het scherm uit; hij verandert niets. Een
+// tabblad dat iemand niet mag zien, slaat hij over.
 // ─────────────────────────────────────────────────────────────────
-function loadVoorraadDemo(){
-  voorraadDemoActive = true;
-  const now = new Date();
-  const iso = (d)=> d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-  const daysAgo = (n)=>{ const d=new Date(now); d.setDate(d.getDate()-n); return d; };
-  let ord = 3515700, deb = 878920000, uid = 2004500;
-  const U = { arno: uid+1, dali: uid+2, chantal: uid+3, bert: uid+4 };
-  advisorMap = { [String(U.arno)]:"Arno", [String(U.dali)]:"Dali", [String(U.chantal)]:"Chantal", [String(U.bert)]:"Bert" };
-  const mkLine = (dAgo, naam, adviseurUid, statusId, model, code, oms, aantal, debtorId) => {
-    const o = ord++;
-    return { lineId: o+"|"+code+"|1", ordernr:o, datum: iso(daysAgo(dAgo)), naam,
-      adviseur: advisorMap[String(adviseurUid)] || ("UserId "+adviseurUid),
-      statusId, status: statusId===1?"Verkooporder":"30% aanbetaald",
-      model, code, omschrijving: oms, aantal, debtorId, userId: adviseurUid };
-  };
-  const D = { spahuis: deb+1, aqua: deb+2, bakker: deb+3, jansen: deb+4 };
-  allLines = [
-    mkLine(0, "Spahuis Nederland",  U.arno,    25, "Renew",     "100430", "Passion Spa | Renew MM + oak/grey trim",          2, D.spahuis),
-    mkLine(0, "Spahuis Nederland",  U.arno,    25, "Soulmate",  "100441", "Passion Spa | Soulmate SW + grey/oak trim",       1, D.spahuis),
-    mkLine(0, "Aqua Pools & Spas",  U.dali,    1,  "Kenai",     "100634", "Grizzly Spas | Kenai Spa | Sterling White",       3, D.aqua),
-    mkLine(0, "Fam. Bakker",        U.chantal, 25, "Happy",     "100515", "Passion Spa | Happy MM + dark grey",              1, D.bakker),
-    mkLine(0, "R. Jansen",          U.bert,    1,  "Vision",    "100702", "Devine | Vision SW + grey",                       1, D.jansen),
-  ];
-  // Klant-soort: 2 al bekend (auto), 2 nog te kiezen — laat precies de flow zien
-  klantType = { [String(D.spahuis)]:"dealer", [String(D.bakker)]:"particulier" };
-  // Overzichten vullen: bestaande demo-reserveringen (in-memory)
-  reserveringen = {};
-  for (const l of allLines){
-    const t = klantType[String(l.debtorId)];
-    if (t) reserveringen[l.lineId] = resvFromLine(l, t);
+const RONDLEIDING = [
+  { titel: "Welkom bij Voorraadbeheer", tekst: "Hier zie je welke spa's er in Nederland staan, welke er onderweg zijn en voor welke klant ze bestemd zijn. Deze rondleiding loopt in een paar minuten langs alle tabbladen. Er verandert niets: je kijkt alleen mee." },
+  { doel: "#zoekAlles", titel: "Overal tegelijk zoeken", tekst: "Typ een ordernummer, klantnaam of spa-model. Het Dashboard zoekt in alle tabbladen tegelijk en laat zien waar het staat." },
+  { doel: ".tabs", titel: "De tabbladen", tekst: "Elk tabblad is een ander deel van het werk: het overzicht, de reserveringen, de inkoop, de schepen, de klanten en de voorraad. We lopen ze nu een voor een langs." },
+  { tab: "overzicht", doel: "#ovKpis", titel: "Overzicht: de kerncijfers", tekst: "Bovenaan in één oogopslag: hoeveel spa's er gereserveerd zijn, wat er in Nederland staat, wat er op zee is en wat er bij de fabriek in productie is." },
+  { tab: "overzicht", doel: "#ovBacklog", kaart: true, titel: "Overzicht: wat moet er besteld worden?", tekst: "Per model: de reserveringen tegenover wat er ligt, vaart en gemaakt wordt. Een groen vinkje betekent dat alle klanten van dat model gedekt zijn; een rood kruisje dat er nog iets bij moet. Bij Tekort zie je hoeveel. Klik een model open om het per kleur te zien." },
+  { tab: "overzicht", doel: "#ovShips", kaart: true, titel: "Overzicht: binnenkomende schepen", tekst: "Alle schepen die onderweg zijn, met hun aankomst (ETA). Die ETA haalt het Dashboard elke ochtend zelf op bij Merzario. Staat er \"ETA nog invullen\", dan kent Merzario dit schip nog niet onder deze naam. Klik een schip open om te zien welke spa's aan boord zijn." },
+  { tab: "reserveringen", doel: "#rfType", kaart: true, titel: "Reserveringen: reserveren voor een klant", tekst: "Hier zet je een spa vast voor een partner of een particulier. Kies het model en de kleur; de klant krijgt een verzoek om aan te betalen. Pas na de aanbetaling is de spa echt voor hem." },
+  { tab: "reserveringen", doel: "#resvOverview", kaart: true, titel: "Reserveringen: de actuele stand", tekst: "Elke openstaande order in Logic4 met een spa erop is een reservering. Per regel zie je de klant, de kleur, of er betaald is en wanneer de spa verwacht wordt: uit voorraad, van een schip, of uit productie. Dit ververst elk uur vanzelf." },
+  { tab: "spainkoop", doel: "#ikoCard", titel: "Inkoop naar Logic4", tekst: "Upload hier de proforma invoice van de fabriek. Het Dashboard leest hem uit en laat zien welke inkooporder het in Logic4 zou maken: spa's, kleuren, aantallen en artikelcodes. Er wordt pas iets weggeschreven als jij zelf op akkoord klikt." },
+  { tab: "ontvangst", doel: "#ciUploadBtn", kaart: true, titel: "Schepen: commercial invoice uploaden", tekst: "Komt er een schip aan, upload dan de commercial invoice: één bestand per schip. Alles wat erop staat telt meteen mee als \"op zee\", in het overzicht en bij de klanten." },
+  { tab: "ontvangst", doel: "#soDoel", titel: "Schepen: elk schip en zijn aankomst", tekst: "Per schip de trackingreferentie en de aankomst. Bij Jazzi vult het Dashboard dat zelf in. Bij andere leveranciers vul je één keer het Merzario-nummer in (begint met SC). Staat er een rode regel, dan is er geen koppeling en wordt de datum niet bijgewerkt. Is een container binnen, klik dan op Container is binnen." },
+  { tab: "ontvangst", doel: "#trkInput", kaart: true, titel: "Schepen: een zending opzoeken", tekst: "Plak een containernummer, orderreferentie of SC-nummer en het Dashboard vraagt Merzario waar die zending nu is." },
+  { tab: "ontvangst", doel: "#dieselKaart", titel: "Schepen: brandstoftoeslag", tekst: "De vervoerders sturen elke week hun percentage. Vul het hier in; het telt meteen mee in de bezorgkosten die partners in Passion Partners zien." },
+  { tab: "particulier", doel: "#partList", kaart: true, titel: "Particulier: de klanten thuis", tekst: "Alle reserveringen van particuliere klanten, met de verwachte levering. Is een spa er en wil de klant hem hebben, zet hem dan op Afroep of Inplannen." },
+  { tab: "particulier", doel: "#partBlokLijst", kaart: true, titel: "Particulier: afroep en binnengekomen", tekst: "Wat op Afroep of Inplannen staat komt hier. Vink Gepland aan zodra de afspraak met de klant staat; de regel schuift dan door." },
+  { tab: "particulier", doel: "#partGeplandLijst", kaart: true, titel: "Particulier: gepland", tekst: "De spa's waarvan de afspraak staat. Is de order in Logic4 afgehandeld, dan verdwijnt de regel vanzelf." },
+  { tab: "partner", doel: "#ptnList", kaart: true, titel: "Partner: dealers en zakelijke klanten", tekst: "Dezelfde lijst, maar dan voor dealers en bedrijven. Je ziet per order wanneer de spa's verwacht worden." },
+  { tab: "partner", doel: "#ptnAdvLijst", kaart: true, titel: "Partner: binnen per adviseur", tekst: "De spa's die binnen zijn voor een dealer, per adviseur. Zo weet elke adviseur welke dealer hij kan bellen." },
+  { tab: "partnercont", doel: "#pcList", kaart: true, titel: "Partner containers", tekst: "Hele containers die rechtstreeks van de fabriek naar een dealer gaan, buiten de voorraad in Uddel om. Klik op een ordernummer om te zien wat erin zit." },
+  { tab: "stock", doel: "#stockLijst", kaart: true, titel: "Stock: wat er nu in Uddel staat", tekst: "Per model wat er fysiek in de hallen staat, en hoeveel daarvan nog vrij is om te verkopen. Klap een model open voor de kleuren." },
+  { titel: "Klaar", tekst: "Dat is Voorraadbeheer. Vragen? Start de rondleiding gerust nog een keer met de knop Rondleiding bovenaan." },
+];
+function startRondleiding(){
+  const zichtbaar = (tab) => { const t = document.querySelector('.tab[data-tab="' + tab + '"]'); return t && t.style.display !== "none" && t.offsetParent !== null; };
+  const stappen = RONDLEIDING.filter(st => !st.tab || zichtbaar(st.tab));
+  let i = 0;
+  const licht = document.createElement("div"); licht.className = "rl-licht";
+  const kaart = document.createElement("div"); kaart.className = "rl-kaart";
+  document.body.appendChild(licht); document.body.appendChild(kaart);
+  let doelEl = null;
+  function plaats(){
+    if (!doelEl) { licht.style.cssText = "left:50%;top:40%;width:0;height:0"; return; }
+    const r = doelEl.getBoundingClientRect(), m = 8;
+    licht.style.cssText = "left:" + (r.left - m) + "px;top:" + (r.top - m) + "px;width:" + (r.width + 2 * m) + "px;height:" + (r.height + 2 * m) + "px";
   }
-  document.getElementById("dateLabel").textContent = "🎬 demo";
-  document.getElementById("resultSection").classList.remove("hidden");
-  renderAdvisorPanel();
-  renderLines();
-  renderOverviews();
-  setStatus("ok", "🎬 Demo - 5 voorbeeld-spa-regels geladen (2 klanten al gemarkeerd, 2 nog te kiezen). Alles blijft zoals het was; ververs voor echte data.");
-  document.querySelector(".tabs").scrollIntoView({ behavior:"smooth", block:"start" });
+  function toon(){
+    const st = stappen[i];
+    if (st.tab) { const t = document.querySelector('.tab[data-tab="' + st.tab + '"]'); if (t && !t.classList.contains("active")) t.click(); }
+    doelEl = null;
+    if (st.doel) { let el = document.querySelector(st.doel); if (el && st.kaart) el = el.closest(".card") || el; if (el && el.offsetParent !== null) doelEl = el; }
+    if (doelEl) doelEl.scrollIntoView({ block: "center", behavior: "smooth" });
+    kaart.innerHTML = '<div class="rl-stap">Stap ' + (i + 1) + ' van ' + stappen.length + '</div><h4>' + esc(st.titel) + '</h4><p>' + esc(st.tekst) + '</p>' +
+      '<div class="rl-knoppen"><button type="button" data-rl="stop" title="De rondleiding stoppen">Stoppen</button>' +
+      (i > 0 ? '<button type="button" data-rl="terug" title="Naar de vorige stap">Vorige</button>' : '') +
+      '<button type="button" class="rl-verder" data-rl="verder" title="' + (i < stappen.length - 1 ? "Naar de volgende stap" : "De rondleiding afsluiten") + '">' + (i < stappen.length - 1 ? "Volgende" : "Klaar") + '</button></div>';
+    kaart.querySelector('[data-rl="stop"]').onclick = stop;
+    const t = kaart.querySelector('[data-rl="terug"]'); if (t) t.onclick = function(){ i--; toon(); };
+    kaart.querySelector('[data-rl="verder"]').onclick = function(){ if (i < stappen.length - 1) { i++; toon(); } else stop(); };
+    plaats(); setTimeout(plaats, 400); setTimeout(plaats, 900);
+  }
+  function stop(){ licht.remove(); kaart.remove(); window.removeEventListener("scroll", plaats, true); window.removeEventListener("resize", plaats); document.removeEventListener("keydown", toets); }
+  function toets(e){ if (e.key === "Escape") stop(); if (e.key === "ArrowRight" && i < stappen.length - 1) { i++; toon(); } if (e.key === "ArrowLeft" && i > 0) { i--; toon(); } }
+  window.addEventListener("scroll", plaats, true); window.addEventListener("resize", plaats); document.addEventListener("keydown", toets);
+  try { if (window.fpLog) window.fpLog("rondleiding", "gestart"); } catch(e) {}
+  toon();
 }
-(function initVoorraadDemo(){
-  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
-  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+(function initRondleiding(){
   const btn = document.getElementById("demoBtn");
-  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadVoorraadDemo); }
+  if (btn) btn.addEventListener("click", startRondleiding);
 })();
 
 </script>
