@@ -38,7 +38,7 @@ const VS_GESLOTEN = 19;          // Logic4-status 'Offerte gesloten'
 /* Het voorstel echt naar de klant mailen gaat pas aan na het akkoord van
    Gerrit op de opmaak (zie memory mails-eerst-laten-zien). Tot die tijd
    werken het voorbeeld en printen wel. */
-const VS_STUUR_AAN = false;
+const VS_STUUR_AAN = true;   // Gerrit akkoord op de opmaak, 31 okt 2026
 const VS_PARTICULIER = 1;        // RelationTypeId
 const VS_ZAKELIJK = 3;
 const VS_ACTIEF = 2;             // StatusId debiteur
@@ -475,15 +475,14 @@ function vsAdviseurMail(wie) {
    komt van Marcel; tot die er is staat hier een korte versie. */
 function vsMailHtml(v, link) {
   const k = v.klant || {};
-  const aanhef = k.aanhef === "1" ? "Beste heer " + (k.tussenvoegsel ? k.tussenvoegsel + " " : "") + k.achternaam
-    : k.aanhef === "2" ? "Beste mevrouw " + (k.tussenvoegsel ? k.tussenvoegsel + " " : "") + k.achternaam
-    : "Beste " + (vsNaam(k) || "klant");
+  /* Klanten spreken we altijd aan met je (Gerrit, 31 okt 2026). */
+  const aanhef = "Beste " + (k.voornaam || vsNaam(k) || "klant");
   return "<div style='font-family:Arial,Helvetica,sans-serif;background:#f5f4ef;padding:20px'><div style='max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden'>" +
     "<div style='background:#144734;padding:16px 20px'><img src='" + VS_LOGO + "' alt='Fonteyn' style='height:44px;display:block'></div>" +
     "<div style='padding:22px'><p style='font-size:15px;line-height:1.55'>" + vsEsc(aanhef) + ",</p>" +
-    "<p style='font-size:15px;line-height:1.55'>Fijn dat u bij ons langs bent geweest. Voordat wij uw voorstel opstellen, vragen wij u even uw gegevens na te kijken. Zo weten we zeker dat alles klopt.</p>" +
+    "<p style='font-size:15px;line-height:1.55'>Fijn dat je bij ons langs bent geweest. Voordat we je voorstel maken, vragen we je even je gegevens na te kijken. Zo weten we zeker dat alles klopt.</p>" +
     "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>Bevestig je gegevens</a></p>" +
-    "<p style='font-size:13px;color:#6b7280;line-height:1.5'>Lukt het klikken op de knop? Kopieer anders deze link naar uw browser:<br>" + vsEsc(link) + "</p>" +
+    "<p style='font-size:13px;color:#6b7280;line-height:1.5'>Lukt het klikken op de knop? Kopieer anders deze link naar je browser:<br>" + vsEsc(link) + "</p>" +
     "<p style='font-size:15px;line-height:1.55'>Met vriendelijke groet,<br>Fonteyn</p></div></div></div>";
 }
 async function vsMailStuur(env, H, v, wie, onderwerp, html) {
@@ -569,21 +568,20 @@ function vsDocHtml(d, opties) {
     "<div class='twee'><div><h3>Voor</h3><p><b>" + vsEsc(k.bedrijf || vsNaam(k)) + "</b>" + (k.bedrijf ? "<br>t.a.v. " + vsEsc(vsNaam(k)) : "") + "<br>" + adres.map(vsEsc).join("<br>") + "</p>" +
       (k.afwijkend ? "<h3 style='margin-top:12px'>Afleveradres</h3><p>" + [a.naam, [a.straat, [a.huisnummer, a.toevoeging].filter(Boolean).join(" ")].join(" "), [a.postcode, a.plaats].filter(Boolean).join(" ")].filter(x => String(x).trim()).map(vsEsc).join("<br>") + "</p>" : "") + "</div>" +
     "<div><h3>Gegevens</h3><table class='geg'>" + regel("Voorstel", d.nummer) + regel("Datum", vsDatum(d.datum)) + regel("Geldig tot", d.geldigTot ? vsDatum(d.geldigTot) : "") +
-      regel("Uw referentie", d.referentie) + regel("Betaling", d.betaalmethode) + regel("Levering", d.transporteur) + regel("Gewenste leverdatum", d.leverdatum ? vsDatum(d.leverdatum) : "") +
-      regel("Uw adviseur", d.adviseur.naam) + regel("E-mail", d.adviseur.mail) + "</table></div></div>" +
+      regel("Je referentie", d.referentie) + regel("Betaling", d.betaalmethode) + regel("Levering", d.transporteur) + regel("Gewenste leverdatum", d.leverdatum ? vsDatum(d.leverdatum) : "") +
+      regel("Je adviseur", d.adviseur.naam) + regel("E-mail", d.adviseur.mail) + "</table></div></div>" +
     (d.omschrijving ? "<p style='margin-bottom:12px'><b>" + vsEsc(d.omschrijving) + "</b></p>" : "") +
     "<table class='r'><thead><tr><th>Omschrijving</th><th class='g'>Aantal</th><th class='g'>Prijs per stuk" + (incl ? " incl. btw" : " excl. btw") + "</th><th class='g'>Totaal</th></tr></thead><tbody>" + d.regels.map(rij).join("") + "</tbody></table>" +
     "<table class='tot'>" + (t.verzend ? "<tr><td>Verzendkosten excl. btw</td><td>" + vsGeld(t.verzend) + "</td></tr>" : "") +
       "<tr><td>Totaal excl. btw</td><td>" + vsGeld(t.ex) + "</td></tr><tr><td>Btw</td><td>" + vsGeld(t.btw) + "</td></tr><tr class='groot'><td>Totaal incl. btw</td><td>" + vsGeld(t.incl) + "</td></tr></table>" +
-    "<p class='klein' style='margin-top:24px'>Vragen over dit voorstel? Mail of bel uw adviseur" + (d.adviseur.naam ? ", " + vsEsc(d.adviseur.naam) : "") + ". Wij helpen u graag verder.</p>" +
+    "<p class='klein' style='margin-top:24px'>Vragen over dit voorstel? Mail of bel je adviseur" + (d.adviseur.naam ? ", " + vsEsc(d.adviseur.naam) : "") + ". We helpen je graag verder.</p>" +
     "</div></div>" + (opties.voet || "") + "</body></html>";
 }
 function vsVoorstelMailHtml(v, d, link, tekst) {
   const k = v.klant || {};
-  const aanhef = k.aanhef === "1" ? "Beste heer " + (k.tussenvoegsel ? k.tussenvoegsel + " " : "") + k.achternaam
-    : k.aanhef === "2" ? "Beste mevrouw " + (k.tussenvoegsel ? k.tussenvoegsel + " " : "") + k.achternaam
-    : "Beste " + (vsNaam(k) || "klant");
-  const alinea = String(tekst || "Hierbij ontvangt u ons voorstel. U bekijkt het via de knop hieronder; daar kunt u het ook printen of opslaan als pdf.")
+  /* Klanten spreken we altijd aan met je (Gerrit, 31 okt 2026). */
+  const aanhef = "Beste " + (k.voornaam || vsNaam(k) || "klant");
+  const alinea = String(tekst || "Hierbij ontvang je ons voorstel. Je bekijkt het via de knop hieronder; daar kun je het ook printen of opslaan als pdf.")
     .split(/\n{2,}/).map(x => "<p style='font-size:15px;line-height:1.55'>" + vsEsc(x).replace(/\n/g, "<br>") + "</p>").join("");
   return "<div style='font-family:Arial,Helvetica,sans-serif;background:#f5f4ef;padding:20px'><div style='max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden'>" +
     "<div style='background:#144734;padding:16px 20px'><img src='" + VS_LOGO + "' alt='Fonteyn' style='height:44px;display:block'></div>" +
@@ -591,7 +589,7 @@ function vsVoorstelMailHtml(v, d, link, tekst) {
     "<table style='border-collapse:collapse;margin:16px 0;font-size:14px'><tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Voorstel</td><td><b>" + vsEsc(d.nummer) + "</b></td></tr>" +
     "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Totaal incl. btw</td><td><b>" + vsGeld(d.totaal.incl) + "</b></td></tr>" +
     (d.geldigTot ? "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Geldig tot</td><td>" + vsEsc(vsDatum(d.geldigTot)) + "</td></tr>" : "") + "</table>" +
-    "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>Bekijk uw voorstel</a></p>" +
+    "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>Bekijk je voorstel</a></p>" +
     "<p style='font-size:15px;line-height:1.55'>Met vriendelijke groet,<br>" + vsEsc(d.adviseur.naam || "Fonteyn") + "<br><span style='color:#6b7280'>Fonteyn" + (d.adviseur.mail ? " &middot; " + vsEsc(d.adviseur.mail) : "") + "</span></p></div></div></div>";
 }
 
@@ -648,16 +646,16 @@ async function vsBevestigGet(env, url) {
   const db = await vsDb(env);
   const token = String(url.searchParams.get("t") || "");
   const r = token ? await db.prepare("SELECT * FROM voorstel WHERE token = ?1").bind(token).first() : null;
-  if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag uw adviseur gerust om een nieuwe link.</p>");
+  if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
   const v = vsUit(r);
   if (v.status !== "wacht") {
-    return vsPagina("Bevestig je gegevens", "<h1>Bedankt, uw gegevens zijn bevestigd</h1><p>Uw adviseur maakt nu uw voorstel. U hoort snel van ons.</p>" + vsGegevensTabel(v.klant || {}));
+    return vsPagina("Bevestig je gegevens", "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je adviseur maakt nu je voorstel. Je hoort snel van ons.</p>" + vsGegevensTabel(v.klant || {}));
   }
   if (url.searchParams.get("aanpassen") === "1") {
-    return vsPagina("Gegevens aanpassen", "<h1>Pas uw gegevens aan</h1><p>Verander wat er anders moet en klik daarna op opslaan.</p>" + vsFormulier(token, v.klant || {}));
+    return vsPagina("Gegevens aanpassen", "<h1>Pas je gegevens aan</h1><p>Verander wat er anders moet en klik daarna op opslaan.</p>" + vsFormulier(token, v.klant || {}));
   }
   return vsPagina("Bevestig je gegevens",
-    "<h1>Kloppen uw gegevens?</h1><p>Kijk ze even na. Daarna maakt uw adviseur uw voorstel.</p>" + vsGegevensTabel(v.klant || {}) +
+    "<h1>Kloppen je gegevens?</h1><p>Kijk ze even na. Daarna maakt je adviseur je voorstel.</p>" + vsGegevensTabel(v.klant || {}) +
     "<form method='post' action='/bevestig'><input type='hidden' name='t' value='" + vsEsc(token) + "'><input type='hidden' name='soort' value='klopt'><button class='knop groen' type='submit'>Klopt</button></form>" +
     "<a class='knop grijs' href='/bevestig?t=" + encodeURIComponent(token) + "&aanpassen=1'>Klopt niet, ik pas het aan</a>");
 }
@@ -667,9 +665,9 @@ async function vsBevestigPost(env, request, H) {
   const db = await vsDb(env);
   const token = String(f.get("t") || "");
   const r = token ? await db.prepare("SELECT * FROM voorstel WHERE token = ?1").bind(token).first() : null;
-  if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag uw adviseur gerust om een nieuwe link.</p>");
+  if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
   const v = vsUit(r);
-  if (v.status !== "wacht") return vsPagina("Bevestig je gegevens", "<h1>Bedankt, uw gegevens zijn bevestigd</h1><p>Uw adviseur maakt nu uw voorstel.</p>");
+  if (v.status !== "wacht") return vsPagina("Bevestig je gegevens", "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je adviseur maakt nu je voorstel.</p>");
   let verschil = [];
   if (String(f.get("soort")) === "aangepast") {
     const g = (n) => f.get(n);
@@ -694,7 +692,7 @@ async function vsBevestigPost(env, request, H) {
   try { await vsNaarLogic4(env, H, db, v, "het Dashboard"); }
   catch (e) { v.logic4Fout = String(e.message || e).slice(0, 300); vsLog(v, "het Dashboard", "Logic4 lukte nog niet: " + v.logic4Fout); await vsSchrijf(db, v); }
   await vsBericht(env, H, v, verschil).catch(() => {});
-  return vsPagina("Bedankt", "<h1>Bedankt, uw gegevens zijn bevestigd</h1><p>Uw adviseur maakt nu uw voorstel. U hoort snel van ons.</p>" + vsGegevensTabel(v.klant));
+  return vsPagina("Bedankt", "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je adviseur maakt nu je voorstel. Je hoort snel van ons.</p>" + vsGegevensTabel(v.klant));
 }
 /* Bericht in het Dashboard van de adviseur. Bij "klopt niet" met wat er
    anders is; bij "klopt" kort dat hij verder kan. */
@@ -723,7 +721,7 @@ export async function vsHandle(request, env, url, H) {
     const l = (t || pr) ? await db.prepare("SELECT id FROM voorstel_link WHERE token = ?1 AND soort = ?2").bind(t || pr, t ? "t" : "p").first() : null;
     const v = l ? await vsLees(db, l.id) : null;
     if (!v || (t && !v.verstuurdeVersie) || v.status === "gesloten")
-      return vsPagina("Voorstel", "<h1>Dit voorstel is verlopen</h1><p>Vraag uw adviseur gerust om een nieuwe link.</p>");
+      return vsPagina("Voorstel", "<h1>Dit voorstel is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
     try {
       const d = t ? v.verstuurdeVersie : await vsDocGegevens(env, H, db, v);
       return new Response(vsDocHtml(d), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
@@ -862,7 +860,7 @@ export async function vsHandle(request, env, url, H) {
       if (!v.orderid || v.status !== "in-logic4") return H.reply(409, { ok: false, error: "Versturen kan zodra het voorstel in Logic4 staat." });
       const d = await vsDocGegevens(env, H, db, v);
       if (!d.regels.length) return H.reply(400, { ok: false, error: "Zet eerst minstens één regel op het voorstel." });
-      const onderwerp = vsS(body.onderwerp, 150) || ("Uw voorstel " + d.nummer + " van Fonteyn");
+      const onderwerp = vsS(body.onderwerp, 150) || ("Je voorstel " + d.nummer + " van Fonteyn");
       const tekst = String(body.tekst || "").slice(0, 3000);
       if (body.stuur !== true) {
         return H.reply(200, { ok: true, voorbeeld: true, naar: v.klant.email, onderwerp,

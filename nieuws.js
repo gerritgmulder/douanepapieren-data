@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-31", bestand: "voorstel-maken.html", soort: "beter",
+      titel: "Voorstel naar de klant",
+      wat:   "Na het voorbeeld stuur je het voorstel met één knop naar de klant. De klant krijgt een mail met een knop naar zijn voorstel, dat hij kan printen of als pdf bewaren."
+    },
+    {
+      datum: "2026-10-31", bestand: "voorstel-maken.html", soort: "beter",
       titel: "Voorstel printen",
       wat:   "Met de knop Printen open je het voorstel zoals het nu in Logic4 staat, met logo, regels en totalen. Je kunt het printen of als pdf bewaren. Ook zie je vooraf precies welke mail de klant krijgt."
     },

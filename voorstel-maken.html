@@ -282,8 +282,8 @@ function teken(){
     var vv = V.voorstelVerstuurd || [];
     h += '<div class="kaart"><h2>Naar de klant</h2>' +
       (vv.length ? '<p class="lead">📨 ' + vv.slice().reverse().map(function(x){ return 'Verstuurd naar <b>'+esc(x.naar)+'</b> op '+esc(wanneer(x.ts))+' ('+esc(geld(x.totaal))+')'; }).join('<br>') + '</p>' : '<p class="lead">De klant krijgt een mail met een knop naar zijn voorstel. Daar kan hij het ook printen of als pdf bewaren.</p>') +
-      '<div class="raster"><div class="s6"><label class="l" for="stOnd">Onderwerp</label><input id="stOnd" placeholder="Uw voorstel '+esc(V.orderid)+' van Fonteyn"></div>' +
-      '<div class="s6"><label class="l" for="stTekst">Eigen tekst in de mail (mag leeg)</label><textarea id="stTekst" placeholder="Hierbij ontvangt u ons voorstel. U bekijkt het via de knop hieronder; daar kunt u het ook printen of opslaan als pdf."></textarea></div></div>' +
+      '<div class="raster"><div class="s6"><label class="l" for="stOnd">Onderwerp</label><input id="stOnd" placeholder="Je voorstel '+esc(V.orderid)+' van Fonteyn"></div>' +
+      '<div class="s6"><label class="l" for="stTekst">Eigen tekst in de mail (mag leeg)</label><textarea id="stTekst" placeholder="Hierbij ontvang je ons voorstel. Je bekijkt het via de knop hieronder; daar kun je het ook printen of opslaan als pdf."></textarea></div></div>' +
       '<div class="knoppen"><button type="button" id="printKnop" title="Het Dashboard opent het voorstel zoals Logic4 het nu heeft, om te printen of als pdf op te slaan">🖨 Printen</button>' +
       '<button type="button" class="doe" id="stVoorbeeld" title="Het Dashboard laat eerst zien welke mail en welk voorstel de klant krijgt">Voorbeeld en versturen</button><span class="melding" id="stMelding"></span></div>' +
       '<div id="stVak"></div></div>';
