@@ -705,6 +705,32 @@ async function svcOverzicht(env, url) {
     tijden: { start: SVC_START, eind: SVC_EIND } };
 }
 
+/* ── Zoeken in Planning Service (Kevin, 30 okt 2026) ──────────────────────
+   Op naam, plaats, adres, ITS-nummer, debiteurnummer, telefoon of mail; met
+   per melding de afspraken (datum, route, monteur), zodat de planner er
+   meteen heen kan. */
+async function svcZoek(env, q) {
+  const db = await svcDb(env);
+  q = String(q || "").trim().toLowerCase();
+  if (q.length < 2) return { ok: true, resultaten: [] };
+  const cijfers = q.replace(/\D/g, "");
+  const rijen = (await db.prepare("SELECT its, status, json FROM svc_melding ORDER BY ts DESC LIMIT 2000").all()).results || [];
+  const hits = [];
+  for (const r of rijen) {
+    const m = svcJson(r.json, {}), k = m.klant || {};
+    const tekst = [r.its, k.naam, k.plaats, k.adres, k.debiteur, k.mail, m.titel].join(" ").toLowerCase();
+    const tels = [k.tel, k.tel2].map(x => String(x || "").replace(/\D/g, "")).join(" ");
+    if (tekst.includes(q) || (cijfers.length >= 4 && tels.includes(cijfers))) hits.push({ its: r.its, status: r.status, naam: k.naam || "", plaats: k.plaats || "", debiteur: k.debiteur || null });
+    if (hits.length >= 40) break;
+  }
+  if (hits.length) {
+    const lijst = hits.map(h => h.its);
+    const afs = ((await db.prepare("SELECT a.id, a.its, a.datum, a.nr, a.status, r.monteur FROM svc_afspraak a LEFT JOIN svc_route r ON r.datum = a.datum AND r.nr = a.nr WHERE a.its IN (" + lijst.map((_, i) => "?" + (i + 1)).join(",") + ") AND a.status IN ('voorstel','akkoord','klaar') ORDER BY a.datum DESC").bind(...lijst).all()).results || []);
+    for (const h of hits) h.afspraken = afs.filter(a => a.its === h.its).map(a => ({ id: a.id, datum: a.datum, nr: Number(a.nr), status: a.status, monteur: a.monteur || "" }));
+  }
+  return { ok: true, resultaten: hits };
+}
+
 /* ── Routes klaarzetten ─────────────────────────────────────────────────── */
 async function svcRoute(env, wie, b) {
   const db = await svcDb(env);
@@ -1518,6 +1544,7 @@ export async function svcHandle(request, env, url, H) {
     if (p === "/service/ziek" && request.method === "POST") return H.reply(200, await svcZiek(env, H, wie, body));
     if (p === "/service/afspraak" && request.method === "POST") return H.reply(200, await svcAfspraakActie(env, H, wie, body));
     if (p === "/service/afspraak/nieuw" && request.method === "POST") return H.reply(200, await svcHandInplannen(env, H, wie, body));
+    if (p === "/service/zoek" && request.method === "GET") return H.reply(200, await svcZoek(env, url.searchParams.get("q")));
     if (p === "/service/mail/voorbeeld" && request.method === "GET") {
       const soort = ["voorstel", "herinnering", "ziek"].includes(url.searchParams.get("soort")) ? url.searchParams.get("soort") : "voorstel";
       const werkdag = (iso) => { while ([0, 6].includes(new Date(iso + "T12:00:00Z").getUTCDay())) iso = svcPlus(iso, 1); return iso; };

@@ -100,6 +100,14 @@ main{max-width:none;margin:0 auto;padding:14px 14px 50px}
 .plus{width:100%;border:1px dashed #d1d5db;background:transparent;border-radius:9px;padding:7px;font:inherit;font-size:12.5px;color:var(--groen);cursor:pointer;font-weight:600}
 .plus:hover{border-color:var(--lime);background:#f7fbef}
 #fout{color:var(--rood);font-weight:600;margin-bottom:10px}
+.zoekbalk{position:relative;margin:0 0 12px}
+.zoekbalk input{width:100%;box-sizing:border-box;font:inherit;font-size:14px;padding:9px 12px;border:1px solid #e0e0d8;border-radius:10px;background:#fff}
+#zoekUit{position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;border:1px solid #e0e0d8;border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.12);max-height:60vh;overflow:auto;display:none}
+#zoekUit .zr{padding:8px 12px;border-bottom:1px solid #f0efe8;font-size:13px}
+#zoekUit .zr b{color:#1f2937}
+#zoekUit .zr .zs{color:var(--grijs);font-size:12px}
+#zoekUit .za{display:inline-block;margin:4px 6px 0 0;font:inherit;font-size:12px;font-weight:600;border:1px solid #cbd5c0;background:#f7fbef;color:#144734;border-radius:999px;padding:2px 9px;cursor:pointer}
+.stop.gevonden{outline:2px solid #f59e0b;outline-offset:-2px;background:#fffbeb}
 .log{font-size:12px;color:var(--grijs);max-height:180px;overflow:auto;margin-top:8px;border-top:1px solid #f0efe8;padding-top:6px}
 .log div{padding:2px 0}
 @media (max-width:1100px){ .week{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))} }
@@ -124,6 +132,8 @@ main{max-width:none;margin:0 auto;padding:14px 14px 50px}
     <input id="directIts" inputmode="numeric" placeholder="ITS-nummer" autocomplete="off">
     <button class="knop groen" id="directKnop" type="button">Direct inplannen</button>
   </div>
+  <!-- Zoeken (Kevin, 30 okt 2026): op klant, plaats, ITS, debiteur, telefoon of mail. -->
+  <div class="zoekbalk"><input id="zoek" type="search" placeholder="Zoek op klant, plaats, ITS-nummer, debiteurnummer, telefoon of mail…" autocomplete="off" title="Het Dashboard zoekt in alle meldingen en laat zien wanneer en bij welke monteur ze staan"><div id="zoekUit"></div></div>
   <div id="meldingen"></div>
   <div class="week" id="week"></div>
 </main>
@@ -267,6 +277,28 @@ function handInplannen(datum, nr){
       laad();
     } });
 }
+/* Zoeken: resultaten met hun afspraken; klik = naar die week, afspraak oplichten en openen. */
+var zoekTimer = null, oplichten = null;
+$("zoek").addEventListener("input", function(){
+  clearTimeout(zoekTimer);
+  var q = this.value.trim();
+  if (q.length < 2) { $("zoekUit").style.display = "none"; return; }
+  zoekTimer = setTimeout(async function(){
+    var j = await svc.api("/service/zoek?q=" + encodeURIComponent(q)).catch(function(e){ return { ok:false, error:e.message }; });
+    var uit = $("zoekUit");
+    if (!j.ok) { uit.innerHTML = '<div class="zr">' + esc(j.error) + '</div>'; uit.style.display = "block"; return; }
+    var r = j.resultaten || [];
+    uit.innerHTML = !r.length ? '<div class="zr">Niets gevonden voor "' + esc(q) + '".</div>' : r.map(function(x){
+      var st = { open: "staat bij In te plannen meldingen", gepland: "ingepland", klaar: "afgerond", vervallen: "vervallen" }[x.status] || x.status;
+      return '<div class="zr"><b>' + esc(x.naam || "ITS " + x.its) + '</b> <span class="zs">' + esc(x.plaats || "") + ' · ITS ' + esc(x.its) + (x.debiteur ? ' · deb. ' + esc(x.debiteur) : '') + ' · ' + esc(st) + '</span><br>' +
+        (x.afspraken || []).map(function(a){ return '<button type="button" class="za" data-a="' + esc(a.id) + '" data-d="' + esc(a.datum) + '" title="Naar deze afspraak in de planning">' + esc(svc.datumLang(a.datum)) + ' · route ' + a.nr + (a.monteur ? ' · ' + esc(a.monteur) : '') + (a.status === "akkoord" ? ' ✓' : a.status === "klaar" ? ' (klaar)' : '') + '</button>'; }).join("") + '</div>';
+    }).join("");
+    uit.style.display = "block";
+    uit.querySelectorAll("[data-a]").forEach(function(b){ b.onclick = function(){ uit.style.display = "none"; oplichten = b.dataset.a; zetWeek(maandagVan(b.dataset.d)); }; });
+    try { if (window.fpLog) fpLog("service-zoek", q); } catch(e) {}
+  }, 250);
+});
+document.addEventListener("mousedown", function(e){ if (!e.target.closest(".zoekbalk")) $("zoekUit").style.display = "none"; });
 function weekNr(isoD){ var d = new Date(isoD+"T12:00:00"); d.setDate(d.getDate()+3-((d.getDay()+6)%7)); var j = new Date(d.getFullYear(),0,4); return 1+Math.round(((d-j)/864e5-3+((j.getDay()+6)%7))/7); }
 
 function routeVenster(r, datum){
@@ -377,6 +409,7 @@ async function laad(){
     var j = await svc.api("/service/overzicht?van=" + plus(maandag, -1) + "&tot=" + plus(maandag, 6));
     if (!j.ok) throw new Error(j.error || "Laden lukte nog niet.");
     data = j; $("fout").textContent = ""; teken();
+    if (oplichten) { var el = document.querySelector('.stop[data-id="' + oplichten + '"]'); if (el) { el.classList.add("gevonden"); el.scrollIntoView({ block: "center", behavior: "smooth" }); } oplichten = null; }
   } catch(e) { $("fout").textContent = e.message; }
 }
 function zetWeek(m){ maandag = m; try { sessionStorage.setItem("ps.week", m); } catch(e) {} laad(); }

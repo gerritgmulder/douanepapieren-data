@@ -10,12 +10,13 @@
   (function(){
     if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
     var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    /* De worker beslist (Patrick Kroes kreeg 30 okt 2026 "Toegang op aanvraag"
+       terwijl de worker hem gewoon toeliet). Twijfelt deze telefoon of pc,
+       dan leggen we vast met welke naam, en vraagt de tegel het de worker. */
     if (window.fpToegang && !fpToegang.mag("service-monteurs", ik) && !fpToegang.mag("service-planning", ik)) {
-      document.addEventListener("DOMContentLoaded", function(){
-        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor de servicemonteurs.</p>' +
-          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
-      });
+      try { var k = localStorage.getItem("fp.teamkey") || "";
+        fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", { method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": k },
+          body: JSON.stringify({ user: ik || "(leeg)", tile: "mijnroute-service", action: "toegang-twijfel", detail: "lijst op dit apparaat zegt nee; worker beslist" }) }).catch(function(){}); } catch (e) {}
     }
   })();
 </script>
@@ -133,7 +134,7 @@ async function laad(){
     var j = await api("/service/mijn?datum=" + datum + (als ? "&als=" + encodeURIComponent(als) : ""));
     if (!j.ok) throw new Error(j.error || "Laden lukte nog niet.");
     data = j; $("fout").textContent = ""; teken();
-  } catch(e) { $("fout").textContent = e.message; }
+  } catch(e) { $("fout").textContent = e.message + (ik ? " (ingelogd als " + ik + ")" : ""); }
 }
 function tekenKop(){
   $("wie").innerHTML = (data.monteurs && data.monteurs.length)

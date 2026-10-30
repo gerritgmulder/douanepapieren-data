@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "planning-service.html", soort: "nieuw",
+      titel: "Zoeken in Planning Service",
+      wat: "Bovenaan staat een zoekvak: zoek op klant, plaats, ITS-nummer, debiteurnummer, telefoon of mail. Klik op een afspraak in de uitkomst, dan ga je naar die week en licht de afspraak op." },
+    {
       datum: "2026-10-30", bestand: "planning-service.html", soort: "beter",
       titel: "Slimmer plannen",
       wat: "Plannen houdt nu rekening met omrijden: klanten uit dezelfde streek komen samen op één dag, en een klant ver weg begint liever een eigen route. Bij elke afspraak staat het debiteurnummer. Nieuwe routes beginnen om 6:15 en zijn om 15:00 terug." },
