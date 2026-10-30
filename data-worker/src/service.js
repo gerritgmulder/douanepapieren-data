@@ -1367,7 +1367,7 @@ export async function svcHandle(request, env, url, H) {
   const planner = await H.toegangMag(env, "service-planning", wie);
   const body = request.method === "POST" ? await request.json().catch(() => ({})) : {};
   /* De monteurs: alleen hun eigen route, hun werkbonnen en artikelen zoeken. */
-  if (["/service/mijn", "/service/bon", "/service/artikel"].includes(p)) {
+  if (["/service/mijn", "/service/bon", "/service/artikel", "/service/melding/vers"].includes(p)) {
     if (!planner && !(await H.toegangMag(env, "service-monteurs", wie))) return H.reply(403, { ok: false, error: "Deze tegel is voor de servicemonteurs." });
     try {
       if (p === "/service/mijn" && request.method === "GET") return H.reply(200, await svcMijn(env, wie, planner, url));
