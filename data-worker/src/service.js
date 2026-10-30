@@ -70,6 +70,20 @@ const SVC_DAGDEEL = {
   3: "in de middag",
 };
 const SVC_DAGDEEL_KORT = { 1: "ochtend", 2: "eind ochtend / begin middag", 3: "middag" };
+/* Duitse klanten krijgen hun mails in het Duits (Gerrit, 30 okt 2026). De
+   taal volgt het land van de klant in Logic4 (DE, AT); zonder land kijkt
+   het Dashboard naar de postcode in het adres. Aan of uit met
+   service-instellingen.duits (eerst het voorbeeld aan Gerrit). */
+const SVC_DAGDEEL_DE = { 1: "am Vormittag", 2: "am späten Vormittag oder am frühen Nachmittag", 3: "am Nachmittag" };
+const SVC_WEEKDAG_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const SVC_MAAND_DE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+function svcTaalVan(m) {
+  const k = (m && m.klant) || {};
+  if (k.land) return ["DE", "AT"].includes(String(k.land).toUpperCase()) ? "de" : "nl";
+  const adres = String(k.adres || "");
+  if (/\b\d{4}\s?[A-Z]{2}\b/i.test(adres)) return "nl";
+  return /\b\d{5}\b/.test(adres) ? "de" : "nl";
+}
 const SVC_WEEKDAG = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
 const SVC_MAAND = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const SVC_MONTEURS = ["Thieme", "Patrick", "Hans", "Bart", "Bertjan", "Kevin"];   // Bart, Bertjan en Kevin erbij (Kevin, 27 okt 2026)
@@ -108,8 +122,9 @@ function svcVandaag() {
   return svcIso(d);
 }
 function svcPlus(iso, n) { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return svcIso(d); }
-function svcDatumTekst(iso) {
+function svcDatumTekst(iso, taal) {
   const d = new Date(iso + "T12:00:00Z");
+  if (taal === "de") return SVC_WEEKDAG_DE[d.getUTCDay()] + ", " + d.getUTCDate() + ". " + SVC_MAAND_DE[d.getUTCMonth()] + " " + d.getUTCFullYear();
   return SVC_WEEKDAG[d.getUTCDay()] + " " + d.getUTCDate() + " " + SVC_MAAND[d.getUTCMonth()] + " " + d.getUTCFullYear();
 }
 function svcToken() {
@@ -271,7 +286,7 @@ async function svcItsZoek(env, H, its) {
         debiteur: Number(m.debiteur), naam: k.CompanyName || naam || m.naam || "",
         adres: [[k.Street, k.HouseNumber, k.HouseNumberAddition].map(x => String(x || "").trim()).filter(Boolean).join(" "),
                 [k.Zipcode, k.City].map(x => String(x || "").trim()).filter(Boolean).join(" ")].filter(Boolean).join(", "),
-        plaats: k.City || "", tel: String(k.MobileNumber || k.TelephoneNumber || "").trim(),
+        plaats: k.City || "", land: String(k.CountryCode || "").toUpperCase() || null, tel: String(k.MobileNumber || k.TelephoneNumber || "").trim(),
         // Beide nummers uit de klantenkaart (Kevin, 29 okt 2026); dubbel = één.
         tel2: (String(k.TelephoneNumber || "").trim() && String(k.TelephoneNumber).replace(/\D/g, "") !== String(k.MobileNumber || "").replace(/\D/g, "")) && k.MobileNumber ? String(k.TelephoneNumber).trim() : "",
         mail: String(k.EmailAddress || "").trim().toLowerCase(),
@@ -300,6 +315,7 @@ function svcSchoonMelding(b, oud) {
     const k = b.klant;
     m.klant = { debiteur: k.debiteur ? Number(k.debiteur) || null : null, naam: tekst(k.naam, 120), adres: tekst(k.adres, 200),
                 plaats: tekst(k.plaats, 80), tel: tekst(k.tel, 40), tel2: tekst(k.tel2, 40),
+                land: k.land ? String(k.land).toUpperCase().slice(0, 2) : (oud && oud.klant && oud.klant.land !== undefined ? oud.klant.land : undefined),
                 mail: [...new Set(String(k.mail || "").toLowerCase().split(/[;,\s]+/).filter(Boolean))].join(", ").slice(0, 200) };
   }
   if (b.duur !== undefined) m.duur = Math.max(0, Math.min(600, Math.round(Number(b.duur) || 0)));
@@ -353,6 +369,7 @@ async function svcMailTeller(db) {
    "Andere datum kiezen" en de zin over kosten zegt wat de klant wél moet
    doen. */
 function svcMailHtml(soort, d, link, metLogo) {
+  if (d.taal === "de") return svcMailHtmlDe(soort, d, link, metLogo);
   const e = svcEsc;
   const p = (t) => "<p style='font-size:14px;line-height:1.55;margin:0 0 12px'>" + t + "</p>";
   const knoppen = link
@@ -392,7 +409,46 @@ function svcMailHtml(soort, d, link, metLogo) {
     kop + "<div style='padding:20px 22px'>" + romp +
     "<p style='font-size:12px;color:#6b7280;margin:18px 0 0'>ITS " + e(d.its) + "</p></div></div>";
 }
+function svcMailHtmlDe(soort, d, link, metLogo) {
+  const e = svcEsc;
+  const p = (t) => "<p style='font-size:14px;line-height:1.55;margin:0 0 12px'>" + t + "</p>";
+  const knop = (k, kleur, t) => "<td style='background:" + kleur + ";border-radius:8px'><a href='" + e(link + "&k=" + k) + "' style='display:inline-block;padding:13px 26px;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;font-family:Arial,sans-serif'>" + t + "</a></td>";
+  const knoppen = link ? "<table role='presentation' cellspacing='0' cellpadding='0' style='margin:18px 0 20px'><tr>" + knop("akkoord", "#15803d", "Einverstanden") + "<td style='width:14px'></td>" + knop("anders", "#b91c1c", "Anderen Termin wählen") + "</tr></table>" : "";
+  const kop = "<div style='background:#144734;padding:18px 22px'>" + (metLogo ? "<img src='" + SVC_LOGO + "' alt='Fonteyn' height='56' style='display:block;height:56px'>" : "<span style='color:#fff;font-size:20px;font-weight:bold'>Fonteyn</span>") + "</div>";
+  const datum = "<b>" + e(svcDatumTekst(d.datum, "de")) + "</b>", dagdeel = "<b>" + e(SVC_DAGDEEL_DE[d.dagdeel] || "") + "</b>";
+  let romp = "";
+  if (soort === "ziek") {
+    romp = p("Guten Tag " + e(d.naam) + ",") +
+      (d.oudeDatum === d.datum
+        ? p("leider müssen wir Ihnen mitteilen, dass sich der Techniker, der am <b>" + e(svcDatumTekst(d.oudeDatum, "de")) + "</b> zu Ihnen kommen sollte, krankgemeldet hat. Ein Kollege übernimmt den Termin und kommt am selben Tag, " + dagdeel + ".")
+        : p("leider müssen wir Ihnen mitteilen, dass sich der Techniker, der am <b>" + e(svcDatumTekst(d.oudeDatum, "de")) + "</b> zu Ihnen kommen sollte, krankgemeldet hat. Dieser Termin entfällt deshalb. Der neue Termin ist am " + datum + ", " + dagdeel + ".")) +
+      p("Bitte teilen Sie uns mit, ob dieser Termin für Sie passt.") + knoppen +
+      p("Mit freundlichen Grüßen<br>Spa-Planung Fonteyn");
+  } else {
+    romp = (soort === "herinnering" ? "<p style='font-size:13px;color:#b45309;font-weight:bold;margin:0 0 12px'>Erinnerung: Wir freuen uns auf Ihre Rückmeldung zu dem unten genannten Termin.</p>" : "") +
+      p("Guten Tag " + e(d.naam) + ",") +
+      p("bitte teilen Sie uns mit, ob der unten genannte Termin für den Servicebesuch für Sie passt.") +
+      p("Ihre Meldung ist bei unserer Serviceabteilung eingegangen, und wir haben einen Termin für Sie eingeplant. Wir möchten Sie gerne am " + datum + " besuchen.<br>Der Techniker kommt voraussichtlich " + dagdeel + ".") +
+      knoppen +
+      p("Der Techniker ruft Sie am Tag selbst mit unterdrückter Nummer an, sobald er eine genauere Uhrzeit nennen kann.") +
+      p("Ist Ihr Spa eingebaut, sind Sie selbst dafür verantwortlich, dass er an allen Seiten mindestens 50 Zentimeter frei zugänglich ist. Steht der Spa vertieft im Boden oder ist eine Terrasse um ihn herum gebaut, muss diese entfernt werden.") +
+      p("Bei einem Servicetermin muss der Spa immer gefüllt sein, es sei denn, es wurde etwas anderes vereinbart. Das gilt auch bei einem Leck.") +
+      p("Diese Bedingungen müssen erfüllt sein, wenn der Techniker bei Ihnen ankommt.") +
+      p("Bitte bestätigen Sie den Termin als Antwort auf diese E-Mail. Haben wir spätestens sechs Werktage vor dem Termin keine Rückmeldung erhalten, behalten wir uns vor, den Termin einseitig abzusagen.") +
+      p("Sie haben dem Termin zugestimmt und möchten ihn doch absagen? Antworten Sie dann einfach auf diese E-Mail.") +
+      p("Wenn Sie zustimmen, sorgen Sie bitte dafür, dass am Tag selbst jemand anwesend ist und die oben genannten Bedingungen erfüllt sind. Andernfalls stellen wir die Kosten in Rechnung.") +
+      p("Vielen Dank für Ihre Mitarbeit.") +
+      p("Mit freundlichen Grüßen<br>Spa-Planung Fonteyn");
+  }
+  return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:640px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden'>" +
+    kop + "<div style='padding:20px 22px'>" + romp +
+    "<p style='font-size:12px;color:#6b7280;margin:18px 0 0'>ITS " + e(d.its) + "</p></div></div>";
+}
 function svcOnderwerp(soort, d) {
+  if (d.taal === "de") {
+    if (soort === "ziek") return d.oudeDatum === d.datum ? "Ihr Servicetermin am " + svcDatumTekst(d.datum, "de") + ": ein Kollege kommt" : "Neuer Termin für Ihren Servicebesuch: " + svcDatumTekst(d.datum, "de");
+    return (soort === "herinnering" ? "Erinnerung: " : "") + "Ihr Servicetermin am " + svcDatumTekst(d.datum, "de");
+  }
   if (soort === "ziek") return d.oudeDatum === d.datum ? "Uw serviceafspraak op " + svcDatumTekst(d.datum) + ": een collega komt" : "Nieuwe datum voor uw serviceafspraak: " + svcDatumTekst(d.datum);
   return (soort === "herinnering" ? "Herinnering: " : "") + "Uw serviceafspraak op " + svcDatumTekst(d.datum);
 }
@@ -410,7 +466,11 @@ async function svcMailStuur(env, db, a, m, soort, extra) {
   if (!naarKlant.length) { a.json.mailFout = "Er staat nog geen mailadres bij de klant."; a.json.mailWacht = soort; return { ok: false, error: a.json.mailFout }; }
   if (!inst.mailAan) { a.json.mailWacht = soort; if (extra && extra.oudeDatum) a.json.oudeDatum = extra.oudeDatum; return { ok: true, wacht: "mailen staat nog uit" }; }
   const naar = inst.proefAdres ? [inst.proefAdres] : naarKlant;
-  const d0 = { naam: (m.klant && m.klant.naam) || "klant", datum: a.datum, dagdeel: a.dagdeel, its: a.its, oudeDatum: (extra && extra.oudeDatum) || a.json.oudeDatum || null };
+  // De taal: het land van de klant (eenmalig uit Logic4), alleen als Duits aan staat.
+  if (inst.duits && m.klant && m.klant.debiteur && m.klant.land === undefined && _svcH) await svcKlantVers(env, db, a.its, m).catch(() => {});
+  const taal = inst.duits ? svcTaalVan(m) : "nl";
+  a.json.taal = taal;
+  const d0 = { naam: (m.klant && m.klant.naam) || (taal === "de" ? "Kunde" : "klant"), datum: a.datum, dagdeel: a.dagdeel, its: a.its, oudeDatum: (extra && extra.oudeDatum) || a.json.oudeDatum || null, taal };
   /* Eerst via de eigen mailserver van Fonteyn, vanuit spaplanning@ (Gerrit,
      23 okt 2026). Daar geldt geen grens per dag. Lukt dat (nog) niet, dan via
      Resend, met de grens van 40 per dag. */
@@ -428,7 +488,7 @@ async function svcMailStuur(env, db, a, m, soort, extra) {
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) return { ok: false, error: "het mailen is in de worker nog in te richten" };
   const bron = env.MAIL_FROM_FONTEYN || env.MAIL_FROM;
   const adres = (String(bron).match(/<([^>]+)>/) || [])[1] || String(bron);
-  const d = { naam: (m.klant && m.klant.naam) || "klant", datum: a.datum, dagdeel: a.dagdeel, its: a.its, oudeDatum: (extra && extra.oudeDatum) || a.json.oudeDatum || null };
+  const d = d0;
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ from: "Fonteyn Spa planning <" + adres + ">", to: naar, reply_to: [SVC_ANTWOORD],
@@ -820,8 +880,8 @@ async function svcRonde(env, H) {
 }
 
 /* ── De pagina's voor de klant ──────────────────────────────────────────── */
-function svcPagina(titel, inhoud) {
-  return new Response("<!doctype html><html lang='nl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
+function svcPagina(titel, inhoud, taal) {
+  return new Response("<!doctype html><html lang='" + (taal === "de" ? "de" : "nl") + "'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
     "<title>" + svcEsc(titel) + " - Fonteyn</title><meta name='robots' content='noindex'>" +
     "<style>body{margin:0;background:#f5f4ef;font-family:Arial,Helvetica,sans-serif;color:#1f2937}" +
     ".kop{background:#144734;padding:16px 20px}.kop img{height:48px;display:block}" +
@@ -835,43 +895,72 @@ function svcPagina(titel, inhoud) {
     "<div class='kop'><img src='" + SVC_LOGO + "' alt='Fonteyn'></div><div class='blok'>" + inhoud + "</div></body></html>",
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
 }
+/* De teksten van de klantpagina, Nederlands en Duits (30 okt 2026). De taal
+   staat bij de afspraak (a.json.taal), gezet toen de mail de deur uit ging. */
+const SVC_PAG = {
+  nl: { termin: "Serviceafspraak", verlopenH: "Deze link is verlopen", verlopenP: "Er is intussen een nieuwe afspraak voor u gemaakt, of deze afspraak is al afgerond. Heeft u een vraag? Mail ons dan op ",
+    bevestigdT: "Afspraak bevestigd", bevestigdH: "Bedankt, de afspraak staat vast", komt: "De monteur komt op ", belt: " Hij belt u op de dag zelf zodra hij een tijdsindicatie heeft.",
+    ontvangenH: "Bedankt voor uw reactie", ontvangenP: "Wij hebben uw wensen ontvangen en nemen ze mee bij het inplannen. U krijgt van ons een nieuwe datum per mail.",
+    andersT: "Andere datum kiezen", andersP1: "Wij hadden u ingepland op ", andersP2: ". Geef hieronder aan wat voor u past; wij plannen u daarna opnieuw in en sturen u een nieuwe datum.",
+    dagenL: "Op welke dagen past het u?", dagen: ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag"], vanafL: "Vanaf welke datum kunnen wij komen?",
+    wegL: "Bent u een tijd weg? Dan plannen wij buiten die periode", van: "van", tot: "tot en met", toelL: "Toelichting (mag leeg)", stuur: "Verstuur mijn wensen",
+    inOrdeL: "Is uw spa weer in orde?", inOrdeP: "Dan mag de afspraak vervallen.", vervallen: "De afspraak mag vervallen",
+    bevestigenT: "Afspraak bevestigen", uwH: "Uw serviceafspraak", ja: "Ja, de afspraak past",
+    foutH: "Dat lukte nog niet", foutP: "Probeer het nog eens via de link in de mail.",
+    weerH: "Bedankt voor uw bericht", weerP: "Fijn dat uw spa weer in orde is. De afspraak vervalt. Heeft u later toch nog een vraag, mail ons dan op ",
+    wensH: "Bedankt, we hebben uw wensen ontvangen", wensP: "Wij plannen u opnieuw in en sturen u een nieuwe datum per mail.", bedankt: "Bedankt" },
+  de: { termin: "Servicetermin", verlopenH: "Dieser Link ist abgelaufen", verlopenP: "Inzwischen wurde ein neuer Termin für Sie erstellt, oder dieser Termin ist bereits abgeschlossen. Haben Sie eine Frage? Schreiben Sie uns an ",
+    bevestigdT: "Termin bestätigt", bevestigdH: "Vielen Dank, der Termin steht fest", komt: "Der Techniker kommt am ", belt: " Er ruft Sie am Tag selbst an, sobald er eine genauere Uhrzeit nennen kann.",
+    ontvangenH: "Vielen Dank für Ihre Rückmeldung", ontvangenP: "Wir haben Ihre Wünsche erhalten und berücksichtigen sie bei der Planung. Sie erhalten von uns einen neuen Termin per E-Mail.",
+    andersT: "Anderen Termin wählen", andersP1: "Wir hatten Sie eingeplant für ", andersP2: ". Geben Sie unten an, was für Sie passt; wir planen Sie dann neu ein und schicken Ihnen einen neuen Termin.",
+    dagenL: "An welchen Tagen passt es Ihnen?", dagen: ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"], vanafL: "Ab welchem Datum können wir kommen?",
+    wegL: "Sind Sie eine Zeit lang nicht da? Dann planen wir außerhalb dieses Zeitraums", van: "von", tot: "bis einschließlich", toelL: "Anmerkung (optional)", stuur: "Meine Wünsche senden",
+    inOrdeL: "Funktioniert Ihr Spa wieder?", inOrdeP: "Dann kann der Termin entfallen.", vervallen: "Der Termin kann entfallen",
+    bevestigenT: "Termin bestätigen", uwH: "Ihr Servicetermin", ja: "Ja, der Termin passt",
+    foutH: "Das hat leider nicht geklappt", foutP: "Bitte versuchen Sie es noch einmal über den Link in der E-Mail.",
+    weerH: "Vielen Dank für Ihre Nachricht", weerP: "Schön, dass Ihr Spa wieder funktioniert. Der Termin entfällt. Haben Sie später doch noch eine Frage, schreiben Sie uns an ",
+    wensH: "Vielen Dank, wir haben Ihre Wünsche erhalten", wensP: "Wir planen Sie neu ein und schicken Ihnen einen neuen Termin per E-Mail.", bedankt: "Vielen Dank" },
+};
 async function svcAntwoordGet(env, url) {
   const db = await svcDb(env);
   const t = String(url.searchParams.get("t") || "").slice(0, 60), k = url.searchParams.get("k") || "";
   const rij = t ? await db.prepare("SELECT * FROM svc_afspraak WHERE token = ?1").bind(t).first() : null;
-  if (!rij) return svcPagina("Serviceafspraak", "<h1>Deze link is verlopen</h1><p>Er is intussen een nieuwe afspraak voor u gemaakt, of deze afspraak is al afgerond. Heeft u een vraag? Mail ons dan op <a href='mailto:" + SVC_ANTWOORD + "'>" + SVC_ANTWOORD + "</a>.</p>");
+  const mailLink = "<a href='mailto:" + SVC_ANTWOORD + "'>" + SVC_ANTWOORD + "</a>";
+  if (!rij) return svcPagina(SVC_PAG.nl.termin, "<h1>" + SVC_PAG.nl.verlopenH + "</h1><p>" + SVC_PAG.nl.verlopenP + mailLink + ".</p>");
   const a = svcAfspraakUit(rij);
-  const wanneer = "<b>" + svcEsc(svcDatumTekst(a.datum)) + "</b>, " + svcEsc(SVC_DAGDEEL[a.dagdeel] || "");
-  if (a.status === "akkoord") return svcPagina("Afspraak bevestigd", "<h1>Bedankt, de afspraak staat vast</h1><p>De monteur komt op " + wanneer + ". Hij belt u op de dag zelf zodra hij een tijdsindicatie heeft.</p>");
-  if (a.status !== "voorstel") return svcPagina("Serviceafspraak", "<h1>Bedankt voor uw reactie</h1><p>Wij hebben uw wensen ontvangen en nemen ze mee bij het inplannen. U krijgt van ons een nieuwe datum per mail.</p>");
+  const taal = a.json.taal === "de" ? "de" : "nl", T = SVC_PAG[taal];
+  const wanneer = "<b>" + svcEsc(svcDatumTekst(a.datum, taal)) + "</b>, " + svcEsc((taal === "de" ? SVC_DAGDEEL_DE : SVC_DAGDEEL)[a.dagdeel] || "");
+  if (a.status === "akkoord") return svcPagina(T.bevestigdT, "<h1>" + T.bevestigdH + "</h1><p>" + T.komt + wanneer + "." + T.belt + "</p>", taal);
+  if (a.status !== "voorstel") return svcPagina(T.termin, "<h1>" + T.ontvangenH + "</h1><p>" + T.ontvangenP + "</p>", taal);
   const verborgen = "<input type='hidden' name='t' value='" + svcEsc(t) + "'>";
   if (k === "anders") {
-    const dag = (n, naam) => "<label><input type='checkbox' name='dag' value='" + n + "'> " + naam + "</label>";
-    return svcPagina("Andere datum kiezen", "<h1>Andere datum kiezen</h1>" +
-      "<p>Wij hadden u ingepland op " + wanneer + ". Geef hieronder aan wat voor u past; wij plannen u daarna opnieuw in en sturen u een nieuwe datum.</p>" +
+    const dag = (n) => "<label><input type='checkbox' name='dag' value='" + n + "'> " + T.dagen[n - 1] + "</label>";
+    return svcPagina(T.andersT, "<h1>" + T.andersT + "</h1>" +
+      "<p>" + T.andersP1 + wanneer + T.andersP2 + "</p>" +
       "<form method='post' action='/service/antwoord'>" + verborgen + "<input type='hidden' name='k' value='anders'>" +
-      "<fieldset><legend>Op welke dagen past het u?</legend>" + dag(1, "maandag") + dag(2, "dinsdag") + dag(3, "woensdag") + dag(4, "donderdag") + dag(5, "vrijdag") + "</fieldset>" +
-      "<fieldset><legend>Vanaf welke datum kunnen wij komen?</legend><input type='date' name='vanaf'></fieldset>" +
-      "<fieldset><legend>Bent u een tijd weg? Dan plannen wij buiten die periode</legend><label>van <input type='date' name='nietVan'></label><label>tot en met <input type='date' name='nietTot'></label></fieldset>" +
-      "<fieldset><legend>Toelichting (mag leeg)</legend><textarea name='opmerking' maxlength='500'></textarea></fieldset>" +
-      "<button class='knop rood' type='submit'>Verstuur mijn wensen</button>" +
-      "<fieldset style='margin-top:22px'><legend>Is uw spa weer in orde?</legend><p class='klein'>Dan mag de afspraak vervallen.</p>" +
-      "<button class='knop grijs' type='submit' name='nodig' value='nee'>De afspraak mag vervallen</button></fieldset>" +
-      "</form>");
+      "<fieldset><legend>" + T.dagenL + "</legend>" + [1, 2, 3, 4, 5].map(dag).join("") + "</fieldset>" +
+      "<fieldset><legend>" + T.vanafL + "</legend><input type='date' name='vanaf'></fieldset>" +
+      "<fieldset><legend>" + T.wegL + "</legend><label>" + T.van + " <input type='date' name='nietVan'></label><label>" + T.tot + " <input type='date' name='nietTot'></label></fieldset>" +
+      "<fieldset><legend>" + T.toelL + "</legend><textarea name='opmerking' maxlength='500'></textarea></fieldset>" +
+      "<button class='knop rood' type='submit'>" + T.stuur + "</button>" +
+      "<fieldset style='margin-top:22px'><legend>" + T.inOrdeL + "</legend><p class='klein'>" + T.inOrdeP + "</p>" +
+      "<button class='knop grijs' type='submit' name='nodig' value='nee'>" + T.vervallen + "</button></fieldset>" +
+      "</form>", taal);
   }
-  return svcPagina("Afspraak bevestigen", "<h1>Uw serviceafspraak</h1><p>De monteur komt op " + wanneer + ".</p>" +
+  return svcPagina(T.bevestigenT, "<h1>" + T.uwH + "</h1><p>" + T.komt + wanneer + ".</p>" +
     "<form method='post' action='/service/antwoord'>" + verborgen + "<input type='hidden' name='k' value='akkoord'>" +
-    "<button class='knop groen' type='submit'>Ja, de afspraak past</button></form>" +
-    "<a class='knop rood' href='/service/antwoord?t=" + encodeURIComponent(t) + "&k=anders'>Andere datum kiezen</a>");
+    "<button class='knop groen' type='submit'>" + T.ja + "</button></form>" +
+    "<a class='knop rood' href='/service/antwoord?t=" + encodeURIComponent(t) + "&k=anders'>" + T.andersT + "</a>", taal);
 }
 async function svcAntwoordPost(env, request, H) {
   const db = await svcDb(env);
   const f = await request.formData().catch(() => null);
-  if (!f) return svcPagina("Serviceafspraak", "<h1>Dat lukte nog niet</h1><p>Probeer het nog eens via de link in de mail.</p>");
+  if (!f) return svcPagina(SVC_PAG.nl.termin, "<h1>" + SVC_PAG.nl.foutH + "</h1><p>" + SVC_PAG.nl.foutP + "</p>");
   const t = String(f.get("t") || "").slice(0, 60), k = String(f.get("k") || "");
   const rij = t ? await db.prepare("SELECT * FROM svc_afspraak WHERE token = ?1").bind(t).first() : null;
   if (!rij) return svcAntwoordGet(env, new URL("https://x/?t="));
   const a = svcAfspraakUit(rij);
+  const taal = a.json.taal === "de" ? "de" : "nl", T = SVC_PAG[taal];
   if (a.status !== "voorstel") return svcAntwoordGet(env, new URL("https://x/?t=" + encodeURIComponent(t)));
   const nu = Date.now();
   if (k === "akkoord") {
@@ -900,9 +989,9 @@ async function svcAntwoordPost(env, request, H) {
   if (!nietNodig && !wens.dagen.length && !wens.vanaf && !(wens.nietVan && wens.nietTot)) m.vanaf = svcPlus(a.datum, 1);
   await db.prepare("UPDATE svc_melding SET status = ?2, json = ?3, ts = ?4 WHERE its = ?1").bind(a.its, nietNodig ? "vervallen" : "open", JSON.stringify(m), nu).run();
   await svcLog(db, a.its, "klant", nietNodig ? "klant: afspraak mag vervallen" : "klant koos een andere datum");
-  return svcPagina("Bedankt", nietNodig
-    ? "<h1>Bedankt voor uw bericht</h1><p>Fijn dat uw spa weer in orde is. De afspraak vervalt. Heeft u later toch nog een vraag, mail ons dan op <a href='mailto:" + SVC_ANTWOORD + "'>" + SVC_ANTWOORD + "</a>.</p>"
-    : "<h1>Bedankt, we hebben uw wensen ontvangen</h1><p>Wij plannen u opnieuw in en sturen u een nieuwe datum per mail.</p>");
+  return svcPagina(T.bedankt, nietNodig
+    ? "<h1>" + T.weerH + "</h1><p>" + T.weerP + "<a href='mailto:" + SVC_ANTWOORD + "'>" + SVC_ANTWOORD + "</a>.</p>"
+    : "<h1>" + T.wensH + "</h1><p>" + T.wensP + "</p>", taal);
 }
 
 /* ═══ MIJN ROUTES SERVICE EN DE WERKBON ════════════════════════════════════
@@ -1002,12 +1091,13 @@ async function svcKlantVers(env, db, its, m) {
     headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ Id: Number(m.klant.debiteur), TakeRecords: 2 }) });
   const j = r.ok ? await r.json().catch(() => null) : null;
   const k = ((Array.isArray(j) ? j : (j && j.Records)) || []).find(x => Number(x.Id) === Number(m.klant.debiteur));
-  if (!k) { m.klant.tel2 = ""; }
+  if (!k) { m.klant.tel2 = ""; m.klant.land = null; }
   else {
     const mob = String(k.MobileNumber || "").trim(), vast = String(k.TelephoneNumber || "").trim();
     const een = mob || vast, twee = mob && vast && vast.replace(/\D/g, "") !== mob.replace(/\D/g, "") ? vast : "";
     if (een) m.klant.tel = een;
     m.klant.tel2 = twee;
+    m.klant.land = String(k.CountryCode || "").toUpperCase() || null;
   }
   await db.prepare("UPDATE svc_melding SET json = ?2 WHERE its = ?1").bind(String(its), JSON.stringify(m)).run();
   return m;
@@ -1177,33 +1267,44 @@ async function svcBonKantoor(env, wie, b) {
   return { ok: true, bon: Object.assign({}, bon, { handtekeningKlant: undefined, getekend: !!bon.handtekeningKlant }) };
 }
 /* De werkbon voor de klant: geen kosten, alleen materialen en uren. */
-function svcBonHtml(bon, metHandtekening) {
+function svcBonHtml(bon, metHandtekening, taal) {
   const e = svcEsc;
+  const de = taal === "de";
+  const T = de ? { titel: "Arbeitsbericht Service", melding: "Meldung", garantie: "Garantie", aanhef: "Guten Tag", intro: "hier sehen Sie, was unser Techniker bei Ihnen erledigt hat.",
+      gedaan: "Was erledigt wurde", mats: "Verwendete Materialien", arbeid: "Arbeitszeit", uur: "Stunden", getekend: "Zur Bestätigung unterschrieben", door: " von ",
+      vraag: "Haben Sie eine Frage? Antworten Sie einfach auf diese E-Mail.", groet: "Mit freundlichen Grüßen<br>Fonteyn Spa-Service", klant: "Kunde" }
+    : { titel: "Werkbon service", melding: "melding", garantie: "garantie", aanhef: "Beste", intro: "Hieronder ziet u wat onze monteur bij u heeft gedaan.",
+      gedaan: "Wat er is gedaan", mats: "Gebruikte materialen", arbeid: "Arbeid", uur: "uur", getekend: "Voor akkoord getekend", door: " door ",
+      vraag: "Heeft u een vraag? Beantwoord dan gewoon deze mail.", groet: "Met vriendelijke groet,<br>Fonteyn Spa service", klant: "klant" };
   const td = "style='padding:6px 8px;border-bottom:1px solid #eee;font-size:14px;vertical-align:top'";
   const k = bon.klant || {};
   const mats = (bon.materialen || []).filter(r => r.aantal > 0);
   return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:640px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden'>" +
     "<div style='background:#144734;padding:18px 22px'><img src='" + SVC_LOGO + "' alt='Fonteyn' height='56' style='display:block;height:56px'></div>" +
     "<div style='padding:20px 22px'>" +
-    "<h2 style='color:#144734;margin:0 0 4px;font-size:19px'>Werkbon service</h2>" +
-    "<p style='margin:0 0 16px;color:#6b7280;font-size:13px'>" + e(svcDatumTekst(bon.datum)) + " &middot; melding " + e(bon.its) + (/^ja/i.test(bon.garantie || "") ? " &middot; garantie" : "") + "</p>" +
-    "<p style='font-size:14px;line-height:1.5'>Beste " + e(k.naam || "klant") + ",<br><br>Hieronder ziet u wat onze monteur bij u heeft gedaan.</p>" +
+    "<h2 style='color:#144734;margin:0 0 4px;font-size:19px'>" + T.titel + "</h2>" +
+    "<p style='margin:0 0 16px;color:#6b7280;font-size:13px'>" + e(svcDatumTekst(bon.datum, taal)) + " &middot; " + T.melding + " " + e(bon.its) + (/^ja/i.test(bon.garantie || "") ? " &middot; " + T.garantie : "") + "</p>" +
+    "<p style='font-size:14px;line-height:1.5'>" + T.aanhef + " " + e(k.naam || T.klant) + ",<br><br>" + T.intro + "</p>" +
     /* "Uw melding" staat er niet meer op (Kevin, 29 okt 2026): daar staat vaak
        informatie in die voor intern is. */
-    "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Wat er is gedaan</h3><p style='font-size:14px;line-height:1.5;white-space:pre-line'>" + e(bon.gedaan) + "</p>" +
-    (mats.length ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Gebruikte materialen</h3><table style='border-collapse:collapse;width:100%'>" +
+    "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>" + T.gedaan + "</h3><p style='font-size:14px;line-height:1.5;white-space:pre-line'>" + e(bon.gedaan) + "</p>" +
+    (mats.length ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>" + T.mats + "</h3><table style='border-collapse:collapse;width:100%'>" +
       mats.map(r => "<tr><td " + td + " width='56'><b>" + e(String(r.aantal).replace(".", ",")) + "x</b></td><td " + td + ">" + e(r.oms) + "</td></tr>").join("") + "</table>" : "") +
-    "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Arbeid</h3><p style='font-size:14px'>" + e(String(bon.uren).replace(".", ",")) + " uur</p>" +
-    (metHandtekening && bon.handtekeningKlant ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>Voor akkoord getekend" + (bon.klantNaam ? " door " + e(bon.klantNaam) : "") + "</h3><img src='cid:hand-klant' alt='handtekening' width='240' style='display:block;border:1px solid #e5e7eb;border-radius:6px;max-width:240px'>" : "") +
-    "<p style='font-size:14px;line-height:1.5;margin-top:20px'>Heeft u een vraag? Beantwoord dan gewoon deze mail.</p>" +
-    "<p style='font-size:14px'>Met vriendelijke groet,<br>Fonteyn Spa service</p></div></div>";
+    "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>" + T.arbeid + "</h3><p style='font-size:14px'>" + e(String(bon.uren).replace(".", ",")) + " " + T.uur + "</p>" +
+    (metHandtekening && bon.handtekeningKlant ? "<h3 style='color:#144734;margin:18px 0 6px;font-size:15px'>" + T.getekend + (bon.klantNaam ? T.door + e(bon.klantNaam) : "") + "</h3><img src='cid:hand-klant' alt='handtekening' width='240' style='display:block;border:1px solid #e5e7eb;border-radius:6px;max-width:240px'>" : "") +
+    "<p style='font-size:14px;line-height:1.5;margin-top:20px'>" + T.vraag + "</p>" +
+    "<p style='font-size:14px'>" + T.groet + "</p></div></div>";
 }
 async function svcBonMail(env, wie, b) {
   const db = await svcBonDb(env);
   const bon = await svcBonLees(db, b.id);
   if (!bon) return { ok: false, error: "Deze werkbon is intussen weg." };
   if (!["klaar", "akkoord", "gemaild"].includes(bon.status)) return { ok: false, error: "De monteur moet de werkbon eerst afronden." };
-  if (b.voorbeeld) return { ok: true, html: svcBonHtml(bon, false), naar: (bon.klant || {}).mail || "" };
+  // De taal van de klant (Duits voor DE en AT), als Duits aan staat.
+  const inst = await svcInstellingen(env);
+  const mRij = await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(String(bon.its)).first().catch(() => null);
+  const taal = inst.duits ? svcTaalVan(svcJson(mRij && mRij.json, { klant: bon.klant })) : "nl";
+  if (b.voorbeeld) return { ok: true, html: svcBonHtml(bon, false, taal), naar: (bon.klant || {}).mail || "", taal };
   const adressen = [...new Set(String(b.naar || (bon.klant || {}).mail || "").toLowerCase().split(/[;,\s]+/).filter(Boolean))];
   const fout = adressen.filter(x => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
   if (!adressen.length || fout.length) return { ok: false, error: fout.length ? "Dit mailadres klopt nog niet: " + fout.join(", ") : "Vul het mailadres van de klant in." };
@@ -1214,8 +1315,8 @@ async function svcBonMail(env, wie, b) {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ from: "Fonteyn Spa service <" + adres + ">", to: adressen, reply_to: [SVC_BON_ANTWOORD],
-      subject: "Werkbon service Fonteyn - melding " + bon.its + " - " + String(bon.datum).split("-").reverse().join("-"),
-      html: svcBonHtml(bon, true), attachments: bijlagen }) });
+      subject: (taal === "de" ? "Arbeitsbericht Service Fonteyn - Meldung " : "Werkbon service Fonteyn - melding ") + bon.its + " - " + String(bon.datum).split("-").reverse().join("-"),
+      html: svcBonHtml(bon, true, taal), attachments: bijlagen }) });
   const tekst = await r.text();
   if (!r.ok) return { ok: false, error: "Versturen lukte nog niet (" + r.status + ") " + tekst.slice(0, 120) };
   bon.status = "gemaild"; bon.gemaild = { naar: adressen.join(", "), ts: new Date().toISOString(), door: wie };
@@ -1420,7 +1521,8 @@ export async function svcHandle(request, env, url, H) {
     if (p === "/service/mail/voorbeeld" && request.method === "GET") {
       const soort = ["voorstel", "herinnering", "ziek"].includes(url.searchParams.get("soort")) ? url.searchParams.get("soort") : "voorstel";
       const werkdag = (iso) => { while ([0, 6].includes(new Date(iso + "T12:00:00Z").getUTCDay())) iso = svcPlus(iso, 1); return iso; };
-      const d = { naam: "familie Jansen", datum: werkdag(svcPlus(svcVandaag(), 9)), dagdeel: 2, its: "48211", oudeDatum: werkdag(svcPlus(svcVandaag(), 3)) };
+      const de = url.searchParams.get("taal") === "de";
+      const d = { naam: de ? "Familie Schmidt" : "familie Jansen", datum: werkdag(svcPlus(svcVandaag(), 9)), dagdeel: 2, its: "48211", oudeDatum: werkdag(svcPlus(svcVandaag(), 3)), taal: de ? "de" : "nl" };
       return H.reply(200, { ok: true, onderwerp: svcOnderwerp(soort, d), html: svcMailHtml(soort, d, "#voorbeeld?t=x", true) });
     }
     if (p === "/service/instellingen" && request.method === "POST") {
@@ -1428,6 +1530,7 @@ export async function svcHandle(request, env, url, H) {
       if (!(await H.toegangMag(env, "administratie-proef", wie))) return H.reply(403, { ok: false, error: "Alleen de beheerlaag zet het mailen aan of uit." });
       const inst = await svcInstellingen(env);
       if (body.mailAan !== undefined) inst.mailAan = !!body.mailAan;
+      if (body.duits !== undefined) inst.duits = !!body.duits;
       if (body.proefAdres !== undefined) inst.proefAdres = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(body.proefAdres || "").trim()) ? String(body.proefAdres).trim().toLowerCase() : "";
       await env.FONTEYN_DATA.put(SVC_INSTEL, JSON.stringify(inst));
       return H.reply(200, { ok: true, instellingen: inst });
