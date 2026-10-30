@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-31", bestand: "voorstel-maken.html", soort: "beter",
+      titel: "Eerst de klant, dan het voorstel",
+      wat:   "De gegevens van het voorstel, zoals referentie, betaalmethode en leverdatum, vul je in zodra de klant zijn gegevens heeft bevestigd. Tot dan staan ze op slot."
+    },
+    {
+      datum: "2026-10-31", bestand: "voorstel-maken.html", soort: "beter",
       titel: "Voorstel naar de klant",
       wat:   "Na het voorbeeld stuur je het voorstel met één knop naar de klant. De klant krijgt een mail met een knop naar zijn voorstel, dat hij kan printen of als pdf bewaren."
     },

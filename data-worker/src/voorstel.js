@@ -824,6 +824,8 @@ export async function vsHandle(request, env, url, H) {
     }
     if (p === "/voorstel/kop" && request.method === "POST") {
       const v = await eigen(body.id);
+      // Gerrit (31 okt 2026): de gegevens van het voorstel pas invullen na de bevestiging.
+      if (v.status !== "in-logic4") return H.reply(409, { ok: false, error: "Invullen kan zodra de klant zijn gegevens heeft bevestigd." });
       const kop = Object.assign({}, v.kop || {}, body.kop || {});
       v.kop = kop;
       if (body.kop && body.kop.vervaldatum !== undefined) v.vervaldatum = vsS(body.kop.vervaldatum, 10);

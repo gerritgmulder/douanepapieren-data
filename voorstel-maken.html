@@ -227,12 +227,15 @@ function teken(){
   }
   h += '</div>';
 
+  /* De gegevens van het voorstel staan er wel, maar gaan pas open als de
+     klant heeft bevestigd (Gerrit, 31 okt 2026). */
+  var kopOpen = V.status === "in-logic4";
   /* Kop: alles uit het bovenste deel van het offertescherm */
   var kop = Object.assign({}, V.kop||{}, ORDER ? ORDER.kop : {});
   var K = KEUZES || {}, T = K.types || {};
   if (!kop.medewerker && IKMW) kop.medewerker = IKMW;
   h += '<div class="kaart"><h2>Gegevens van het voorstel' + (V.orderid ? '<span class="rechts">Nummer in Logic4: <b>'+esc(V.orderid)+'</b></span>' : '') + '</h2>' +
-    (V.orderid ? '' : '<p class="lead">Wat je hier invult, gaat mee zodra het voorstel in Logic4 komt.</p>') +
+    (kopOpen ? '' : '<div class="slot" style="margin-bottom:10px">🔒 Invullen kan zodra de klant zijn gegevens heeft bevestigd.</div>') +
     '<div class="raster">' +
     '<div class="s2"><label class="l" for="o_referentie">Uw referentie</label><input id="o_referentie" data-o="referentie" value="'+esc(kop.referentie||"")+'"></div>' +
     '<div class="s4"><label class="l" for="o_omschrijving">Omschrijving</label><input id="o_omschrijving" data-o="omschrijving" value="'+esc(kop.omschrijving||"")+'"></div>' +
@@ -245,7 +248,7 @@ function teken(){
     '<div class="s1"><label class="l" for="o_vervaldatum">Vervaldatum</label><input id="o_vervaldatum" data-o="vervaldatum" type="date" value="'+esc(V.vervaldatum||kop.vervaldatum||"")+'"></div>' +
     [1,2,3,4].map(function(n){ var t = T[n] || { naam: "Type "+n, keuzes: [] }; return keuze("type"+n, t.naam, t.keuzes, kop["type"+n], "s1"); }).join("") +
     '<div class="s6"><label class="l" for="o_memo">Order memo</label><textarea id="o_memo" data-o="memo">'+esc(kop.memo||"")+'</textarea></div>' +
-    '</div><div class="knoppen"><button type="button" id="kopBewaar" title="Het Dashboard bewaart deze gegevens'+(V.orderid?' en zet ze meteen in Logic4':'')+'">Opslaan</button><span class="melding" id="kopMelding"></span></div></div>';
+    '</div><div class="knoppen'+(kopOpen?'':' verberg')+'"><button type="button" id="kopBewaar" title="Het Dashboard bewaart deze gegevens'+(V.orderid?' en zet ze meteen in Logic4':'')+'">Opslaan</button><span class="melding" id="kopMelding"></span></div></div>';
 
   /* Regels */
   h += '<div class="kaart"><h2>Regels</h2>';
@@ -299,6 +302,8 @@ function teken(){
 
   $("vak").innerHTML = h;
   koppel(vast || V.status === "gesloten");
+  // Gegevens van het voorstel: op slot tot de klant heeft bevestigd.
+  Array.prototype.forEach.call(document.querySelectorAll("[data-o]"), function(x){ x.disabled = V.status !== "in-logic4"; });
   sluitKoppel();
   stuurKoppel();
 }
