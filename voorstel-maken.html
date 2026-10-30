@@ -277,6 +277,18 @@ function teken(){
   }
   h += '</div>';
 
+  /* Naar de klant: versturen en printen */
+  if (V.status === "in-logic4") {
+    var vv = V.voorstelVerstuurd || [];
+    h += '<div class="kaart"><h2>Naar de klant</h2>' +
+      (vv.length ? '<p class="lead">📨 ' + vv.slice().reverse().map(function(x){ return 'Verstuurd naar <b>'+esc(x.naar)+'</b> op '+esc(wanneer(x.ts))+' ('+esc(geld(x.totaal))+')'; }).join('<br>') + '</p>' : '<p class="lead">De klant krijgt een mail met een knop naar zijn voorstel. Daar kan hij het ook printen of als pdf bewaren.</p>') +
+      '<div class="raster"><div class="s6"><label class="l" for="stOnd">Onderwerp</label><input id="stOnd" placeholder="Uw voorstel '+esc(V.orderid)+' van Fonteyn"></div>' +
+      '<div class="s6"><label class="l" for="stTekst">Eigen tekst in de mail (mag leeg)</label><textarea id="stTekst" placeholder="Hierbij ontvangt u ons voorstel. U bekijkt het via de knop hieronder; daar kunt u het ook printen of opslaan als pdf."></textarea></div></div>' +
+      '<div class="knoppen"><button type="button" id="printKnop" title="Het Dashboard opent het voorstel zoals Logic4 het nu heeft, om te printen of als pdf op te slaan">🖨 Printen</button>' +
+      '<button type="button" class="doe" id="stVoorbeeld" title="Het Dashboard laat eerst zien welke mail en welk voorstel de klant krijgt">Voorbeeld en versturen</button><span class="melding" id="stMelding"></span></div>' +
+      '<div id="stVak"></div></div>';
+  }
+
   /* Sluiten (zoals Verwijderen in het offertescherm van Logic4) */
   if (V.id && V.status !== "gesloten") h += '<div class="kaart"><h2>Klaar met dit voorstel?</h2><div class="knoppen" style="margin-top:0"><input id="sluitReden" placeholder="Reden (mag leeg)" style="max-width:320px">' +
     '<button type="button" id="sluitKnop" title="Het Dashboard sluit dit voorstel; in Logic4 komt het op Offerte gesloten">Voorstel sluiten</button><span class="melding" id="sluitMelding"></span></div></div>';
@@ -288,6 +300,7 @@ function teken(){
   $("vak").innerHTML = h;
   koppel(vast || V.status === "gesloten");
   sluitKoppel();
+  stuurKoppel();
 }
 
 function klantUitScherm(){
@@ -390,6 +403,35 @@ function koppel(vast){
       };
     });
   }
+}
+function stuurKoppel(){
+  if (!$("printKnop")) return;
+  $("printKnop").onclick = async function(){
+    var k = this; k.disabled = true; melding("stMelding", "Voorstel klaarzetten…");
+    try { var j = await api("/voorstel/print", { id: V.id }); window.open(j.url, "_blank"); log("print", V.id); melding("stMelding", "Het voorstel staat open in een nieuw venster."); }
+    catch(e){ melding("stMelding", e.message, true); }
+    k.disabled = false;
+  };
+  $("stVoorbeeld").onclick = async function(){
+    var k = this; k.disabled = true; melding("stMelding", "Voorbeeld maken…");
+    var body = { id: V.id, onderwerp: $("stOnd").value, tekst: $("stTekst").value };
+    try {
+      var j = await api("/voorstel/stuur", body);
+      melding("stMelding", "");
+      $("stVak").innerHTML = '<p class="lead" style="margin-top:12px">Zo krijgt <b>'+esc(j.naar)+'</b> het. Onderwerp: <b>'+esc(j.onderwerp)+'</b></p>' +
+        '<div class="raster"><div class="s3"><label class="l">De mail</label><iframe id="stMail" style="width:100%;height:520px;border:1px solid #e5e7eb;border-radius:8px;background:#f5f4ef"></iframe></div>' +
+        '<div class="s3"><label class="l">Het voorstel achter de knop</label><iframe id="stDoc" style="width:100%;height:520px;border:1px solid #e5e7eb;border-radius:8px;background:#f5f4ef"></iframe></div></div>' +
+        '<div class="knoppen"><button type="button" class="doe" id="stEcht" title="Het Dashboard stuurt deze mail nu naar de klant">Versturen naar '+esc(j.naar)+'</button><button type="button" id="stTerug" title="Het Dashboard sluit het voorbeeld; er gaat niets weg">Nog aanpassen</button><span class="melding" id="stMelding2"></span></div>';
+      $("stMail").srcdoc = j.mail; $("stDoc").srcdoc = j.voorstel;
+      $("stTerug").onclick = function(){ $("stVak").innerHTML = ""; };
+      $("stEcht").onclick = async function(){
+        var b = this; b.disabled = true; melding("stMelding2", "Versturen…");
+        try { var r = await api("/voorstel/stuur", Object.assign({ stuur: true }, body)); V = r.voorstel; log("voorstel-verstuurd", V.id); teken(); melding("stMelding", "Verstuurd."); }
+        catch(e){ melding("stMelding2", e.message, true); b.disabled = false; }
+      };
+    } catch(e){ melding("stMelding", e.message, true); }
+    k.disabled = false;
+  };
 }
 function sluitKoppel(){
   if (!$("sluitKnop")) return;

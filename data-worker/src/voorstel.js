@@ -35,6 +35,10 @@
 const VS_LOGO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png";
 const VS_OFFERTE = 4;            // Logic4-status 'Offerte'
 const VS_GESLOTEN = 19;          // Logic4-status 'Offerte gesloten'
+/* Het voorstel echt naar de klant mailen gaat pas aan na het akkoord van
+   Gerrit op de opmaak (zie memory mails-eerst-laten-zien). Tot die tijd
+   werken het voorbeeld en printen wel. */
+const VS_STUUR_AAN = false;
 const VS_PARTICULIER = 1;        // RelationTypeId
 const VS_ZAKELIJK = 3;
 const VS_ACTIEF = 2;             // StatusId debiteur
@@ -60,6 +64,8 @@ async function vsDb(env) {
       /* Per debiteur de gegevens zoals de klant ze het laatst bevestigde.
          Gerrit (30 okt 2026): eenmaal bevestigd is genoeg, zolang er niets
          aan veranderd is. */
+      // Links naar het voorstel: t = verstuurd aan de klant, p = printen. Eigen tabel, zodat zoeken één rij leest.
+      db.prepare("CREATE TABLE IF NOT EXISTS voorstel_link (token TEXT PRIMARY KEY, id TEXT, soort TEXT, ts INTEGER)"),
       db.prepare("CREATE TABLE IF NOT EXISTS voorstel_bevestigd (debiteur INTEGER PRIMARY KEY, klant TEXT, ts INTEGER, voorstel TEXT)"),
     ]);
     _vsTabel = true;
@@ -480,11 +486,11 @@ function vsMailHtml(v, link) {
     "<p style='font-size:13px;color:#6b7280;line-height:1.5'>Lukt het klikken op de knop? Kopieer anders deze link naar uw browser:<br>" + vsEsc(link) + "</p>" +
     "<p style='font-size:15px;line-height:1.55'>Met vriendelijke groet,<br>Fonteyn</p></div></div></div>";
 }
-async function vsMailStuur(env, H, v, wie) {
+async function vsMailStuur(env, H, v, wie, onderwerp, html) {
   const naar = v.klant && v.klant.email;
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar || "")) return { ok: false, error: "Vul eerst een geldig e-mailadres van de klant in." };
-  const onderwerp = "Bevestig je gegevens";
-  const html = vsMailHtml(v, vsLink(env, v.token));
+  onderwerp = onderwerp || "Bevestig je gegevens";
+  html = html || vsMailHtml(v, vsLink(env, v.token));
   const adviseur = vsAdviseurMail(v.adviseur || wie);
   // Proef: alles naar één adres zolang de tegel in aanbouw is.
   const aan = env.VS_PROEF_AAN ? [env.VS_PROEF_AAN] : [naar];
@@ -501,6 +507,92 @@ async function vsMailStuur(env, H, v, wie) {
   });
   if (!r.ok) return { ok: false, error: "Versturen lukte nog niet (" + r.status + ")." };
   return { ok: true, via: "Fonteyn", naar: aan.join(", ") };
+}
+
+/* ── Het voorstel zelf: om te printen en om naar de klant te sturen ──────── */
+/* Gerrit (31 okt 2026): "Ga door met voorstel naar de klant sturen en
+   printen." Logic4 maakt zijn offerte-pdf alleen in het programma zelf, niet
+   via de koppeling. Dus tekent het Dashboard het voorstel als pagina: de
+   adviseur print die (of slaat hem op als pdf), en de klant krijgt een mail
+   met een link ernaartoe. Wat de klant ziet is de stand op het moment van
+   versturen; latere wijzigingen gaan pas mee bij opnieuw versturen. */
+function vsDocLink(env, v) { return (env.SVC_LINK_BASIS || "https://fonteyn-data-store.g-mulder.workers.dev") + "/voorstel/bekijk?t=" + encodeURIComponent(v.bekijkToken); }
+function vsGeld(x) { return "\u20ac " + (Math.round((Number(x) || 0) * 100) / 100).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function vsDatum(t) { const d = t ? new Date(t) : null; return d && !isNaN(d) ? d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Amsterdam" }) : ""; }
+/* Alles wat op het papier komt, in één keer bij elkaar. */
+async function vsDocGegevens(env, H, db, v) {
+  const o = await vsOrderLees(env, H, v.orderid);
+  if (!o) throw new Error("Logic4 gaf dit voorstel even terug zonder inhoud. Probeer het zo nog eens.");
+  const k = await vsKeuzes(env, H, db);
+  const naamVan = (lijst, id) => ((k[lijst] || []).find(x => String(x.id) === String(id)) || {}).naam || "";
+  const mw = (k.medewerkers || []).find(x => String(x.id) === String(o.kop.medewerker)) || {};
+  const adviseurMail = /@/.test(mw.login || "") ? mw.login : vsAdviseurMail(v.adviseur);
+  return {
+    nummer: o.id, datum: Date.now(), geldigTot: v.vervaldatum || "",
+    klant: v.klant, zakelijk: !!(v.klant && (v.klant.bedrijf || v.klant.btw)),
+    referentie: o.kop.referentie, omschrijving: o.kop.omschrijving,
+    betaalmethode: naamVan("betaalmethoden", o.kop.betaalmethode), transporteur: naamVan("transporteurs", o.kop.transporteur),
+    leverdatum: o.kop.leverdatum && o.kop.leverdatum < "2099" ? o.kop.leverdatum : "",
+    adviseur: { naam: mw.naam || String(v.adviseur || "").replace(/@.*/, ""), mail: adviseurMail },
+    regels: o.regels.filter(r => !r.vervallen && r.aantal).map(r => ({ code: r.code, oms: r.oms, oms2: r.oms2, aantal: r.aantal,
+      stukEx: r.netto, stukIncl: Math.round(r.netto * (1 + r.btw / 100) * 100) / 100, btw: r.btw,
+      bruto: r.bruto, korting: r.bruto && r.netto < r.bruto ? Math.round((1 - r.netto / r.bruto) * 1000) / 10 : 0 })),
+    totaal: o.totaal,
+  };
+}
+function vsDocHtml(d, opties) {
+  opties = opties || {};
+  const k = d.klant || {}, a = k.aflevering || {};
+  const regel = (l, w) => w ? "<tr><td>" + vsEsc(l) + "</td><td>" + vsEsc(w) + "</td></tr>" : "";
+  const adres = [[k.straat, [k.huisnummer, k.toevoeging].filter(Boolean).join(" ")].filter(Boolean).join(" "), [k.postcode, k.plaats].filter(Boolean).join(" "), k.land && k.land !== "NL" ? k.land : ""].filter(Boolean);
+  const incl = !d.zakelijk;   // particulier: prijzen met btw; zakelijk: zonder
+  const rij = r => "<tr><td>" + vsEsc(r.oms) + (r.oms2 && r.oms2.trim() !== String(r.oms).trim() ? "<div class='klein'>" + vsEsc(r.oms2) + "</div>" : "") + "<div class='klein'>Artikel " + vsEsc(r.code) + (r.korting ? " &middot; " + vsEsc(String(r.korting).replace(".", ",")) + "% korting" : "") + "</div></td>" +
+    "<td class='g'>" + vsEsc(String(r.aantal).replace(".", ",")) + "</td><td class='g'>" + vsGeld(incl ? r.stukIncl : r.stukEx) + "</td><td class='g'>" + vsGeld((incl ? r.stukIncl : r.stukEx) * r.aantal) + "</td></tr>";
+  const t = d.totaal || {};
+  return "<!doctype html><html lang='nl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
+    "<title>Voorstel " + vsEsc(d.nummer) + " - Fonteyn</title><meta name='robots' content='noindex'><style>" +
+    "body{margin:0;background:#f5f4ef;font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:14px}" +
+    ".vel{max-width:800px;margin:20px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}" +
+    ".kop{background:#144734;padding:18px 26px;display:flex;align-items:center;gap:16px}.kop img{height:52px;display:block}.kop .t{margin-left:auto;color:#fff;text-align:right}.kop .t b{display:block;font-size:20px}" +
+    ".in{padding:24px 26px 28px}.twee{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:18px}@media(max-width:600px){.twee{grid-template-columns:1fr}.in{padding:18px 14px}}" +
+    "h3{margin:0 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#144734}p{margin:0;line-height:1.5}" +
+    "table.geg{border-collapse:collapse}table.geg td{padding:2px 12px 2px 0;vertical-align:top}table.geg td:first-child{color:#6b7280}" +
+    "table.r{width:100%;border-collapse:collapse;margin-top:6px}table.r th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;border-bottom:2px solid #144734;padding:7px 6px}" +
+    "table.r td{padding:9px 6px;border-bottom:1px solid #eee;vertical-align:top}.g{text-align:right;white-space:nowrap}table.r th.g{text-align:right}.klein{font-size:12px;color:#6b7280;margin-top:2px}" +
+    ".tot{margin:14px 0 0 auto;border-collapse:collapse}.tot td{padding:4px 6px}.tot td:last-child{text-align:right;min-width:110px}.tot .groot td{font-weight:bold;font-size:16px;border-top:2px solid #144734;padding-top:8px}" +
+    ".knop{display:inline-block;background:#144734;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-size:15px;font-weight:bold;cursor:pointer;font-family:inherit}" +
+    ".balk{max-width:800px;margin:16px auto 0;text-align:right}" +
+    "@media print{body{background:#fff}.balk{display:none}.vel{border:0;margin:0;max-width:none;border-radius:0}.kop{-webkit-print-color-adjust:exact;print-color-adjust:exact}}" +
+    "</style></head><body>" +
+    "<div class='balk'><button class='knop' onclick='window.print()' title='Print dit voorstel of sla het op als pdf'>Printen of opslaan als pdf</button></div>" +
+    "<div class='vel'><div class='kop'><img src='" + VS_LOGO + "' alt='Fonteyn'><div class='t'><b>Voorstel " + vsEsc(d.nummer) + "</b>" + vsEsc(vsDatum(d.datum)) + "</div></div><div class='in'>" +
+    "<div class='twee'><div><h3>Voor</h3><p><b>" + vsEsc(k.bedrijf || vsNaam(k)) + "</b>" + (k.bedrijf ? "<br>t.a.v. " + vsEsc(vsNaam(k)) : "") + "<br>" + adres.map(vsEsc).join("<br>") + "</p>" +
+      (k.afwijkend ? "<h3 style='margin-top:12px'>Afleveradres</h3><p>" + [a.naam, [a.straat, [a.huisnummer, a.toevoeging].filter(Boolean).join(" ")].join(" "), [a.postcode, a.plaats].filter(Boolean).join(" ")].filter(x => String(x).trim()).map(vsEsc).join("<br>") + "</p>" : "") + "</div>" +
+    "<div><h3>Gegevens</h3><table class='geg'>" + regel("Voorstel", d.nummer) + regel("Datum", vsDatum(d.datum)) + regel("Geldig tot", d.geldigTot ? vsDatum(d.geldigTot) : "") +
+      regel("Uw referentie", d.referentie) + regel("Betaling", d.betaalmethode) + regel("Levering", d.transporteur) + regel("Gewenste leverdatum", d.leverdatum ? vsDatum(d.leverdatum) : "") +
+      regel("Uw adviseur", d.adviseur.naam) + regel("E-mail", d.adviseur.mail) + "</table></div></div>" +
+    (d.omschrijving ? "<p style='margin-bottom:12px'><b>" + vsEsc(d.omschrijving) + "</b></p>" : "") +
+    "<table class='r'><thead><tr><th>Omschrijving</th><th class='g'>Aantal</th><th class='g'>Prijs per stuk" + (incl ? " incl. btw" : " excl. btw") + "</th><th class='g'>Totaal</th></tr></thead><tbody>" + d.regels.map(rij).join("") + "</tbody></table>" +
+    "<table class='tot'>" + (t.verzend ? "<tr><td>Verzendkosten excl. btw</td><td>" + vsGeld(t.verzend) + "</td></tr>" : "") +
+      "<tr><td>Totaal excl. btw</td><td>" + vsGeld(t.ex) + "</td></tr><tr><td>Btw</td><td>" + vsGeld(t.btw) + "</td></tr><tr class='groot'><td>Totaal incl. btw</td><td>" + vsGeld(t.incl) + "</td></tr></table>" +
+    "<p class='klein' style='margin-top:24px'>Vragen over dit voorstel? Mail of bel uw adviseur" + (d.adviseur.naam ? ", " + vsEsc(d.adviseur.naam) : "") + ". Wij helpen u graag verder.</p>" +
+    "</div></div>" + (opties.voet || "") + "</body></html>";
+}
+function vsVoorstelMailHtml(v, d, link, tekst) {
+  const k = v.klant || {};
+  const aanhef = k.aanhef === "1" ? "Beste heer " + (k.tussenvoegsel ? k.tussenvoegsel + " " : "") + k.achternaam
+    : k.aanhef === "2" ? "Beste mevrouw " + (k.tussenvoegsel ? k.tussenvoegsel + " " : "") + k.achternaam
+    : "Beste " + (vsNaam(k) || "klant");
+  const alinea = String(tekst || "Hierbij ontvangt u ons voorstel. U bekijkt het via de knop hieronder; daar kunt u het ook printen of opslaan als pdf.")
+    .split(/\n{2,}/).map(x => "<p style='font-size:15px;line-height:1.55'>" + vsEsc(x).replace(/\n/g, "<br>") + "</p>").join("");
+  return "<div style='font-family:Arial,Helvetica,sans-serif;background:#f5f4ef;padding:20px'><div style='max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden'>" +
+    "<div style='background:#144734;padding:16px 20px'><img src='" + VS_LOGO + "' alt='Fonteyn' style='height:44px;display:block'></div>" +
+    "<div style='padding:22px'><p style='font-size:15px;line-height:1.55'>" + vsEsc(aanhef) + ",</p>" + alinea +
+    "<table style='border-collapse:collapse;margin:16px 0;font-size:14px'><tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Voorstel</td><td><b>" + vsEsc(d.nummer) + "</b></td></tr>" +
+    "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Totaal incl. btw</td><td><b>" + vsGeld(d.totaal.incl) + "</b></td></tr>" +
+    (d.geldigTot ? "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Geldig tot</td><td>" + vsEsc(vsDatum(d.geldigTot)) + "</td></tr>" : "") + "</table>" +
+    "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>Bekijk uw voorstel</a></p>" +
+    "<p style='font-size:15px;line-height:1.55'>Met vriendelijke groet,<br>" + vsEsc(d.adviseur.naam || "Fonteyn") + "<br><span style='color:#6b7280'>Fonteyn" + (d.adviseur.mail ? " &middot; " + vsEsc(d.adviseur.mail) : "") + "</span></p></div></div></div>";
 }
 
 /* ── De pagina voor de klant ────────────────────────────────────────────── */
@@ -623,6 +715,20 @@ async function vsBericht(env, H, v, verschil) {
 export async function vsHandle(request, env, url, H) {
   const p = url.pathname;
   // De klantpagina: zonder sleutel, het token in de link is de sleutel.
+  /* Het voorstel bekijken: ?t= is de link uit de mail aan de klant (de
+     versie van het versturen), ?p= de printlink van de adviseur (live). */
+  if (p === "/voorstel/bekijk" && request.method === "GET") {
+    const db = await vsDb(env);
+    const t = String(url.searchParams.get("t") || ""), pr = String(url.searchParams.get("p") || "");
+    const l = (t || pr) ? await db.prepare("SELECT id FROM voorstel_link WHERE token = ?1 AND soort = ?2").bind(t || pr, t ? "t" : "p").first() : null;
+    const v = l ? await vsLees(db, l.id) : null;
+    if (!v || (t && !v.verstuurdeVersie) || v.status === "gesloten")
+      return vsPagina("Voorstel", "<h1>Dit voorstel is verlopen</h1><p>Vraag uw adviseur gerust om een nieuwe link.</p>");
+    try {
+      const d = t ? v.verstuurdeVersie : await vsDocGegevens(env, H, db, v);
+      return new Response(vsDocHtml(d), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+    } catch (e) { return vsPagina("Voorstel", "<h1>Even geduld</h1><p>" + vsEsc(e.message) + "</p>"); }
+  }
   if (p === "/bevestig") {
     if (request.method === "GET") return vsBevestigGet(env, url);
     if (request.method === "POST") return vsBevestigPost(env, request, H);
@@ -723,7 +829,13 @@ export async function vsHandle(request, env, url, H) {
       const kop = Object.assign({}, v.kop || {}, body.kop || {});
       v.kop = kop;
       if (body.kop && body.kop.vervaldatum !== undefined) v.vervaldatum = vsS(body.kop.vervaldatum, 10);
+      if (v.status === "gesloten") return H.reply(409, { ok: false, error: "Dit voorstel is gesloten." });
       if (v.orderid) {
+        /* De status die Logic4 nu heeft gaat ongewijzigd mee terug. Stond
+           hier vast 4, dan zette elke kopwijziging een gesloten voorstel of
+           een order die intussen betaald is terug op Offerte (proef 31 okt). */
+        const nu = await vsOrderLees(env, H, v.orderid);
+        if (nu && Number(nu.statusId) !== VS_OFFERTE) return H.reply(409, { ok: false, error: "Dit voorstel is in Logic4 al verder (status " + nu.status + "); de kop blijft zoals hij is." });
         await vsL4(env, H, "/v3/Orders/AddUpdateOrder", Object.assign({ Id: Number(v.orderid), DebtorId: Number(v.debiteur),
           OrderStatus: { Id: VS_OFFERTE }, CreationDate: new Date(v.aangemaakt || Date.now()).toISOString().slice(0, 19) }, vsKopNaarL4(kop)));
       }
@@ -731,6 +843,43 @@ export async function vsHandle(request, env, url, H) {
       await vsSchrijf(db, v);
       const order = v.orderid ? await vsOrderLees(env, H, v.orderid).catch(() => null) : null;
       return H.reply(200, { ok: true, voorstel: vsVoorTegel(v), order });
+    }
+    /* Het voorstel als pagina, om te printen (live uit Logic4). Geeft een
+       link terug die de tegel in een nieuw venster opent. */
+    if (p === "/voorstel/print" && request.method === "POST") {
+      const v = await eigen(body.id);
+      if (!v.orderid) return H.reply(409, { ok: false, error: "Printen kan zodra het voorstel in Logic4 staat." });
+      if (!v.printToken) {
+        v.printToken = vsCode(32); await vsSchrijf(db, v);
+        await db.prepare("INSERT OR REPLACE INTO voorstel_link (token, id, soort, ts) VALUES (?1, ?2, 'p', ?3)").bind(v.printToken, v.id, Date.now()).run();
+      }
+      return H.reply(200, { ok: true, url: (env.SVC_LINK_BASIS || "https://fonteyn-data-store.g-mulder.workers.dev") + "/voorstel/bekijk?p=" + encodeURIComponent(v.printToken) });
+    }
+    /* Versturen aan de klant. Zonder 'stuur:true' komt alleen het voorbeeld
+       terug (mail en voorstel), zodat de adviseur eerst ziet wat er gaat. */
+    if (p === "/voorstel/stuur" && request.method === "POST") {
+      const v = await eigen(body.id);
+      if (!v.orderid || v.status !== "in-logic4") return H.reply(409, { ok: false, error: "Versturen kan zodra het voorstel in Logic4 staat." });
+      const d = await vsDocGegevens(env, H, db, v);
+      if (!d.regels.length) return H.reply(400, { ok: false, error: "Zet eerst minstens één regel op het voorstel." });
+      const onderwerp = vsS(body.onderwerp, 150) || ("Uw voorstel " + d.nummer + " van Fonteyn");
+      const tekst = String(body.tekst || "").slice(0, 3000);
+      if (body.stuur !== true) {
+        return H.reply(200, { ok: true, voorbeeld: true, naar: v.klant.email, onderwerp,
+          mail: vsVoorstelMailHtml(v, d, "#", tekst), voorstel: vsDocHtml(d) });
+      }
+      if (!VS_STUUR_AAN && !env.DEV_OPEN) return H.reply(409, { ok: false, error: "Versturen gaat aan zodra de opmaak van de mail is goedgekeurd. Printen en het voorbeeld werken al." });
+      if (!v.bekijkToken) {
+        v.bekijkToken = vsCode(32);
+        await db.prepare("INSERT OR REPLACE INTO voorstel_link (token, id, soort, ts) VALUES (?1, ?2, 't', ?3)").bind(v.bekijkToken, v.id, Date.now()).run();
+      }
+      v.verstuurdeVersie = d;
+      const m = await vsMailStuur(env, H, v, wie, onderwerp, vsVoorstelMailHtml(v, d, vsDocLink(env, v), tekst));
+      if (!m.ok) return H.reply(502, m);
+      v.voorstelVerstuurd = (v.voorstelVerstuurd || []).concat([{ ts: Date.now(), naar: m.naar, via: m.via, totaal: d.totaal.incl }]).slice(-20);
+      vsLog(v, wie, "Voorstel verstuurd naar " + m.naar + " (" + vsGeld(d.totaal.incl) + ")");
+      await vsSchrijf(db, v);
+      return H.reply(200, { ok: true, voorstel: vsVoorTegel(v) });
     }
     /* Sluiten: in Logic4 naar 'Offerte gesloten' (19). Weggooien kan via de
        koppeling niet; gesloten telt nergens meer mee. */
