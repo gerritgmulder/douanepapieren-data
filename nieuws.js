@@ -51,6 +51,10 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-30", bestand: "voorraad.html", soort: "beter",
+      titel: "Rode ETA: met de hand ingevuld",
+      wat: "Bij Overzicht > Binnenkomende schepen staat een ETA nu rood als hij met de hand is ingevuld en Merzario de referentie nog niet kent. Zo'n datum blijft staan tot iemand hem aanpast. Vul bij Schepen het SC-nummer van Merzario in, dan haalt het Dashboard de datum voortaan zelf op." },
+    {
       datum: "2026-10-30", bestand: "voorraad.html", soort: "nieuw",
       titel: "Rondleiding door Voorraadbeheer",
       wat: "Met de knop Rondleiding bovenaan loop je stap voor stap langs alle tabbladen; per stap licht het Dashboard uit wat je daar doet. Er verandert niets. Een order van € 0 (retour of omruiling) heet nu \"€ 0, niets te betalen\" in plaats van \"betaald 0%\"." },

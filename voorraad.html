@@ -2364,7 +2364,9 @@ function renderOvShips(){
       "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(ref||"-")+"</b></td>"+
       /* Noemt de invoice geen schip, dan het schip volgens Merzario (30 okt 2026, Devine 364-365). */
       "<td style='font-size:12px;color:var(--muted)'>"+esc(s.vessel||(s.track&&s.track.vessel?s.track.vessel+(s.track.voyage?" / "+s.track.voyage:""):"")||"-")+"</td>"+
-      "<td>"+(s.eta?esc(datumNL(s.eta)):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
+      /* Met de hand ingevulde ETA zonder koppeling met Merzario: rood, want die
+         datum wordt nergens bijgewerkt (Gerrit, 30 okt 2026). */
+      "<td>"+(s.eta?(s.track?esc(datumNL(s.eta)):"<span style='color:#b91c1c;font-weight:700' title='Met de hand ingevuld. Merzario kent deze referentie nog niet, dus deze datum wordt nergens bijgewerkt. Vul bij Schepen het SC-nummer van Merzario in.'>&#9679; "+esc(datumNL(s.eta))+"</span><br><span style='font-size:11px;color:#b91c1c'>met de hand, geen live ETA</span>"):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
       "<td>"+n+" spa's</td></tr>";
     if(open){
       const mc=s.modelColors||{};
