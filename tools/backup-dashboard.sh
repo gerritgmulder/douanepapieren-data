@@ -120,9 +120,11 @@ try: namen+=[x["name"] for x in json.load(open(os.path.join(doel,"cloudflare/kv/
 except Exception: pass
 # Sleutels die alleen in D1 staan (sinds 14 okt 2026 bewaart de worker daar).
 try:
-    import urllib.request
-    rq=urllib.request.Request("https://fonteyn-data-store.g-mulder.workers.dev/beheer/kv?lijst=1", headers={"X-Fonteyn-Auth": os.environ.get("TEAMSLEUTEL","")})
-    d1=json.load(urllib.request.urlopen(rq, timeout=60)).get("sleutels",[])
+    # Via curl: Cloudflare weigert Python's urllib met 403 (error code 1010).
+    import subprocess
+    uit=subprocess.run(["curl","-sf","--max-time","60","https://fonteyn-data-store.g-mulder.workers.dev/beheer/kv?lijst=1",
+        "-H","X-Fonteyn-Auth: "+os.environ.get("TEAMSLEUTEL","")], capture_output=True, text=True, check=True).stdout
+    d1=json.loads(uit).get("sleutels",[])
     weg={x["sleutel"] for x in d1 if x.get("soort")=="weg"}
     namen=[n for n in namen if n not in weg]+[x["sleutel"] for x in d1 if x.get("soort")!="weg" and x["sleutel"] not in set(namen)]
 except Exception as e: print("  LET OP: lijst uit D1 kwam niet binnen:", e)
@@ -284,6 +286,12 @@ print("     buckets   : %d verwacht, %d ontbreekt, %d verouderd" % (len(tekst), 
 if mist_d: print("     MIST:", ", ".join(mist_d[:8]))
 if mist_b: print("     MIST:", ", ".join(mist_b[:8]))
 if oud: print("     VEROUDERD (niet ververst deze ronde):", ", ".join(oud[:8]))
+# "Ontbreekt" kijkt alleen naar de KV-lijst. Wat uit D1 of het archief komt en
+# leeg terugkwam, telt daar niet mee; rl: (tellers die vanzelf verlopen) is
+# gewoon leeg.
+leeg=[r[5:].strip() for r in open(os.environ["LOG"]) if r.startswith("LEEG ") and not r.startswith("LEEG rl:")]
+print("     leeg terug: %d" % len(leeg))
+if leeg: print("     LEEG:", ", ".join(leeg[:8]))
 PY
 
 # ── 7. controlelijst en leesmij ────────────────────────────────────────────

@@ -23,6 +23,8 @@ if [ "$soort" = "bucket" ] && [ -n "${TEAMSLEUTEL:-}" ]; then
   enc="$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$sleutel")"
   code=$(curl -s -o "$doel" -w "%{http_code}" "https://fonteyn-data-store.g-mulder.workers.dev/beheer/kv?sleutel=$enc" -H "X-Fonteyn-Auth: $TEAMSLEUTEL" 2>>"$LOG.fouten")
   if [ "$code" = "200" ] && [ -s "$doel" ]; then exit 0; fi
+  # Foto's, tuinsets en proforma's staan in het archief en niet in KV/D1.
+  if [ "$code" = "404" ] && curl -sf "https://fonteyn-data-store.g-mulder.workers.dev/beheer/archief?sleutel=$enc" -H "X-Fonteyn-Auth: $TEAMSLEUTEL" -o "$doel" 2>>"$LOG.fouten" && [ -s "$doel" ]; then exit 0; fi
   if [ "$code" = "404" ]; then echo "LEEG $sleutel" >> "$LOG"; rm -f "$doel"; exit 0; fi
   rm -f "$doel"
 fi
