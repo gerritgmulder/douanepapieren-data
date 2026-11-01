@@ -5443,6 +5443,16 @@ async function handleTeamKey(request, env) {
   });
   if (!r.ok) {
     console.log("[teamkey] Logic4-verificatie faalde voor " + username + " (HTTP " + r.status + ")");
+    /* In het logboek, zodat een mislukte inlog terug te vinden is: Patrick
+       Kroes kwam er dagenlang niet in en er stond nergens iets van (Gerrit,
+       1 nov 2026). Alleen de naam en het antwoord van Logic4, nooit het
+       wachtwoord. */
+    try {
+      const fout = (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160);
+      const ts = new Date().toISOString();
+      await actSchrijf(env, "team", ts.slice(0, 7), { ts, user: username.toLowerCase().slice(0, 80), tile: "dashboard",
+        action: "login-mislukt", detail: "Logic4 HTTP " + r.status + (fout ? ": " + fout : "") });
+    } catch (e) {}
     return reply(401, { ok: false, error: "logic4-login-failed" });
   }
   const j = await r.json().catch(() => null);
