@@ -5410,7 +5410,18 @@ async function handleTeamKey(request, env) {
   // Zonder rem is dit endpoint een open brute-force-proxy richting Logic4's
   // IDP (met de teamsleutel als prijs). 10 pogingen per kwartier per IP is
   // ruim voor legitiem gebruik (1 poging per login).
+  /* Elke afloop van een inlog in het logboek: op de telefoon liet een
+     geslaagde inlog niets achter tot iemand een tegel opende, en een
+     geremde poging ook niet (Patrick Kroes, 2 nov 2026). */
+  const inlogLog = async (actie, detail) => {
+    try {
+      const ts = new Date().toISOString();
+      await actSchrijf(env, "team", ts.slice(0, 7), { ts, user: username.toLowerCase().slice(0, 80), tile: "dashboard",
+        action: actie, detail: String(detail || "").slice(0, 200) });
+    } catch (e) {}
+  };
   if (await rateLimited(env, request, "teamkey", 10, 900)) {
+    await inlogLog("login-mislukt", "te veel pogingen (429)");
     return reply(429, { ok: false, error: "too-many-attempts" });
   }
   /* Externen (Christiaan) loggen in met hun eigen Dashboard-wachtwoord, niet
@@ -5456,8 +5467,12 @@ async function handleTeamKey(request, env) {
     return reply(401, { ok: false, error: "logic4-login-failed" });
   }
   const j = await r.json().catch(() => null);
-  if (!j || !j.access_token) return reply(401, { ok: false, error: "logic4-login-failed" });
+  if (!j || !j.access_token) {
+    await inlogLog("login-mislukt", "Logic4 gaf geen token");
+    return reply(401, { ok: false, error: "logic4-login-failed" });
+  }
   console.log("[teamkey] uitgegeven aan " + username);
+  await inlogLog("login-gelukt", "via " + (request.headers.get("Origin") || request.headers.get("Referer") || "onbekend"));
   /* Iemand van buiten Fonteyn (groep extern in toegang.js) krijgt NIET de
      teamsleutel, maar een eigen sleutel die alleen bij zijn eigen tegels
      past. Gerrit (27 sep 2026) over Christiaan, compagnon van Dolf voor de
