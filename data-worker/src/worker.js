@@ -19640,17 +19640,27 @@ async function externPoort(request, env) {
     { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   const sl = request.headers.get("X-Fonteyn-Auth") || "";
   const [, naamEnc, sig] = sl.split(".");
-  const naam = decodeURIComponent(naamEnc || "").toLowerCase();
-  if (!naam || !sig || sig !== await externHandtekening(env, naam)) return nee(401, "Deze sleutel hoort bij niemand; log opnieuw in.");
-  if (!(await toegangMag(env, "extern", naam))) return nee(401, "Log opnieuw in.");
+  let naam = ""; try { naam = decodeURIComponent(naamEnc || "").toLowerCase(); } catch (e) {}
   const url = new URL(request.url);
+  /* Een weigering in het logboek, met de reden: Patrick Kroes zag alleen
+     "geen-toegang" en er stond nergens waarom (Gerrit, 2 nov 2026). */
+  const weiger = async (status, uitleg, reden) => {
+    try {
+      const ts = new Date().toISOString();
+      await actSchrijf(env, "team", ts.slice(0, 7), { ts, user: (naam || "onbekend").slice(0, 80), tile: "extern",
+        action: "toegang-geweigerd", detail: reden + " - " + request.method + " " + url.pathname });
+    } catch (e) {}
+    return nee(status, uitleg);
+  };
+  if (!naam || !sig || sig !== await externHandtekening(env, naam)) return weiger(401, "Deze sleutel hoort bij niemand; log opnieuw in.", "sleutel klopt niet");
+  if (!(await toegangMag(env, "extern", naam))) return weiger(401, "Log opnieuw in.", "niet in groep extern");
   /* Het dashboard toetst of een sleutel werkt met een leesvraag op
      rapportage. Voor een externe sleutel: ja, hij werkt, en er zit niets in. */
   if (url.pathname === "/data/rapportage" && request.method === "GET")
     return new Response("{}", { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   if (!externMagRoute(url.pathname, request.method)) {
     console.log("[extern] " + naam + " tegengehouden op " + request.method + " " + url.pathname);
-    return nee(403, "Dit onderdeel hoort bij een andere tegel.");
+    return weiger(403, "Dit onderdeel hoort bij een andere tegel.", "onderdeel niet toegestaan");
   }
   const h = new Headers(request.headers);
   h.set("X-Fonteyn-Auth", env.SHARED_SECRET);
