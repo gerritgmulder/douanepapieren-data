@@ -19400,8 +19400,7 @@ export class LiveKamer {
          mag alleen in de kamer van Bakwagenroute. */
       let extern = false;
       if (d.soort === "hallo" && att && att.kamer === "bakwagen" && /^ext1\./.test(String(d.sleutel || ""))) {
-        const [, naamEnc, sig] = String(d.sleutel).split(".");
-        const naam = decodeURIComponent(naamEnc || "").toLowerCase();
+        const { naam, sig } = externSleutelLees(d.sleutel);
         extern = !!naam && sig === await externHandtekening(this.env, naam) && await toegangMag(this.env, "extern", naam);
       }
       if (d.soort === "hallo" && ((this.env.SHARED_SECRET && d.sleutel === this.env.SHARED_SECRET) || extern)) {
@@ -19607,6 +19606,17 @@ async function externHandtekening(env, naam) {
 async function externSleutel(env, naam) {
   return "ext1." + encodeURIComponent(naam) + "." + await externHandtekening(env, naam);
 }
+/* De naam kan zelf een punt hebben (patrick.kroes, thieme.wennink), en
+   encodeURIComponent laat die staan. Dus niet op elke punt knippen: de
+   handtekening is alles na de láátste punt, de naam alles daarvoor. Op elke
+   punt knippen gaf "patrick" als naam en "kroes" als handtekening, en Patrick
+   kwam nooit in Mijn routes Service (Gerrit, 2 nov 2026). */
+function externSleutelLees(sl) {
+  const m = /^ext1\.(.+)\.([0-9a-f]+)$/.exec(String(sl || ""));
+  if (!m) return { naam: "", sig: "" };
+  let naam = ""; try { naam = decodeURIComponent(m[1]).toLowerCase(); } catch (e) {}
+  return { naam, sig: m[2] };
+}
 function externMagRoute(pad, methode) {
   if (EXTERN_EXACT.includes(pad)) return true;
   if (pad.startsWith("/data/")) return methode === "GET" && EXTERN_VAKKEN.includes(decodeURIComponent(pad.slice(6)));
@@ -19639,8 +19649,7 @@ async function externPoort(request, env) {
   const nee = (status, uitleg) => new Response(JSON.stringify({ ok: false, error: "geen-toegang", uitleg }),
     { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   const sl = request.headers.get("X-Fonteyn-Auth") || "";
-  const [, naamEnc, sig] = sl.split(".");
-  let naam = ""; try { naam = decodeURIComponent(naamEnc || "").toLowerCase(); } catch (e) {}
+  const { naam, sig } = externSleutelLees(sl);
   const url = new URL(request.url);
   /* Een weigering in het logboek, met de reden: Patrick Kroes zag alleen
      "geen-toegang" en er stond nergens waarom (Gerrit, 2 nov 2026). */
