@@ -36,6 +36,14 @@ for taal in sorted(os.listdir(bron)):
                '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="background:#ffffff;"><tr><td align="center" style="padding:14px 30px 10px;">'
                '<img src="' + PP + '/become-partner/img/held.jpg" width="340" alt="Passion Spas" class="fluid" style="display:block;width:340px;max-width:100%;height:auto;border:0;margin:0 auto;"></td></tr></table>', s)
     s = s.replace("{{unsubscribe}}", "{{AFMELDEN}}")
+    # Meebewegend in plaats van vast 710 breed: in een smal leesvenster (Outlook)
+    # moest je opzij scrollen (Gerrit, 3 nov 2026). Outlook voor Windows krijgt 600.
+    s = s.replace('class="container" width="710"', 'class="container" width="100%"')
+    s = s.replace("width:710px;max-width:710px;", "width:100%;max-width:600px;")
+    s = s.replace('<table role="presentation" width="710" align="center"', '<table role="presentation" width="600" align="center"')
+    s = s.replace('width="220" alt="Passion Spas', 'width="180" alt="Passion Spas').replace("width:220px;height:auto", "width:180px;max-width:100%;height:auto")
+    s = s.replace(".h1{font-size:30px!important;line-height:36px!important;}", ".h1{font-size:23px!important;line-height:29px!important;}")
+    assert "710" not in s, taal
     # Knop naar de partnerpagina, onder de beursaanbieding.
     link = PP + "/become-partner?lang=" + (taal if taal in BP_TALEN else "en")
     knop = ('<div style="padding-top:12px;"><table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td bgcolor="#ffffff" style="border-radius:30px;background:#ffffff;">'
