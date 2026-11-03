@@ -5112,6 +5112,32 @@ async function beursProef(request, env, url) {
   const uit = await beursMail(env, aan, url.searchParams.get("taal") || "en");
   return new Response(JSON.stringify(uit), { status: uit.ok ? 200 : 502, headers: { "Content-Type": "application/json" } });
 }
+/* Waar komt info@passionspas.com uit? Kijkt via het serviceaccount wie of wat
+   achter een adres zit (eigen mailbox, groep, doorsturing) en of het
+   Dashboard erin mag. Alleen met de beheersleutel. */
+async function beursMailbox(request, env, url) {
+  if (!env.BEURS_BEHEER || request.headers.get("X-Beurs-Sleutel") !== env.BEURS_BEHEER)
+    return new Response(JSON.stringify({ ok: false }), { status: 401 });
+  const adres = String(url.searchParams.get("adres") || "info@passionspas.com");
+  const naam = await ewsRoep(env, "ResolveNames",
+    '<m:ResolveNames ReturnFullContactData="true"><m:UnresolvedEntry>' + xmlUit(adres) + "</m:UnresolvedEntry></m:ResolveNames>",
+    "-", "gedelegeerd");
+  const toegang = {};
+  for (const modus of MAIL_MODI) {
+    const r = await ewsRoep(env, "FindItem", '<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape></m:ItemShape>' +
+      '<m:IndexedPageItemView MaxEntriesReturned="1" Offset="0" BasePoint="Beginning"/><m:ParentFolderIds>' +
+      mapVerwijzing("inbox", adres, modus) + "</m:ParentFolderIds></m:FindItem>", adres, modus);
+    toegang[modus] = r.ok ? "werkt" : (r.code || r.error) + ": " + (r.uitleg || "");
+  }
+  const x = naam.xml || "";
+  return new Response(JSON.stringify({ ok: true, adres,
+    gevonden: naam.ok, fout: naam.ok ? null : (naam.error + ": " + (naam.uitleg || "")),
+    soort: (x.match(/<t:MailboxType>([^<]*)/) || [])[1] || null,
+    naam: (x.match(/<t:Name>([^<]*)/) || [])[1] || null,
+    weergave: (x.match(/<t:DisplayName>([^<]*)/) || [])[1] || null,
+    adressen: [...x.matchAll(/<t:Entry Key="EmailAddress\d">([^<]*)/g)].map(m => m[1]),
+    toegang }, null, 1), { headers: { "Content-Type": "application/json" } });
+}
 async function beursAfmelden(request, env, url) {
   const adres = String(url.searchParams.get("e") || "").trim().toLowerCase();
   const goed = adres && url.searchParams.get("s") === await beursHandtekening(env, adres);
@@ -5247,6 +5273,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/become-partner" && request.method === "GET") return bpPagina();
   if (p === "/dealers/become-partner/send" && request.method === "POST") return bpAanmelding(request, env, url);
   if (p === "/dealers/beurs/proef" && request.method === "POST") return beursProef(request, env, url);
+  if (p === "/dealers/beurs/mailbox" && request.method === "GET") return beursMailbox(request, env, url);
   if (p === "/dealers/beurs/afmelden" && (request.method === "GET" || request.method === "POST")) return beursAfmelden(request, env, url);
   const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate)\.jpg)$/);
   if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);
