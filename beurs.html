@@ -84,6 +84,11 @@ select,input[type=text]{font:inherit;font-size:13px;border:1px solid var(--rand)
 .st-concept{color:var(--grijs)}.st-nalezen{color:var(--oranje);font-weight:700}.st-klaar{color:var(--groen);font-weight:700}.st-verzonden{color:#1d4ed8;font-weight:700}
 .tellers{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .teller{border:1px solid var(--rand);border-radius:999px;padding:4px 12px;font-size:12.5px;background:#fff}
+.knop{font:inherit;font-weight:700;font-size:13.5px;border:0;border-radius:9px;padding:9px 16px;cursor:pointer;background:var(--rood);color:#fff}
+.knop.licht{background:#fff;color:var(--ink);border:1px solid var(--rand)}
+.knop.groen{background:var(--groen)}
+.mrij{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.aanuit{font-weight:700}.aanuit.aan{color:var(--groen)}.aanuit.uit{color:var(--oranje)}
 .melding{font-size:12.5px;color:var(--groen);min-height:1em}
 #fout{color:var(--rood);font-weight:600;margin-bottom:10px}
 @media (max-width:760px){
@@ -113,10 +118,12 @@ select,input[type=text]{font:inherit;font-size:13px;border:1px solid var(--rand)
     <div class="aftel"><b id="dagen">-</b><span id="dagenTekst">dagen tot de beurs</span></div>
   </div>
   <div class="tabs" id="tabs">
+    <button class="tab" type="button" data-tab="mailing" title="De beursmail versturen en volgen">Mailing</button>
     <button class="tab aan" type="button" data-tab="lijst">Nog te bevestigen</button>
     <button class="tab" type="button" data-tab="talen">17 talen</button>
     <button class="tab" type="button" data-tab="pitch">Pitch en koopmotieven</button>
   </div>
+  <section id="t-mailing" hidden></section>
   <section id="t-lijst"></section>
   <section id="t-talen" hidden></section>
   <section id="t-pitch" hidden></section>
@@ -182,8 +189,8 @@ var BEURS = {
   ],
 };
 var STATUS = [["concept", "Concept"], ["nalezen", "Bij de nalezer"], ["klaar", "Nagelezen, klaar"], ["verzonden", "Verzonden"]];
-var data = { punten: {}, talen: {} }, tab = "lijst", bewaarTimer = null;
-try { tab = sessionStorage.getItem("beurs.tab") || "lijst"; } catch(e) {}
+var data = { punten: {}, talen: {} }, tab = "mailing", bewaarTimer = null;
+try { tab = sessionStorage.getItem("beurs.tab") || "mailing"; } catch(e) {}
 
 function aftellen(){
   var nu = new Date(); nu.setHours(0,0,0,0);
@@ -236,8 +243,9 @@ function tekenPitch(){
 }
 function teken(){
   document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
-  ["lijst", "talen", "pitch"].forEach(function(t){ $("t-" + t).hidden = t !== tab; });
-  tekenLijst(); tekenTalen(); tekenPitch();
+  ["mailing", "lijst", "talen", "pitch"].forEach(function(t){ $("t-" + t).hidden = t !== tab; });
+  tekenLijst(); tekenTalen(); tekenPitch(); tekenMailing();
+  if (tab === "mailing" && !mail) laadMailing();
 }
 function bewaar(meteen){
   clearTimeout(bewaarTimer);
@@ -253,6 +261,75 @@ function bewaar(meteen){
       try { if (window.fpLog) fpLog("beurs-bijgewerkt", ""); } catch(e) {}
     } catch(e) { $("stand").textContent = "Bewaren vraagt nog een poging: " + e.message; }
   }, meteen ? 0 : 700);
+}
+/* ── Mailing: de beursmail in 17 talen via Brevo (3 nov 2026) ──────────
+   De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het
+   aantal per dag op is. Hier zet je hem aan of op pauze en zie je de stand. */
+var mail = null, mailBevestig = false, mailMelding = "";
+var TAALNAAM = { nl:"Nederlands", fr:"Frans", en:"Engels", de:"Duits", it:"Italiaans", es:"Spaans", pt:"Portugees", sv:"Zweeds", fi:"Fins",
+  da:"Deens", no:"Noors", pl:"Pools", cs:"Tsjechisch", hu:"Hongaars", ro:"Roemeens", bg:"Bulgaars", el:"Grieks" };
+async function laadMailing(){
+  try {
+    var r = await fetch(W + "/dealers/beurs/status", { headers: kop() });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    mail = j;
+  } catch(e) { mailMelding = "Ophalen lukte nog niet: " + e.message; }
+  tekenMailing();
+}
+async function mailPost(pad, body){
+  var r = await fetch(W + pad, { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, kop()), body: JSON.stringify(body) });
+  return r.json();
+}
+async function mailZet(aan){
+  if (aan && !mailBevestig) { mailBevestig = true; tekenMailing(); return; }
+  mailBevestig = false;
+  var j = await mailPost("/dealers/beurs/instelling", { aan: aan, perDag: Number(($("mPerDag") || {}).value) || undefined });
+  mailMelding = j.ok ? (aan ? "Gestart. De eerste portie gaat binnen een kwartier." : "Op pauze gezet.") : (j.error || "Lukte nog niet.");
+  try { if (window.fpLog) fpLog(aan ? "beursmail-start" : "beursmail-pauze", ""); } catch(e) {}
+  laadMailing();
+}
+async function mailProef(){
+  mailMelding = "Bezig met versturen...";
+  tekenMailing();
+  var j = await mailPost("/dealers/beurs/proefmail", { aan: $("mProefAan").value, taal: $("mProefTaal").value });
+  mailMelding = j.ok ? "Proefmail verstuurd naar " + $("mProefAan").value + "." : (j.error || "Lukte nog niet.");
+  tekenMailing();
+}
+function tekenMailing(){
+  var el = $("t-mailing"); if (!el) return;
+  if (!mail) { el.innerHTML = '<div class="kaart"><p class="lead">' + esc(mailMelding || "Even laden...") + '</p></div>'; return; }
+  var tot = { wacht:0, verstuurd:0, fout:0, afgemeld:0 }, talen = {};
+  mail.per.forEach(function(r){ tot[r.status] = (tot[r.status] || 0) + r.n; (talen[r.taal] = talen[r.taal] || {})[r.status] = r.n; });
+  var aan = mail.inst && mail.inst.aan, perDag = (mail.inst && mail.inst.perDag) || 290;
+  var dagen = Math.ceil(tot.wacht / perDag);
+  var h = '<div class="kaart"><h3>Versturen</h3>' +
+    '<p class="lead">De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het aantal per dag op is. Elk land krijgt de mail in zijn eigen taal. Afzender: Dolf Nieland - Passion Spas. Antwoorden gaan naar info@passionspas.com.</p>' +
+    '<p>Stand: <span class="aanuit ' + (aan ? 'aan">Staat aan' : 'uit">Staat op pauze') + '</span>' +
+    (mail.inst && mail.inst.door ? ' <small style="color:var(--grijs)">(' + esc(String(mail.inst.door).split("@")[0]) + ', ' + new Date(mail.inst.ts).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) + ')</small>' : '') + '</p>' +
+    '<div class="mrij">' +
+    (aan ? '<button class="knop licht" type="button" onclick="mailZet(false)" title="Zet het versturen op pauze; wat nog wacht blijft in de wachtrij">Pauze</button>'
+         : (mailBevestig ? '<button class="knop groen" type="button" onclick="mailZet(true)" title="Start het versturen naar de hele lijst">Ja, start het versturen</button> <button class="knop licht" type="button" onclick="mailBevestig=false;tekenMailing()" title="Toch nog niet starten">Nog even niet</button>'
+                         : '<button class="knop" type="button" onclick="mailZet(true)" title="Start het versturen naar de hele lijst, in porties over de dag">Start versturen</button>')) +
+    ' <label style="font-size:13px">Per dag <input id="mPerDag" type="text" inputmode="numeric" value="' + perDag + '" style="width:60px" title="Hoeveel mails per dag; Brevo gratis staat er 300 toe"></label>' +
+    '</div><p class="melding">' + esc(mailMelding) + '</p>' +
+    '<div class="tellers"><span class="teller">In de wachtrij: <b>' + tot.wacht + '</b></span><span class="teller">Verstuurd: <b>' + tot.verstuurd + '</b></span>' +
+    '<span class="teller">Vandaag: <b>' + mail.vandaag + '</b> van ' + perDag + '</span><span class="teller">Teruggekomen: <b>' + tot.fout + '</b></span>' +
+    '<span class="teller">Afgemeld: <b>' + tot.afgemeld + '</b></span>' + (tot.wacht ? '<span class="teller">Nog ongeveer <b>' + dagen + '</b> ' + (dagen === 1 ? 'dag' : 'dagen') + '</span>' : '') + '</div></div>';
+  h += '<div class="kaart"><h3>Proefmail</h3><div class="mrij"><input id="mProefAan" type="text" placeholder="mailadres" value="' + esc(ik.indexOf("@") > 0 ? ik : "") + '" style="min-width:220px">' +
+    '<select id="mProefTaal">' + Object.keys(TAALNAAM).map(function(t){ return '<option value="' + t + '"' + (t === "nl" ? " selected" : "") + '>' + TAALNAAM[t] + '</option>'; }).join("") + '</select>' +
+    '<button class="knop licht" type="button" onclick="mailProef()" title="Stuur de beursmail in deze taal naar dit ene adres">Stuur proefmail</button></div></div>';
+  h += '<div class="kaart"><h3>Per taal</h3><table><thead><tr><th>Taal</th><th>Wacht</th><th>Verstuurd</th><th>Terug</th><th>Afgemeld</th></tr></thead><tbody>' +
+    Object.keys(talen).sort(function(a, b){ return ((talen[b].wacht||0)+(talen[b].verstuurd||0)) - ((talen[a].wacht||0)+(talen[a].verstuurd||0)); }).map(function(t){
+      var x = talen[t]; return '<tr><td class="taal">' + esc(TAALNAAM[t] || t) + '</td><td>' + (x.wacht||0) + '</td><td>' + (x.verstuurd||0) + '</td><td>' + (x.fout||0) + '</td><td>' + (x.afgemeld||0) + '</td></tr>';
+    }).join("") + '</tbody></table></div>';
+  if (mail.laatst.length) h += '<div class="kaart"><h3>Vandaag verstuurd</h3><table><tbody>' + mail.laatst.map(function(r){
+    return '<tr><td>' + esc(new Date(r.ts).toLocaleTimeString("nl-NL", { hour:"2-digit", minute:"2-digit" })) + '</td><td>' + esc(r.bedrijf) + '<small>' + esc(r.email) + '</small></td><td>' + esc(r.land) + '</td><td>' + esc(TAALNAAM[r.taal] || r.taal) + '</td></tr>'; }).join("") + '</tbody></table></div>';
+  if (mail.fouten.length) h += '<div class="kaart"><h3>Teruggekomen</h3><table><tbody>' + mail.fouten.map(function(r){
+    return '<tr><td>' + esc(r.bedrijf) + '<small>' + esc(r.email) + '</small></td><td>' + esc(r.land) + '</td><td><small>' + esc(r.fout) + '</small></td></tr>'; }).join("") + '</tbody></table></div>';
+  h += '<div class="kaart"><h3>Reacties</h3><p class="lead">Antwoorden komen nu binnen bij info@passionspas.com, in de mailbox van Arno. Zodra er een eigen mailbox voor de beurs is, staan de reacties hier, met automatische berichten apart.</p></div>' +
+    '<button class="knop licht" type="button" onclick="laadMailing()" title="Haal de nieuwste stand op">Ververs</button>';
+  el.innerHTML = h;
 }
 async function laad(){
   try {

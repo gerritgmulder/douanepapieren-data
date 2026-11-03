@@ -50,6 +50,9 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    { datum: "2026-11-03", bestand: "beurs.html", soort: "nieuw",
+      titel: "Beurs: tabblad Mailing",
+      wat:   "De beursmail voor Lyon versturen in 17 talen, elk land in zijn eigen taal. Met één knop start of pauzeer je het versturen; je ziet per taal wat er al weg is, wat terugkwam en wie zich afmeldde. Ook een proefmail naar jezelf in elke taal." },
     {
       datum: "2026-10-31", bestand: "voorstel-maken.html", soort: "beter",
       titel: "Eerst de klant, dan het voorstel",
