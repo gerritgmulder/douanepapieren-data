@@ -5067,6 +5067,62 @@ const BP_RAW = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-d
 const bpEsc = (x) => String(x == null ? "" : x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const BP_FLYER_NAAM = { en: "Become a Partner (EN)", nl: "Word partner (NL)", de: "Partner werden (DE)", fr: "Devenez partenaire (FR)", it: "Diventate partner (IT)", es: "Hagase partner (ES)" };
 
+/* ═══ BEURSMAILING LYON ═══════════════════════════════════════════════════
+   Gerrit (3 nov 2026): de partnerflyer voor Piscine Global Lyon gaat via
+   Brevo, een eigen gratis account op mail.passionspas.com (300 per dag).
+   Bewust niet via Resend: dat account is van Passion Partners en een koude
+   lijst kan het laten blokkeren. De mail staat in partnerpagina/beursmail/
+   <taal>.html; {{AFMELDEN}} wordt per adres een eigen afmeldlink.
+   Afmelden staat in KV onder beurs-af:<adres>, zonder einddatum. */
+const BEURS_AFZENDER = { name: "Dolf Nieland - Passion Spas", email: "dolf@mail.passionspas.com" };
+const BEURS_ANTWOORD = { email: "info@passionspas.com", name: "Passion Spas" };
+async function beursHandtekening(env, adres) {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(env.SHARED_SECRET || "")),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode("beurs-af:" + adres));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 24);
+}
+async function beursAfmeldLink(env, adres) {
+  return "https://partner.passionspas.com/beurs/afmelden?e=" + encodeURIComponent(adres) + "&s=" + await beursHandtekening(env, adres);
+}
+async function beursMail(env, adres, taal) {
+  const t = BP_TALEN.includes(taal) ? taal : "en";
+  const r = await fetch(BP_RAW + "beursmail/" + t + ".html?cb=" + Math.floor(Date.now() / 60000));
+  if (!r.ok) return { ok: false, error: "geen mailtekst voor " + t };
+  const link = await beursAfmeldLink(env, adres);
+  const html = (await r.text()).split("{{AFMELDEN}}").join(link);
+  const onderwerp = ((/<title>([^<]*)<\/title>/i.exec(html) || [])[1] || "Passion Spas").trim();
+  const b = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "api-key": env.BREVO_API_KEY, "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ sender: BEURS_AFZENDER, replyTo: BEURS_ANTWOORD, to: [{ email: adres }],
+      subject: onderwerp, htmlContent: html, tags: ["beurs-lyon-2026", "taal-" + t],
+      headers: { "List-Unsubscribe": "<" + link + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }),
+  });
+  const j = await b.json().catch(() => ({}));
+  return b.ok ? { ok: true, messageId: j.messageId || null, onderwerp } : { ok: false, status: b.status, error: j.message || j.code || "Brevo weigerde" };
+}
+async function beursProef(request, env, url) {
+  if (!env.BEURS_BEHEER || request.headers.get("X-Beurs-Sleutel") !== env.BEURS_BEHEER)
+    return new Response(JSON.stringify({ ok: false, error: "geen-toegang" }), { status: 401, headers: { "Content-Type": "application/json" } });
+  const aan = String(url.searchParams.get("aan") || "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(aan)) return new Response(JSON.stringify({ ok: false, error: "adres?" }), { status: 400 });
+  const uit = await beursMail(env, aan, url.searchParams.get("taal") || "en");
+  return new Response(JSON.stringify(uit), { status: uit.ok ? 200 : 502, headers: { "Content-Type": "application/json" } });
+}
+async function beursAfmelden(request, env, url) {
+  const adres = String(url.searchParams.get("e") || "").trim().toLowerCase();
+  const goed = adres && url.searchParams.get("s") === await beursHandtekening(env, adres);
+  if (goed) await env.FONTEYN_DATA.put("beurs-af:" + adres, new Date().toISOString());
+  if (request.method === "POST") return new Response(goed ? "ok" : "?", { status: goed ? 200 : 400 });
+  const tekst = goed
+    ? "<h1>Done</h1><p>" + bpEsc(adres) + " will receive no further e-mails about this. Thank you, and good luck with your business.</p>"
+    : "<h1>Link incomplete</h1><p>Please reply to the e-mail with the word <b>unsubscribe</b> and we will take care of it.</p>";
+  return new Response("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Passion Spas</title>" +
+    "<style>body{font-family:Arial,sans-serif;background:#f6f6f8;margin:0}.k{max-width:440px;margin:14vh auto;background:#fff;border-radius:14px;padding:30px;border:1px solid #e5e7eb}h1{font-size:20px;margin:0 0 10px}p{color:#4b5563;line-height:1.55}</style>" +
+    "</head><body><div class='k'>" + tekst + "</div></body></html>", { headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" } });
+}
+
 async function bpPagina() {
   const cb = Math.floor(Date.now() / 60000);
   const r = await fetch(BP_RAW + "become-partner.html?cb=" + cb, { cf: { cacheTtl: 60, cacheEverything: true } });
@@ -5188,6 +5244,8 @@ async function handleDealerRoutes(request, env, url) {
   // Openbare pagina "Become a Partner" voor de flyer-mailing (zie BECOME-PARTNER).
   if (p === "/dealers/become-partner" && request.method === "GET") return bpPagina();
   if (p === "/dealers/become-partner/send" && request.method === "POST") return bpAanmelding(request, env, url);
+  if (p === "/dealers/beurs/proef" && request.method === "POST") return beursProef(request, env, url);
+  if (p === "/dealers/beurs/afmelden" && (request.method === "GET" || request.method === "POST")) return beursAfmelden(request, env, url);
   const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate)\.jpg)$/);
   if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);
 
