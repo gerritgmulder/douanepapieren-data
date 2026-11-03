@@ -5076,6 +5076,8 @@ const BP_FLYER_NAAM = { en: "Become a Partner (EN)", nl: "Word partner (NL)", de
    Afmelden staat in KV onder beurs-af:<adres>, zonder einddatum. */
 const BEURS_AFZENDER = { name: "Dolf Nieland - Passion Spas", email: "dolf@mail.passionspas.com" };
 const BEURS_ANTWOORD = { email: "info@passionspas.com", name: "Passion Spas" };
+// De 17 talen van Dolfs mail (map Lyon_mail_HTML_alle_talen, 3 nov 2026).
+const BEURS_TALEN = ["bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "hu", "it", "nl", "no", "pl", "pt", "ro", "sv"];
 async function beursHandtekening(env, adres) {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(env.SHARED_SECRET || "")),
     { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -5086,7 +5088,7 @@ async function beursAfmeldLink(env, adres) {
   return "https://partner.passionspas.com/beurs/afmelden?e=" + encodeURIComponent(adres) + "&s=" + await beursHandtekening(env, adres);
 }
 async function beursMail(env, adres, taal) {
-  const t = BP_TALEN.includes(taal) ? taal : "en";
+  const t = BEURS_TALEN.includes(taal) ? taal : "en";
   const r = await fetch(BP_RAW + "beursmail/" + t + ".html?cb=" + Math.floor(Date.now() / 60000));
   if (!r.ok) return { ok: false, error: "geen mailtekst voor " + t };
   const link = await beursAfmeldLink(env, adres);
