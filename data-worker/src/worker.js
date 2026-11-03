@@ -4251,16 +4251,16 @@ async function dpAdminUitnodigen(request, env, url) {
    ontvangen wanneer we ze als nieuwe dealer/partner aanmelden."
 
    Resend verstuurt er 100 per dag, en die zijn ook nodig voor bestellingen en
-   inloglinks. Daarom gaat de wachtrij met 40 per dag, 8 per uur, in de ronde
+   inloglinks. Daarom gaat de wachtrij met 35 per dag, 8 per uur, in de ronde
    op :15, tussen 9 en 17 uur. Wie intussen zelf een wachtwoord koos of geblokkeerd werd, slaat
    hij over. Adviseurs (@fonteyn.nl) horen er niet bij. */
 const PP_WACHTRIJ = "pp-uitnodig-wachtrij";
 /* 4 nov 2026: Resend zat op 3 nov aan de 100. De wachtrij nam er 70, de rest
    (bestellingen, inloglinks, servicemails, opleverbonnen) ging erbovenop. En
    Resend telt per dag in UTC: de ronde van 00:15 bij ons viel nog in de dag
-   ervoor. Nu 40 per dag, alleen tussen 9 en 17 uur, zodat er elke dag ruim
+   ervoor. Nu 35 per dag (de helft, Gerrit), alleen tussen 9 en 17 uur, zodat er elke dag ruim
    plek blijft voor wat echt moet aankomen. */
-const PP_PER_DAG = 40, PP_PER_RONDE = 8, PP_VAN_UUR = 9, PP_TOT_UUR = 17;
+const PP_PER_DAG = 35, PP_PER_RONDE = 8, PP_VAN_UUR = 9, PP_TOT_UUR = 17;
 const ppVandaag = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
 function ppKandidaat(d) {
   return d && d.active !== false && !d.pw && /@/.test(String(d.email || "")) && !/@fonteyn\.nl$/i.test(String(d.email || ""));
