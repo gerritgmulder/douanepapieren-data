@@ -177,7 +177,8 @@
          bertjan, chantal, dali, danique, don, edwin, gretha, joppe, julia,
          julia.de.nijs, kevin, kim, luis, luuk, melissa, niels_vdl, patrick,
          rosalie, sidney, tim, yamen, yves. */
-      "dolf", "fonteynbot", "gerrit",
+      /* Gretha en Don testen eerst (Gerrit, 3 nov 2026). */
+      "dolf", "don", "fonteynbot", "gerrit", "gretha",
     ],
     "voorstel-beheer": [
       "dolf", "fonteynbot", "gerrit",
