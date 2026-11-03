@@ -5275,7 +5275,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/beurs/proef" && request.method === "POST") return beursProef(request, env, url);
   if (p === "/dealers/beurs/mailbox" && request.method === "GET") return beursMailbox(request, env, url);
   if (p === "/dealers/beurs/afmelden" && (request.method === "GET" || request.method === "POST")) return beursAfmelden(request, env, url);
-  const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate)\.jpg)$/);
+  const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate|lyon)\.jpg)$/);
   if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);
 
   if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env, url);

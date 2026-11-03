@@ -31,10 +31,9 @@ for taal in sorted(os.listdir(bron)):
     s = s.replace("<style>", "<!--[if mso]><style>*{font-family:Arial,Helvetica,sans-serif!important}</style><![endif]-->\n<style>", 1)
     # Logo: het echte Passion-logo in hoge resolutie.
     s = s.replace('src="images/logo_passionspas_onwhite.png"', 'src="' + PP + '/logo.png"')
-    # Grote foto: de afgesneden strook (hoofden eraf) wordt de spa zelf.
+    # Grote foto: de afgesneden strook (hoofden eraf) wordt het stel met de spa ernaast (foto.py).
     s = re.sub(r'<img src="images/hero_nl_article\.jpg"[^>]*>',
-               '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="background:#ffffff;"><tr><td align="center" style="padding:14px 30px 10px;">'
-               '<img src="' + PP + '/become-partner/img/held.jpg" width="340" alt="Passion Spas" class="fluid" style="display:block;width:340px;max-width:100%;height:auto;border:0;margin:0 auto;"></td></tr></table>', s)
+               '<img src="' + PP + '/become-partner/img/lyon.jpg" width="600" alt="Passion Spas" class="fluid" style="display:block;width:100%;max-width:600px;height:auto;border:0;">', s)
     s = s.replace("{{unsubscribe}}", "{{AFMELDEN}}")
     # Meebewegend in plaats van vast 710 breed: in een smal leesvenster (Outlook)
     # moest je opzij scrollen (Gerrit, 3 nov 2026). Outlook voor Windows krijgt 600.
