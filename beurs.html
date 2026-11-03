@@ -266,6 +266,8 @@ function bewaar(meteen){
    De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het
    aantal per dag op is. Hier zet je hem aan of op pauze en zie je de stand. */
 var mail = null, mailBevestig = false, mailMelding = "";
+// Wat in het proefvak staat blijft staan als de tegel opnieuw tekent (eerst ging het adres verloren).
+var proefAan = ik.indexOf("@") > 0 ? ik : "", proefTaal = "nl";
 var TAALNAAM = { nl:"Nederlands", fr:"Frans", en:"Engels", de:"Duits", it:"Italiaans", es:"Spaans", pt:"Portugees", sv:"Zweeds", fi:"Fins",
   da:"Deens", no:"Noors", pl:"Pools", cs:"Tsjechisch", hu:"Hongaars", ro:"Roemeens", bg:"Bulgaars", el:"Grieks" };
 async function laadMailing(){
@@ -290,10 +292,11 @@ async function mailZet(aan){
   laadMailing();
 }
 async function mailProef(){
+  proefAan = $("mProefAan").value.trim(); proefTaal = $("mProefTaal").value;
   mailMelding = "Bezig met versturen...";
   tekenMailing();
-  var j = await mailPost("/dealers/beurs/proefmail", { aan: $("mProefAan").value, taal: $("mProefTaal").value });
-  mailMelding = j.ok ? "Proefmail verstuurd naar " + $("mProefAan").value + "." : (j.error || "Lukte nog niet.");
+  var j = await mailPost("/dealers/beurs/proefmail", { aan: proefAan, taal: proefTaal });
+  mailMelding = j.ok ? "Proefmail (" + (TAALNAAM[proefTaal] || proefTaal) + ") verstuurd naar " + proefAan + "." : (j.error || "Lukte nog niet.");
   tekenMailing();
 }
 function tekenMailing(){
@@ -316,8 +319,8 @@ function tekenMailing(){
     '<div class="tellers"><span class="teller">In de wachtrij: <b>' + tot.wacht + '</b></span><span class="teller">Verstuurd: <b>' + tot.verstuurd + '</b></span>' +
     '<span class="teller">Vandaag: <b>' + mail.vandaag + '</b> van ' + perDag + '</span><span class="teller">Teruggekomen: <b>' + tot.fout + '</b></span>' +
     '<span class="teller">Afgemeld: <b>' + tot.afgemeld + '</b></span>' + (tot.wacht ? '<span class="teller">Nog ongeveer <b>' + dagen + '</b> ' + (dagen === 1 ? 'dag' : 'dagen') + '</span>' : '') + '</div></div>';
-  h += '<div class="kaart"><h3>Proefmail</h3><div class="mrij"><input id="mProefAan" type="text" placeholder="mailadres" value="' + esc(ik.indexOf("@") > 0 ? ik : "") + '" style="min-width:220px">' +
-    '<select id="mProefTaal">' + Object.keys(TAALNAAM).map(function(t){ return '<option value="' + t + '"' + (t === "nl" ? " selected" : "") + '>' + TAALNAAM[t] + '</option>'; }).join("") + '</select>' +
+  h += '<div class="kaart"><h3>Proefmail</h3><div class="mrij"><input id="mProefAan" type="text" placeholder="mailadres" value="' + esc(proefAan) + '" oninput="proefAan=this.value" style="min-width:220px">' +
+    '<select id="mProefTaal" onchange="proefTaal=this.value">' + Object.keys(TAALNAAM).map(function(t){ return '<option value="' + t + '"' + (t === proefTaal ? " selected" : "") + '>' + TAALNAAM[t] + '</option>'; }).join("") + '</select>' +
     '<button class="knop licht" type="button" onclick="mailProef()" title="Stuur de beursmail in deze taal naar dit ene adres">Stuur proefmail</button></div></div>';
   h += '<div class="kaart"><h3>Per taal</h3><table><thead><tr><th>Taal</th><th>Wacht</th><th>Verstuurd</th><th>Terug</th><th>Afgemeld</th></tr></thead><tbody>' +
     Object.keys(talen).sort(function(a, b){ return ((talen[b].wacht||0)+(talen[b].verstuurd||0)) - ((talen[a].wacht||0)+(talen[a].verstuurd||0)); }).map(function(t){
