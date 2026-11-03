@@ -5087,12 +5087,16 @@ async function beursHandtekening(env, adres) {
 async function beursAfmeldLink(env, adres) {
   return "https://partner.passionspas.com/beurs/afmelden?e=" + encodeURIComponent(adres) + "&s=" + await beursHandtekening(env, adres);
 }
-async function beursMail(env, adres, taal) {
+async function beursMail(env, adres, taal, sjablonen) {
   const t = BEURS_TALEN.includes(taal) ? taal : "en";
-  const r = await fetch(BP_RAW + "beursmail/" + t + ".html?cb=" + Math.floor(Date.now() / 60000));
-  if (!r.ok) return { ok: false, error: "geen mailtekst voor " + t };
+  const bewaard = sjablonen || {};
+  if (!bewaard[t]) {
+    const r = await fetch(BP_RAW + "beursmail/" + t + ".html?cb=" + Math.floor(Date.now() / 60000));
+    if (!r.ok) return { ok: false, error: "geen mailtekst voor " + t };
+    bewaard[t] = await r.text();
+  }
   const link = await beursAfmeldLink(env, adres);
-  const html = (await r.text()).split("{{AFMELDEN}}").join(link);
+  const html = bewaard[t].split("{{AFMELDEN}}").join(link);
   const onderwerp = ((/<title>([^<]*)<\/title>/i.exec(html) || [])[1] || "Passion Spas").trim();
   const b = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
@@ -5138,10 +5142,108 @@ async function beursMailbox(request, env, url) {
     adressen: [...x.matchAll(/<t:Entry Key="EmailAddress\d">([^<]*)/g)].map(m => m[1]),
     toegang }, null, 1), { headers: { "Content-Type": "application/json" } });
 }
+/* Verzenden in porties. De lijst staat in D1 (beurs_mail in fonteyn-activiteit),
+   niet in KV: elke verzonden mail is één schrijfactie en KV heeft er maar
+   duizend per dag. Elke kwartierronde stuurt een deel van wat er vandaag nog
+   mag, tussen 8 en 19 uur Nederlandse tijd, zodat de 300 van Brevo gratis
+   over de dag verspreid gaan en niet in één klap (dat ziet er voor
+   spamfilters uit als een koude lijst, wat het ook is). Aan of uit en het
+   aantal per dag staan in KV beurs-instelling; die zet de tegel Beurs. */
+const BEURS_PER_DAG_MAX = 300;
+async function beursInstelling(env) {
+  return (await env.FONTEYN_DATA.get("beurs-instelling", { type: "json" })) || { aan: false, perDag: 290 };
+}
+async function beursVandaag(env) {
+  const r = await env.ACTIVITEIT.prepare("SELECT COUNT(*) AS n FROM beurs_mail WHERE dag=?").bind(pcVandaag()).first();
+  return (r && r.n) || 0;
+}
+async function beursRonde(env) {
+  const inst = await beursInstelling(env);
+  if (!inst.aan || !env.BREVO_API_KEY) return { uit: true };
+  const uur = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Amsterdam", hour: "2-digit", hour12: false }));
+  if (uur < 8 || uur >= 19) return { buitenTijd: true };
+  const perDag = Math.min(Number(inst.perDag) || 290, BEURS_PER_DAG_MAX);
+  const al = await beursVandaag(env);
+  const rest = perDag - al;
+  if (rest <= 0) return { vol: true, al };
+  const minutenTot19 = (19 - uur) * 60 - new Date().getUTCMinutes();
+  const rondesOver = Math.max(1, Math.ceil(minutenTot19 / 15));
+  const nu = Math.min(rest, Math.max(1, Math.ceil(rest / rondesOver)), 20);
+  const { results } = await env.ACTIVITEIT.prepare("SELECT email, taal FROM beurs_mail WHERE status='wacht' ORDER BY volg LIMIT ?").bind(nu).all();
+  const sjablonen = {}, dag = pcVandaag();
+  let verstuurd = 0, fout = 0;
+  for (const rij of results || []) {
+    const ts = new Date().toISOString();
+    if (await env.FONTEYN_DATA.get("beurs-af:" + rij.email)) {
+      await env.ACTIVITEIT.prepare("UPDATE beurs_mail SET status='afgemeld' WHERE email=?").bind(rij.email).run();
+      continue;
+    }
+    const uit = await beursMail(env, rij.email, rij.taal, sjablonen);
+    if (uit.ok) {
+      verstuurd++;
+      await env.ACTIVITEIT.prepare("UPDATE beurs_mail SET status='verstuurd', dag=?, ts=?, bericht=? WHERE email=?").bind(dag, ts, uit.messageId || "", rij.email).run();
+    } else if (uit.status === 429 || uit.status === 402 || uit.status === 401 || uit.status === 403 || !uit.status) {
+      // Brevo zit vol of weigert de sleutel: deze ronde stoppen, het adres blijft in de wachtrij.
+      return { verstuurd, fout, gestopt: (uit.status || "") + " " + (uit.error || "") };
+    } else {
+      fout++;
+      await env.ACTIVITEIT.prepare("UPDATE beurs_mail SET status='fout', dag=?, ts=?, fout=? WHERE email=?").bind(dag, ts, String(uit.error || uit.status).slice(0, 200), rij.email).run();
+    }
+  }
+  return { verstuurd, fout };
+}
+/* De lijst inlezen (eenmalig, met de beheersleutel): [{e, b, l, t, v}] =
+   e-mail, bedrijf, land, taal, volgorde. Wat er al in staat blijft staan. */
+async function beursLijst(request, env) {
+  if (!env.BEURS_BEHEER || request.headers.get("X-Beurs-Sleutel") !== env.BEURS_BEHEER) return reply(401, { ok: false });
+  const rijen = await request.json().catch(() => null);
+  if (!Array.isArray(rijen) || rijen.length > 1000) return reply(400, { ok: false, error: "1 tot 1000 rijen" });
+  const st = env.ACTIVITEIT.prepare("INSERT OR IGNORE INTO beurs_mail (email, bedrijf, land, taal, volg, status) VALUES (?, ?, ?, ?, ?, 'wacht')");
+  const goed = rijen.filter(r => r && /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(r.e || "")));
+  await env.ACTIVITEIT.batch(goed.map(r => st.bind(String(r.e).toLowerCase(), String(r.b || "").slice(0, 160), String(r.l || "").slice(0, 40),
+    BEURS_TALEN.includes(r.t) ? r.t : "en", Number(r.v) || 0)));
+  return reply(200, { ok: true, ingelezen: goed.length });
+}
+/* Voor de tegel Beurs: teamsleutel plus de groep beurs in toegang.js. */
+async function beursMagTegel(request, env) {
+  if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return false;
+  return toegangMag(env, "beurs", String(request.headers.get("X-Fonteyn-User") || "").toLowerCase());
+}
+async function beursTegel(request, env, url, p) {
+  if (!(await beursMagTegel(request, env))) return reply(403, { ok: false, error: "Deze tegel is voor Dolf en Gerrit." });
+  const db = env.ACTIVITEIT;
+  if (p === "/dealers/beurs/status" && request.method === "GET") {
+    const inst = await beursInstelling(env);
+    const { results: per } = await db.prepare("SELECT status, taal, COUNT(*) AS n FROM beurs_mail GROUP BY status, taal").all();
+    const { results: fouten } = await db.prepare("SELECT email, bedrijf, land, ts, fout FROM beurs_mail WHERE status='fout' ORDER BY volg LIMIT 50").all();
+    const { results: laatst } = await db.prepare("SELECT email, bedrijf, land, taal, ts FROM beurs_mail WHERE dag=? ORDER BY ts DESC LIMIT 30").bind(pcVandaag()).all();
+    return reply(200, { ok: true, inst, sleutel: !!env.BREVO_API_KEY, vandaag: await beursVandaag(env), per: per || [], fouten: fouten || [], laatst: laatst || [] });
+  }
+  if (p === "/dealers/beurs/instelling" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const oud = await beursInstelling(env);
+    const nieuw = { aan: b.aan === undefined ? !!oud.aan : !!b.aan,
+      perDag: Math.max(1, Math.min(BEURS_PER_DAG_MAX, Number(b.perDag) || Number(oud.perDag) || 290)),
+      door: String(request.headers.get("X-Fonteyn-User") || ""), ts: new Date().toISOString() };
+    await env.FONTEYN_DATA.put("beurs-instelling", JSON.stringify(nieuw));
+    return reply(200, { ok: true, inst: nieuw });
+  }
+  if (p === "/dealers/beurs/proefmail" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const aan = String(b.aan || "").trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(aan)) return reply(400, { ok: false, error: "Vul een geldig mailadres in." });
+    return reply(200, await beursMail(env, aan, String(b.taal || "nl")));
+  }
+  return reply(404, { ok: false });
+}
+
 async function beursAfmelden(request, env, url) {
   const adres = String(url.searchParams.get("e") || "").trim().toLowerCase();
   const goed = adres && url.searchParams.get("s") === await beursHandtekening(env, adres);
-  if (goed) await env.FONTEYN_DATA.put("beurs-af:" + adres, new Date().toISOString());
+  if (goed) {
+    await env.FONTEYN_DATA.put("beurs-af:" + adres, new Date().toISOString());
+    try { await env.ACTIVITEIT.prepare("UPDATE beurs_mail SET status='afgemeld' WHERE email=?").bind(adres).run(); } catch (e) {}
+  }
   if (request.method === "POST") return new Response(goed ? "ok" : "?", { status: goed ? 200 : 400 });
   const tekst = goed
     ? "<h1>Done</h1><p>" + bpEsc(adres) + " will receive no further e-mails about this. Thank you, and good luck with your business.</p>"
@@ -5274,6 +5376,8 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/become-partner/send" && request.method === "POST") return bpAanmelding(request, env, url);
   if (p === "/dealers/beurs/proef" && request.method === "POST") return beursProef(request, env, url);
   if (p === "/dealers/beurs/mailbox" && request.method === "GET") return beursMailbox(request, env, url);
+  if (p === "/dealers/beurs/lijst" && request.method === "POST") return beursLijst(request, env);
+  if (p === "/dealers/beurs/status" || p === "/dealers/beurs/instelling" || p === "/dealers/beurs/proefmail") return beursTegel(request, env, url, p);
   if (p === "/dealers/beurs/afmelden" && (request.method === "GET" || request.method === "POST")) return beursAfmelden(request, env, url);
   const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate|lyon)\.jpg)$/);
   if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);
@@ -20266,6 +20370,9 @@ async function kvNoodTerug(env, maxPerRonde, doen) {
 const FP_WORKER = {
   async scheduled(event, env, ctx) {
     env = kvMetTeller(env, ctx);
+    // Beursmailing Lyon: elke kwartierronde een portie (zie beursRonde).
+    ctx.waitUntil(beursRonde(env).then(r => { if (r && (r.verstuurd || r.fout || r.gestopt)) console.log("[cron] beurs: " + JSON.stringify(r)); })
+      .catch(e => console.log("[cron] beurs: " + (e.message || e))));
     ctx.waitUntil((async () => {
       try {
         if (!env.LOGIC4_USERNAME) { console.log("[cron] geen Logic4-creds"); return; }
