@@ -5150,6 +5150,10 @@ async function beursMailbox(request, env, url) {
    spamfilters uit als een koude lijst, wat het ook is). Aan of uit en het
    aantal per dag staan in KV beurs-instelling; die zet de tegel Beurs. */
 const BEURS_PER_DAG_MAX = 300;
+/* Na deze dag heeft de uitnodiging geen zin meer: de beurs loopt van 17 tot
+   en met 20 november, en wie de mail op de laatste dag krijgt, komt niet meer
+   (Gerrit, 3 nov 2026: stoppen zodra het niet meer nuttig is). */
+const BEURS_LAATSTE_DAG = "2026-11-19";
 async function beursInstelling(env) {
   return (await env.FONTEYN_DATA.get("beurs-instelling", { type: "json" })) || { aan: false, perDag: 290 };
 }
@@ -5160,6 +5164,7 @@ async function beursVandaag(env) {
 async function beursRonde(env) {
   const inst = await beursInstelling(env);
   if (!inst.aan || !env.BREVO_API_KEY) return { uit: true };
+  if (pcVandaag() > BEURS_LAATSTE_DAG) return { voorbij: true };
   const uur = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Amsterdam", hour: "2-digit", hour12: false }));
   if (uur < 8 || uur >= 19) return { buitenTijd: true };
   const perDag = Math.min(Number(inst.perDag) || 290, BEURS_PER_DAG_MAX);
@@ -5217,7 +5222,7 @@ async function beursTegel(request, env, url, p) {
     const { results: per } = await db.prepare("SELECT status, taal, COUNT(*) AS n FROM beurs_mail GROUP BY status, taal").all();
     const { results: fouten } = await db.prepare("SELECT email, bedrijf, land, ts, fout FROM beurs_mail WHERE status='fout' ORDER BY volg LIMIT 50").all();
     const { results: laatst } = await db.prepare("SELECT email, bedrijf, land, taal, ts FROM beurs_mail WHERE dag=? ORDER BY ts DESC LIMIT 30").bind(pcVandaag()).all();
-    return reply(200, { ok: true, inst, sleutel: !!env.BREVO_API_KEY, vandaag: await beursVandaag(env), per: per || [], fouten: fouten || [], laatst: laatst || [] });
+    return reply(200, { ok: true, inst, laatsteDag: BEURS_LAATSTE_DAG, sleutel: !!env.BREVO_API_KEY, vandaag: await beursVandaag(env), per: per || [], fouten: fouten || [], laatst: laatst || [] });
   }
   if (p === "/dealers/beurs/instelling" && request.method === "POST") {
     const b = await request.json().catch(() => ({}));

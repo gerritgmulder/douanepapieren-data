@@ -307,7 +307,7 @@ function tekenMailing(){
   var aan = mail.inst && mail.inst.aan, perDag = (mail.inst && mail.inst.perDag) || 290;
   var dagen = Math.ceil(tot.wacht / perDag);
   var h = '<div class="kaart"><h3>Versturen</h3>' +
-    '<p class="lead">De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het aantal per dag op is. Elk land krijgt de mail in zijn eigen taal. Afzender: Dolf Nieland - Passion Spas. Antwoorden gaan naar info@passionspas.com.</p>' +
+    '<p class="lead">De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het aantal per dag op is. Elk land krijgt de mail in zijn eigen taal. Afzender: Dolf Nieland - Passion Spas. Antwoorden gaan naar info@passionspas.com. Na ' + new Date((mail.laatsteDag || "2026-11-19") + "T12:00").toLocaleDateString("nl-NL", { day: "numeric", month: "long" }) + ' stopt het versturen vanzelf: dan is de beurs bijna voorbij.</p>' +
     '<p>Stand: <span class="aanuit ' + (aan ? 'aan">Staat aan' : 'uit">Staat op pauze') + '</span>' +
     (mail.inst && mail.inst.door ? ' <small style="color:var(--grijs)">(' + esc(String(mail.inst.door).split("@")[0]) + ', ' + new Date(mail.inst.ts).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) + ')</small>' : '') + '</p>' +
     '<div class="mrij">' +
@@ -318,7 +318,7 @@ function tekenMailing(){
     '</div><p class="melding">' + esc(mailMelding) + '</p>' +
     '<div class="tellers"><span class="teller">In de wachtrij: <b>' + tot.wacht + '</b></span><span class="teller">Verstuurd: <b>' + tot.verstuurd + '</b></span>' +
     '<span class="teller">Vandaag: <b>' + mail.vandaag + '</b> van ' + perDag + '</span><span class="teller">Teruggekomen: <b>' + tot.fout + '</b></span>' +
-    '<span class="teller">Afgemeld: <b>' + tot.afgemeld + '</b></span>' + (tot.wacht ? '<span class="teller">Nog ongeveer <b>' + dagen + '</b> ' + (dagen === 1 ? 'dag' : 'dagen') + '</span>' : '') + '</div></div>';
+    '<span class="teller">Afgemeld: <b>' + tot.afgemeld + '</b></span>' + (tot.wacht ? '<span class="teller">Nog ongeveer <b>' + dagen + '</b> ' + (dagen === 1 ? 'dag' : 'dagen') + ' werk</span>' : '') + '</div></div>';
   h += '<div class="kaart"><h3>Proefmail</h3><div class="mrij"><input id="mProefAan" type="text" placeholder="mailadres" value="' + esc(proefAan) + '" oninput="proefAan=this.value" style="min-width:220px">' +
     '<select id="mProefTaal" onchange="proefTaal=this.value">' + Object.keys(TAALNAAM).map(function(t){ return '<option value="' + t + '"' + (t === proefTaal ? " selected" : "") + '>' + TAALNAAM[t] + '</option>'; }).join("") + '</select>' +
     '<button class="knop licht" type="button" onclick="mailProef()" title="Stuur de beursmail in deze taal naar dit ene adres">Stuur proefmail</button></div></div>';
