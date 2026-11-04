@@ -43,6 +43,7 @@ body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg)
 header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 header h1{margin:0;font-size:16px;font-weight:600;flex:1}
 main{max-width:1100px;margin:16px auto;padding:0 14px 60px}
+body.demo main{max-width:1440px}
 .kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
 .kaart h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--groen);display:flex;align-items:center;gap:8px;white-space:nowrap}
 .kaart h2 .rechts{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
@@ -93,16 +94,46 @@ button:disabled{opacity:.5;cursor:default}
 .verschil{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:12.5px}
 .verschil b{color:var(--oranje)}
 .verberg{display:none}
+.pc-uitleg{font-size:11.5px;color:var(--grijs);min-height:0;margin-top:-2px}.pc-uitleg.goed{color:#15803d}.pc-uitleg.let{color:var(--oranje)}
+.treffers div.art{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;align-items:baseline}
+.treffers div.art .p{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.treffers div.art small{grid-column:2 / 4}
+.treffers div.art.weg{color:#9ca3af}
+.treffers div.actief{background:#f0f7e8}
+.treffers .meer{color:var(--grijs);font-size:11.5px;cursor:default;background:#fafaf7}
+/* Live: de klant bevestigt en je ziet het gebeuren (Gerrit, 4 nov 2026) */
+.live{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--grijs);margin-top:8px}
+.live i{width:9px;height:9px;border-radius:50%;background:var(--lime);display:inline-block;animation:puls 1.4s infinite}
+@keyframes puls{0%{box-shadow:0 0 0 0 #8bc53f99}70%{box-shadow:0 0 0 9px #8bc53f00}100%{box-shadow:0 0 0 0 #8bc53f00}}
+.nieuwsbalk{background:#dcfce7;border:1px solid #86efac;color:#14532d;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:600;animation:inkomen .5s ease-out}
+@keyframes inkomen{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.oplicht{animation:oplicht 2.2s ease-out}
+@keyframes oplicht{0%{box-shadow:0 0 0 3px var(--lime);background:#f0f7e8}100%{box-shadow:0 0 0 0 transparent}}
+/* Demo: links de tegel, rechts de telefoon van de klant */
+.demo-band{background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#78350f}
+.demo-band b{white-space:nowrap}
+.demo-wat{background:#fff;border:1px solid var(--rand);border-left:4px solid var(--lime);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;line-height:1.5}
+.demo-wat b{color:var(--groen)}
+.demo-raam{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.demo-raam > .tel-plek{position:sticky;top:12px}
+@media(max-width:900px){.demo-raam{grid-template-columns:1fr}.demo-raam > .tel-plek{position:static}}
+.tel{width:292px;max-width:100%;margin:0 auto;background:#111;border-radius:36px;padding:12px;box-shadow:0 10px 30px #0003}
+.tel-scherm{background:#f5f4ef;border-radius:26px;overflow:hidden;height:560px;position:relative}
+.tel-scherm iframe{border:0;width:100%;height:100%;display:block;background:#f5f4ef}
+.tel-leeg{display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:var(--grijs);font-size:12.5px;line-height:1.5}
+.tel-kop{color:#d1d5db;font-size:11px;text-align:center;margin:0 0 8px}
+.tel-onder{text-align:center;color:var(--grijs);font-size:11.5px;margin-top:8px}
 </style>
 </head>
 <body>
 <header>
   <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
   <h1>📝 Voorstel maken</h1>
+  <button type="button" class="fp-kop-knop" id="demoKnop" title="Het Dashboard laat met een voorbeeldklant zien hoe een voorstel werkt, van klantgegevens tot aanbetaling. Er gaat niets naar Logic4 of naar een klant.">▶ Demo</button>
   <button type="button" class="fp-kop-knop" id="lijstKnop" title="Het Dashboard laat al je voorstellen zien">Mijn voorstellen</button>
   <button type="button" class="fp-kop-knop" id="nieuwKnop" title="Het Dashboard begint een nieuw voorstel met lege klantgegevens">+ Nieuw voorstel</button>
 </header>
-<main id="vak"></main>
+<main><div id="demoBoven"></div><div id="raam"><div id="vak"></div><div id="telPlek" class="tel-plek verberg"></div></div></main>
 
 <script>
 var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
@@ -114,6 +145,8 @@ function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){retu
 function geld(v){ return "€ "+(Number(v)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function wanneer(ts){ if(!ts) return ""; var d=new Date(ts); return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
 async function api(pad, body){
+  // In de demo blijft alles in de tegel; zoeken in Logic4 gaat wel echt (alleen lezen).
+  if (DEMO && body && pad !== "/voorstel/demo") return demoApi(pad, body);
   var r = await fetch(W+pad, { method: body ? "POST" : "GET", headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" }, body: body ? JSON.stringify(body) : undefined });
   var j = await r.json().catch(function(){ return null; });
   if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("Het Dashboard wacht nog op antwoord (" + r.status + "). Probeer het zo nog eens."));
@@ -125,6 +158,8 @@ var STATUS = { "concept":"Concept", "wacht":"Wacht op de klant", "bevestigd":"Be
 /* ── Overzicht ───────────────────────────────────────────────────────── */
 var alleTonen = false;
 async function overzicht(){
+  wachtStop();
+  if (DEMO) demoStop();
   history.replaceState(null, "", location.pathname + (location.search.indexOf("w=")>=0 ? "?w="+encodeURIComponent(W) : ""));
   $("vak").innerHTML = '<div class="kaart"><p class="lead">Even laden…</p></div>';
   try{
@@ -146,12 +181,15 @@ async function overzicht(){
 
 /* ── Eén voorstel ─────────────────────────────────────────────────────── */
 var V = null, ORDER = null, KEUZES = null, IKMW = null, EERDER = null;
+var NIEUWS = "", OPLICHT = null;   // een melding en wat oplicht bij de volgende keer tekenen
+var DEMO = false;
 async function keuzesLaden(){
   if (KEUZES) return KEUZES;
   try { var j = await api("/voorstel/keuzes"); KEUZES = j.keuzes || {}; IKMW = j.ikMedewerker; } catch(e){ KEUZES = {}; }
   return KEUZES;
 }
 async function openen(id){
+  if (DEMO) demoStop();
   $("vak").innerHTML = '<div class="kaart"><p class="lead">Even laden…</p></div>';
   try{
     var j = await api("/voorstel?id="+encodeURIComponent(id));
@@ -163,6 +201,7 @@ async function openen(id){
   }catch(e){ $("vak").innerHTML = '<div class="kaart"><p class="melding fout">'+esc(e.message)+'</p></div>'; }
 }
 function nieuw(){
+  if (DEMO) demoStop();
   V = { id: null, status: "concept", klant: { land: "NL", aflevering: {} }, kop: {}, log: [] }; ORDER = null; EERDER = null;
   history.replaceState(null, "", location.pathname + (location.search.indexOf("w=")>=0 ? "?w="+encodeURIComponent(W) : ""));
   keuzesLaden().then(teken);
@@ -182,7 +221,8 @@ function teken(){
   var k = V.klant || {}, a = k.aflevering || {};
   var vast = V.status === "bevestigd" || V.status === "in-logic4";
   var stap = V.status === "concept" ? 1 : V.status === "wacht" ? 2 : 3;
-  var h = '';
+  var h = NIEUWS ? '<div class="nieuwsbalk">'+esc(NIEUWS)+'</div>' : '';
+  NIEUWS = "";
   h += '<div class="stappen">' +
     '<div class="stap '+(stap===1?'nu':'klaar')+'"><b>1. Klantgegevens</b>De adviseur vult ze in</div>' +
     '<div class="stap '+(stap===2?'nu':stap>2?'klaar':'')+'"><b>2. De klant bevestigt</b>Via de mail "Bevestig je gegevens"</div>' +
@@ -201,18 +241,21 @@ function teken(){
     '<div class="s1"><label class="l" for="k_aanhef">Aanhef</label><select id="k_aanhef" data-k="aanhef"><option value=""></option><option value="1"'+(k.aanhef==="1"?" selected":"")+'>De heer</option><option value="2"'+(k.aanhef==="2"?" selected":"")+'>Mevrouw</option></select></div>' +
     veld("voornaam","Voornaam",k.voornaam,"s2") + veld("tussenvoegsel","Tussenv.",k.tussenvoegsel,"s1") + veld("achternaam","Achternaam",k.achternaam,"s2") +
     veld("bedrijf","Bedrijfsnaam (als het een bedrijf is)",k.bedrijf,"s3") + veld("btw","Btw-nummer",k.btw,"s3") +
-    veld("straat","Straat",k.straat,"s3") + veld("huisnummer","Huisnr.",k.huisnummer,"s1") + veld("toevoeging","Toev.",k.toevoeging,"s1") + veld("land","Land",k.land||"NL","s1",' maxlength="2"') +
-    veld("postcode","Postcode",k.postcode,"s2") + veld("plaats","Plaats",k.plaats,"s4") +
+    /* Eerst postcode en huisnummer: straat en plaats komen er dan vanzelf bij. */
+    veld("postcode","Postcode",k.postcode,"s2",' autocomplete="off" placeholder="1234 AB"') + veld("huisnummer","Huisnr.",k.huisnummer,"s1") + veld("toevoeging","Toev.",k.toevoeging,"s1") + veld("land","Land",k.land||"NL","s2",' maxlength="2"') +
+    '<div class="s6 pc-uitleg" id="pcUitleg"></div>' +
+    veld("straat","Straat",k.straat,"s3") + veld("plaats","Plaats",k.plaats,"s3") +
     veld("email","E-mailadres",k.email,"s2",' type="email"') + veld("telefoon","Telefoon",k.telefoon,"s2",' type="tel"') + veld("mobiel","Mobiel",k.mobiel,"s2",' type="tel"') +
     '<div class="s6"><label class="vink"><input type="checkbox" id="k_afwijkend"'+(k.afwijkend?" checked":"")+'> Afleveren op een ander adres</label></div>' +
     '<div class="s6 '+(k.afwijkend?'':'verberg')+'" id="aflBlok"><div class="raster">' +
-      '<div class="s2"><label class="l">Naam</label><input data-a="naam" value="'+esc(a.naam||"")+'"></div>' +
-      '<div class="s2"><label class="l">Straat</label><input data-a="straat" value="'+esc(a.straat||"")+'"></div>' +
+      '<div class="s6"><label class="l">Naam</label><input data-a="naam" value="'+esc(a.naam||"")+'"></div>' +
+      '<div class="s2"><label class="l">Postcode</label><input data-a="postcode" autocomplete="off" placeholder="1234 AB" value="'+esc(a.postcode||"")+'"></div>' +
       '<div class="s1"><label class="l">Huisnr.</label><input data-a="huisnummer" value="'+esc(a.huisnummer||"")+'"></div>' +
       '<div class="s1"><label class="l">Toev.</label><input data-a="toevoeging" value="'+esc(a.toevoeging||"")+'"></div>' +
-      '<div class="s2"><label class="l">Postcode</label><input data-a="postcode" value="'+esc(a.postcode||"")+'"></div>' +
+      '<div class="s2"><label class="l">Land</label><input data-a="land" maxlength="2" value="'+esc(a.land||"")+'"></div>' +
+      '<div class="s6 pc-uitleg" id="pcUitlegA"></div>' +
+      '<div class="s3"><label class="l">Straat</label><input data-a="straat" value="'+esc(a.straat||"")+'"></div>' +
       '<div class="s3"><label class="l">Plaats</label><input data-a="plaats" value="'+esc(a.plaats||"")+'"></div>' +
-      '<div class="s1"><label class="l">Land</label><input data-a="land" maxlength="2" value="'+esc(a.land||"")+'"></div>' +
     '</div></div></div>';
   if (!vast) {
     if (EERDER && !EERDER.anders) h += '<p class="lead" style="margin-top:10px">✅ Deze klant heeft precies deze gegevens al bevestigd op <b>'+esc(wanneer(EERDER.ts))+'</b>. Je kunt meteen verder.</p>';
@@ -221,7 +264,8 @@ function teken(){
       (EERDER && !EERDER.anders ? '<button type="button" class="doe" id="eerderKnop" title="Het Dashboard zet het voorstel meteen in Logic4, zonder nieuwe mail aan de klant">Al bevestigd, ga verder</button>' : '') +
       '<button type="button" class="'+(EERDER && !EERDER.anders ? '' : 'doe')+'" id="verstuur" title="Het Dashboard stuurt de klant de mail Bevestig je gegevens, met een link naar een pagina van Fonteyn">'+(V.status==="wacht"?"Opnieuw versturen":"Verstuur ‘Bevestig je gegevens’")+'</button>' +
       '<span class="melding" id="klantMelding"></span></div>';
-    if (V.status === "wacht" && V.verstuurd) h += '<p class="lead" style="margin-top:10px">📨 Verstuurd naar <b>'+esc(V.verstuurd.naar)+'</b> op '+esc(wanneer(V.verstuurd.ts))+'. Zodra de klant bevestigt, zie je dat hier en krijg je een bericht in je Dashboard.</p>';
+    if (V.status === "wacht" && V.verstuurd) h += '<p class="lead" style="margin-top:10px">📨 Verstuurd naar <b>'+esc(V.verstuurd.naar)+'</b> op '+esc(wanneer(V.verstuurd.ts))+'.</p>' +
+      '<div class="live" title="Het Dashboard kijkt elke paar seconden of de klant al heeft bevestigd"><i></i> Het Dashboard kijkt live mee. Zodra de klant op zijn telefoon bevestigt, gaat het voorstel hier vanzelf open.</div>';
   } else {
     h += '<p class="lead" style="margin-top:10px">✅ Bevestigd door de klant op '+esc(wanneer(V.bevestigd && V.bevestigd.ts))+'.</p>';
   }
@@ -235,7 +279,7 @@ function teken(){
   var K = KEUZES || {}, T = K.types || {};
   if (!kop.medewerker && IKMW) kop.medewerker = IKMW;
   if (!kop.type4) kop.type4 = 1;   // Magazijn: zo maakt het Dashboard het voorstel ook aan (Marcel)
-  h += '<div class="kaart"><h2>Gegevens van het voorstel' + (V.orderid ? '<span class="rechts">Nummer in Logic4: <b>'+esc(V.orderid)+'</b></span>' : '') + '</h2>' +
+  h += '<div class="kaart" id="kaartKop"><h2>Gegevens van het voorstel' + (V.orderid ? '<span class="rechts">Nummer in Logic4: <b>'+esc(V.orderid)+'</b></span>' : '') + '</h2>' +
     (kopOpen ? '' : '<div class="slot" style="margin-bottom:10px">🔒 Invullen kan zodra de klant zijn gegevens heeft bevestigd.</div>') +
     '<div class="raster">' +
     '<div class="s2"><label class="l" for="o_referentie">Uw referentie</label><input id="o_referentie" data-o="referentie" value="'+esc(kop.referentie||"")+'"></div>' +
@@ -252,7 +296,7 @@ function teken(){
     '</div><div class="knoppen'+(kopOpen?'':' verberg')+'"><button type="button" id="kopBewaar" title="Het Dashboard bewaart deze gegevens'+(V.orderid?' en zet ze meteen in Logic4':'')+'">Opslaan</button><span class="melding" id="kopMelding"></span></div></div>';
 
   /* Regels */
-  h += '<div class="kaart"><h2>Regels</h2>';
+  h += '<div class="kaart" id="kaartRegels"><h2>Regels</h2>';
   if (V.status !== "in-logic4") {
     h += '<div class="slot">' + (V.status === "bevestigd"
       ? 'De klant heeft bevestigd. Het voorstel gaat nu naar Logic4. ' + (V.logic4Fout ? '<br><span style="color:#b91c1c">'+esc(V.logic4Fout)+'</span><br><button type="button" class="doe" id="naarL4" style="margin-top:8px" title="Het Dashboard maakt de debiteur en het voorstel aan in Logic4">Opnieuw proberen</button>' : '')
@@ -260,7 +304,8 @@ function teken(){
   } else {
     h += '<div class="raster" style="margin-bottom:10px"><div class="s4 zoek"><label class="l" for="artZoek">Artikel toevoegen</label><input id="artZoek" placeholder="Artikelcode of naam" autocomplete="off"><div class="treffers verberg" id="artTreffers"></div></div>' +
       '<div class="s1"><label class="l" for="artAantal">Aantal</label><input id="artAantal" value="1" inputmode="decimal"></div>' +
-      '<div class="s1" style="align-self:end"><span class="melding" id="regelMelding"></span></div></div>';
+      '<div class="s1" style="align-self:end"><span class="melding" id="regelMelding"></span></div>' +
+      '<div class="s6 pc-uitleg">Zoek zoals in Logic4: op artikelcode, naam, barcode of een paar woorden tegelijk (bijvoorbeeld <i>lyon wit</i>). Met de pijltjes kies je, met Enter zet je het erop.</div></div>';
     var rg = ORDER ? ORDER.regels : [];
     h += rg.length ? '<table class="regels"><colgroup><col style="width:11%"><col><col style="width:8%"><col class="smal" style="width:11%"><col style="width:8%"><col style="width:11%"><col class="smal" style="width:6%"><col style="width:11%"><col style="width:12%"></colgroup>' +
       '<thead><tr><th>Code</th><th>Omschrijving</th><th class="getal">Aantal</th><th class="getal smal">Bruto</th><th class="getal">Korting %</th><th class="getal">Netto</th><th class="getal smal">Btw</th><th class="getal">Totaal</th><th></th></tr></thead><tbody>' +
@@ -297,14 +342,14 @@ function teken(){
   if (V.status === "in-logic4" && ORDER) {
     var bt = V.betaal || {}, isOrder = Number(ORDER.statusId) !== 4;
     var aanb = bt.aanbetaling || Math.round((ORDER.totaal && ORDER.totaal.incl || 0) * 30) / 100;
-    h += '<div class="kaart"><h2>Aanbetaling</h2>';
+    h += '<div class="kaart" id="kaartAanbetaling"><h2>Aanbetaling</h2>';
     if (isOrder) {
       h += '<p class="lead">✅ Dit voorstel is een order in Logic4: <b>'+esc(ORDER.status)+'</b>. Betaald: <b>'+esc(geld(ORDER.betaald))+'</b> van '+esc(geld(ORDER.totaal && ORDER.totaal.incl))+'.</p>';
     } else {
       h += '<p class="lead">Zodra de klant aanbetaalt, wordt dit voorstel meteen een order in Logic4 (30% aanbetaald; bij alles betaald Volledig betaald). ' +
         (bt.link ? 'De klant betaalt met de knop <b>Aanbetalen</b> onder zijn voorstel, of via deze link, ook in de winkel op zijn telefoon.' : 'De klant ziet de knop <b>Aanbetalen</b> onder het voorstel zodra je het verstuurt.') +
         ' Betaalt hij aan de kassa op dit voorstelnummer, klik dan op Ververs: dan zet het Dashboard het meteen om.</p>' +
-        '<div class="raster"><div class="s2"><label class="l" for="abBedrag">Aanbetaling incl. btw' + (bt.eigenBedrag ? '' : ' (30%)') + '</label><input id="abBedrag" inputmode="decimal" value="'+esc(String(aanb).replace(".", ","))+'"></div>' +
+        '<div class="raster"><div class="s2"><label class="l" for="abBedrag">Aanbetaling incl. btw' + (bt.eigenBedrag ? '' : ' (30%)') + '</label><input id="abBedrag" inputmode="decimal" value="'+esc((Number(aanb)||0).toFixed(2).replace(".", ","))+'"></div>' +
         (bt.link ? '<div class="s4"><label class="l" for="abLink">Betaallink voor de klant</label><input id="abLink" readonly value="'+esc(bt.link)+'"></div>' : '') + '</div>' +
         '<div class="knoppen"><button type="button" id="abBewaar" title="Het Dashboard bewaart dit bedrag; de klant betaalt dit bij Aanbetalen">Bedrag opslaan</button>' +
         (bt.eigenBedrag ? '<button type="button" id="abTerug" title="Het Dashboard zet de aanbetaling terug op 30% van het totaal">Terug naar 30%</button>' : '') +
@@ -325,15 +370,18 @@ function teken(){
   if ((V.log||[]).length) h += '<div class="kaart"><h2>Wat er gebeurde</h2><div class="log">' + V.log.slice().reverse().map(function(x){ return esc(wanneer(x.ts))+' - '+esc(String(x.wie).replace(/@.*/,""))+': '+esc(x.wat); }).join("<br>") + '</div></div>';
 
   $("vak").innerHTML = h;
+  if (OPLICHT) { OPLICHT.forEach(function(id){ var e=$(id); if(e) e.classList.add("oplicht"); }); OPLICHT = null; }
   koppel(vast || V.status === "gesloten");
   // Gegevens van het voorstel: op slot tot de klant heeft bevestigd.
   Array.prototype.forEach.call(document.querySelectorAll("[data-o]"), function(x){ x.disabled = V.status !== "in-logic4"; });
   sluitKoppel();
   stuurKoppel();
   aanbetaalKoppel();
+  wachtStart();
+  if (DEMO) demoWat();
 }
 function aanbetaalKoppel(){
-  if ($("abVervers")) $("abVervers").onclick = function(){ log("aanbetaling-ververs", V.id); openen(V.id); };
+  if ($("abVervers")) $("abVervers").onclick = function(){ log("aanbetaling-ververs", V.id); if (DEMO) teken(); else openen(V.id); };
   if ($("abKopie")) $("abKopie").onclick = function(){
     var i = $("abLink"); i.select();
     try { navigator.clipboard.writeText(i.value); } catch(e) { try { document.execCommand("copy"); } catch(e2) {} }
@@ -372,6 +420,7 @@ function koppel(vast){
   Array.prototype.forEach.call(document.querySelectorAll("[data-k],[data-a]"), function(x){ x.disabled = vast; });
   $("k_afwijkend").disabled = vast;
   $("k_afwijkend").onchange = function(){ $("aflBlok").classList.toggle("verberg", !this.checked); };
+  postcodeKoppel("k", $("pcUitleg")); postcodeKoppel("a", $("pcUitlegA"));
 
   if (!vast) {
     $("klantBewaar").onclick = async function(){
@@ -419,14 +468,23 @@ function koppel(vast){
     try { await api("/voorstel/logic4", { id: V.id }); openen(V.id); } catch(e){ alertIn(e.message); this.disabled = false; }
   };
   if ($("artZoek")) {
-    zoeker($("artZoek"), $("artTreffers"), function(q){ return "/voorstel/artikel?q="+encodeURIComponent(q)+"&debiteur="+encodeURIComponent(V.debiteur||""); }, function(j){
-      return (j.artikelen||[]).map(function(a, i){ return '<div data-i="'+i+'"><b>'+esc(a.code)+'</b> '+esc(a.oms)+(a.prijs?' <small>'+esc(geld(a.prijs))+'</small>':'')+'</div>'; }).join("") || '<div><small>Geen artikel gevonden.</small></div>';
+    zoeker($("artZoek"), $("artTreffers"), function(q){ return "/voorstel/artikel?q="+encodeURIComponent(q); }, function(j){
+      var l = j.artikelen || [];
+      if (!l.length) return '<div class="meer">Logic4 vindt hier geen artikel bij. Probeer een ander woord of de artikelcode.</div>';
+      return l.map(function(a, i){
+        var st = a.vervallen ? 'Vervallen' : (a.status && a.status !== "Gewoon leverbaar" ? a.status : '');
+        return '<div class="art'+(a.vervallen?' weg':'')+'" data-i="'+i+'"><b>'+esc(a.code)+'</b><span>'+esc(a.oms)+'</span><span class="p">'+(a.prijs?esc(geld(a.prijs))+' ex':'')+'</span>' +
+          '<small>'+(a.voorraad!=null?'Vrije voorraad '+esc(a.voorraad):'')+(st?' · '+esc(st):'')+'</small></div>'; }).join("") +
+        (j.meer || l.length >= 120 ? '<div class="meer">Er zijn nog meer artikelen. Typ er een woord bij om te zoeken binnen deze lijst.</div>' : '');
     }, async function(j, i){
       var a = j.artikelen[i];
       melding("regelMelding", "Toevoegen…");
-      try { var r = await api("/voorstel/regel", { id: V.id, regel: { code: a.code, aantal: Number(String($("artAantal").value).replace(",", ".")) || 1 } });
-        ORDER = r.order; log("regel-erbij", a.code); teken(); melding("regelMelding", a.code + " staat erop."); }
+      try { var r = await api("/voorstel/regel", { id: V.id, regel: { code: a.code, aantal: Number(String($("artAantal").value).replace(",", ".")) || 1 }, artikel: DEMO ? a : undefined });
+        ORDER = r.order; log("regel-erbij", a.code); teken(); melding("regelMelding", a.code + " staat erop."); var z = $("artZoek"); if (z) z.focus(); }
       catch(e){ melding("regelMelding", e.message, true); }
+    }, function(j, q){
+      var l = j.artikelen || [], i = l.findIndex(function(a){ return a.code.toLowerCase() === q.toLowerCase(); });
+      return i >= 0 ? i : (l.length === 1 ? 0 : -1);
     });
     Array.prototype.forEach.call(document.querySelectorAll("tr[data-r]"), function(tr){
       var b = tr.querySelector("[data-bewaar]"), w = tr.querySelector("[data-weg]");
@@ -452,7 +510,7 @@ function stuurKoppel(){
   if (!$("printKnop")) return;
   $("printKnop").onclick = async function(){
     var k = this; k.disabled = true; melding("stMelding", "Voorstel klaarzetten…");
-    try { var j = await api("/voorstel/print", { id: V.id }); window.open(j.url, "_blank"); log("print", V.id); melding("stMelding", "Het voorstel staat open in een nieuw venster."); }
+    try { var j = await api("/voorstel/print", { id: V.id }); if (j.url) window.open(j.url, "_blank"); log("print", V.id); melding("stMelding", DEMO ? "Het voorstel staat in de telefoon." : "Het voorstel staat open in een nieuw venster."); }
     catch(e){ melding("stMelding", e.message, true); }
     k.disabled = false;
   };
@@ -489,22 +547,316 @@ function sluitKoppel(){
 }
 function alertIn(t){ melding("regelMelding", t, true); }
 
-/* Zoekveld met een lijstje eronder. Wacht even tot er niet meer getypt wordt. */
-function zoeker(inp, lijst, pad, html, kies){
-  var tik = null, laatste = null;
+/* Zoekveld met een lijstje eronder. Wacht even tot er niet meer getypt wordt.
+   Pijltjes kiezen, Enter neemt de gekozen (of de code die precies klopt). */
+function zoeker(inp, lijst, pad, html, kies, precies){
+  var tik = null, laatste = null, keuze = -1, vraag = "";
+  function rijen(){ return lijst.querySelectorAll("[data-i]"); }
+  function markeer(){ Array.prototype.forEach.call(rijen(), function(d, i){ d.classList.toggle("actief", i === keuze); if (i === keuze) d.scrollIntoView({ block: "nearest" }); }); }
+  async function zoek(q){
+    var j = await api(pad(q));
+    if (inp.value.trim() !== q) return null;
+    laatste = j; vraag = q; keuze = -1; lijst.innerHTML = html(j); lijst.classList.remove("verberg");
+    Array.prototype.forEach.call(rijen(), function(d){ d.onmousedown = function(e){ e.preventDefault(); }; d.onclick = function(){ lijst.classList.add("verberg"); kies(laatste, Number(d.dataset.i)); }; });
+    return j;
+  }
   inp.oninput = function(){
     clearTimeout(tik);
     var q = inp.value.trim();
     if (q.length < 2) { lijst.classList.add("verberg"); return; }
-    tik = setTimeout(async function(){
-      try { var j = await api(pad(q)); laatste = j; lijst.innerHTML = html(j); lijst.classList.remove("verberg");
-        Array.prototype.forEach.call(lijst.querySelectorAll("[data-i]"), function(d){ d.onclick = function(){ lijst.classList.add("verberg"); kies(laatste, Number(d.dataset.i)); }; }); }
-      catch(e){ lijst.innerHTML = '<div><small>'+esc(e.message)+'</small></div>'; lijst.classList.remove("verberg"); }
-    }, 350);
+    tik = setTimeout(function(){ zoek(q).catch(function(e){ lijst.innerHTML = '<div><small>'+esc(e.message)+'</small></div>'; lijst.classList.remove("verberg"); }); }, 300);
   };
-  inp.onblur = function(){ setTimeout(function(){ lijst.classList.add("verberg"); }, 250); };
+  inp.onkeydown = async function(e){
+    var n = rijen().length, open = !lijst.classList.contains("verberg");
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n && open) {
+      e.preventDefault(); keuze = Math.max(0, Math.min(n - 1, keuze + (e.key === "ArrowDown" ? 1 : -1))); markeer();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (open && keuze >= 0 && rijen()[keuze]) return rijen()[keuze].click();
+      var q = inp.value.trim(); if (q.length < 2) return;
+      clearTimeout(tik);
+      try {
+        var j = (vraag === q && laatste) ? laatste : await zoek(q);
+        var p = j && precies ? precies(j, q) : -1;
+        if (p >= 0) { lijst.classList.add("verberg"); kies(j, p); }
+        else if (rijen().length) { lijst.classList.remove("verberg"); keuze = 0; markeer(); }
+      } catch(x) {}
+    } else if (e.key === "Escape") lijst.classList.add("verberg");
+  };
+  inp.onblur = function(){ setTimeout(function(){ lijst.classList.add("verberg"); }, 200); };
+  inp.onfocus = function(){ if (laatste && inp.value.trim() === vraag && rijen().length) lijst.classList.remove("verberg"); };
 }
 
+/* Postcode en huisnummer: straat en plaats komen er vanzelf bij (Gerrit,
+   4 nov 2026). Uit de gratis adressenlijst van de overheid (PDOK), alleen
+   voor adressen in Nederland. Lukt het niet, dan typ je ze gewoon zelf. */
+function postcodeKoppel(soort, uitleg){
+  function v(n){ return document.querySelector('[data-'+soort+'="'+n+'"]'); }
+  var pc = v("postcode"), nr = v("huisnummer"), land = v("land"), tik = null, beurt = 0;
+  if (!pc || !nr || pc.disabled) return;
+  function zeg(t, cls){ if (uitleg) { uitleg.textContent = t; uitleg.className = "s6 pc-uitleg " + (cls||""); } }
+  async function pdok(q, type){
+    var r = await fetch("https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?rows=1&fl=straatnaam,woonplaatsnaam&fq=type:"+type+"&q="+encodeURIComponent(q));
+    var j = await r.json();
+    return ((j.response||{}).docs||[])[0] || null;
+  }
+  function zoek(){
+    clearTimeout(tik);
+    var p = pc.value.replace(/\s+/g, "").toUpperCase(), n = (nr.value.match(/\d+/)||[""])[0], l = ((land && land.value) || "NL").trim().toUpperCase();
+    if (l && l !== "NL") { zeg(""); return; }
+    if (!/^\d{4}[A-Z]{2}$/.test(p)) { zeg(p.length >= 4 ? "" : ""); return; }
+    var mijn = ++beurt;
+    tik = setTimeout(async function(){
+      try {
+        var d = n ? await pdok("postcode:"+p+" and huisnummer:"+n, "adres") : null;
+        var los = d ? null : await pdok("postcode:"+p, "postcode");
+        if (mijn !== beurt) return;
+        var g = d || los;
+        if (!g) { zeg("Deze postcode staat niet in de adressenlijst. Typ straat en plaats zelf.", "let"); return; }
+        v("straat").value = g.straatnaam || ""; v("plaats").value = g.woonplaatsnaam || "";
+        if (d) zeg("✓ " + g.straatnaam + " " + n + ", " + g.woonplaatsnaam, "goed");
+        else if (n) zeg("Straat en plaats gevonden. Kijk het huisnummer even na: " + n + " staat niet bij deze postcode.", "let");
+        else zeg("✓ " + g.straatnaam + ", " + g.woonplaatsnaam + ". Vul nog het huisnummer in.", "goed");
+      } catch(e) { zeg(""); }
+    }, 250);
+  }
+  pc.addEventListener("input", zoek); nr.addEventListener("input", zoek);
+  if (land) land.addEventListener("input", zoek);
+}
+
+/* ── Live meekijken (Gerrit, 4 nov 2026) ──────────────────────────────────
+   "Als de klant de gegevens bevestigt, moet je dat ook echt zien gebeuren
+   in je scherm." Wacht het voorstel op de klant (of op een aanbetaling), dan
+   vraagt de tegel elke paar seconden de stand op: één regel, geen Logic4.
+   Na een half uur rustiger, en niet als de tegel op de achtergrond staat. */
+var wacht = { id: null };
+function wachtStop(){ clearTimeout(wacht.tik); wacht = { id: null }; }
+function bezigMetTypen(){ var a = document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== "abLink"); }
+function wachtStart(){
+  var opBetaling = V && V.status === "in-logic4" && ORDER && Number(ORDER.statusId) === 4 && (V.voorstelVerstuurd||[]).length;
+  if (DEMO || !V || !V.id || !(V.status === "wacht" || opBetaling)) return wachtStop();
+  if (wacht.id === V.id && wacht.status === V.status) return;   // loopt al
+  wachtStop();
+  var mijn = wacht = { id: V.id, status: V.status, betaald: (V.betaal||{}).betaald || 0, begin: Date.now(), tik: null };
+  (async function rondje(){
+    if (wacht !== mijn) return;
+    if (document.visibilityState === "visible") {
+      try {
+        var j = await api("/voorstel/stand?id=" + encodeURIComponent(mijn.id));
+        if (wacht !== mijn || !V || V.id !== mijn.id) return;
+        if (mijn.status === "wacht" && j.status !== "wacht") { wachtStop(); return liveBijgewerkt(); }
+        if (mijn.status !== "wacht" && j.betaald > mijn.betaald && !bezigMetTypen()) { wachtStop(); return liveBijgewerkt(); }
+      } catch(e) {}
+    }
+    var lang = Date.now() - mijn.begin > 30 * 60e3;
+    mijn.tik = setTimeout(rondje, mijn.status === "wacht" ? (lang ? 30000 : 3000) : (lang ? 60000 : 8000));
+  })();
+}
+/* De klant deed iets: zonder "Even laden" opnieuw tekenen, met een melding. */
+async function liveBijgewerkt(){
+  var was = V.status, id = V.id;
+  try {
+    var j = await api("/voorstel?id=" + encodeURIComponent(id));
+    if (!V || V.id !== id) return;
+    V = j.voorstel; ORDER = j.order && !j.order.fout ? j.order : null; EERDER = j.eerder || null;
+    liveMelding(was);
+    teken();
+    log("live", V.status);
+  } catch(e) { wachtStart(); }
+}
+function liveMelding(was){
+  var naam = [V.klant && V.klant.voornaam, V.klant && V.klant.tussenvoegsel, V.klant && V.klant.achternaam].filter(Boolean).join(" ") || "De klant";
+  if (was === "wacht" && V.status !== "wacht" && V.status !== "concept") {
+    NIEUWS = "✅ " + naam + " heeft de gegevens net " + (V.bevestigd && V.bevestigd.aangepast ? "aangepast en bevestigd" : "bevestigd") + "." +
+      (V.status === "in-logic4" ? " Het voorstel staat in Logic4: vul het nu verder in." : "");
+    OPLICHT = ["kaartKop", "kaartRegels"];
+  } else if (ORDER && Number(ORDER.statusId) !== 4) {
+    NIEUWS = "💶 " + naam + " heeft net aanbetaald. Het voorstel is nu een order in Logic4: " + ORDER.status + ".";
+    OPLICHT = ["kaartAanbetaling"];
+  }
+}
+document.addEventListener("visibilitychange", function(){ if (document.visibilityState === "visible" && wacht.id && wacht.tik) { clearTimeout(wacht.tik); var m = wacht; m.begin = Date.now(); wacht = { id: null }; wachtStart(); } });
+
+/* ── Demo (Gerrit, 4 nov 2026) ───────────────────────────────────────────
+   "Maak een demo waarmee ik mensen kan laten zien hoe dit werkt." Links het
+   scherm van de adviseur, rechts de telefoon van de klant met de pagina's
+   zoals de klant ze echt krijgt. Er gaat niets naar Logic4, Mollie of een
+   klant; alleen het zoeken in Logic4 is echt (en dat leest alleen). */
+var TEL = null;
+function demoStart(){
+  wachtStop();
+  DEMO = true; document.body.classList.add("demo");
+  V = { id: "demo", status: "concept", adviseur: ik, kop: {}, log: [],
+    klant: { aanhef: "2", voornaam: "Sanne", tussenvoegsel: "de", achternaam: "Vries", email: "sanne@voorbeeld.nl", mobiel: "06 12345678", land: "NL", aflevering: {} } };
+  ORDER = null; EERDER = null; TEL = null;
+  history.replaceState(null, "", location.pathname + (location.search.indexOf("w=")>=0 ? "?w="+encodeURIComponent(W) : ""));
+  $("raam").className = "demo-raam"; $("telPlek").classList.remove("verberg");
+  telToon(null);
+  keuzesLaden().then(teken);
+  log("demo", "");
+}
+function demoStop(){
+  DEMO = false; document.body.classList.remove("demo");
+  $("raam").className = ""; $("telPlek").classList.add("verberg"); $("telPlek").innerHTML = ""; $("demoBoven").innerHTML = "";
+}
+function demoAdviseur(){ var m = ((KEUZES||{}).medewerkers||[]).find(function(x){ return String(x.id) === String(IKMW); }); return m ? m.naam : ""; }
+function demoNaarBoven(){ try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch(e) { window.scrollTo(0, 0); } }
+function demoLog(wie, wat){ V.log = (V.log||[]).concat([{ ts: Date.now(), wie: wie, wat: wat }]); }
+function demoMist(k){
+  var m = [];
+  if (!k.achternaam && !k.bedrijf) m.push("achternaam");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(k.email||"")) m.push("e-mailadres");
+  ["straat","huisnummer","postcode","plaats"].forEach(function(x){ if (!k[x]) m.push(x); });
+  if (!k.telefoon && !k.mobiel) m.push("telefoon of mobiel");
+  return m;
+}
+function demoTotaal(){
+  var ex = 0, btw = 0;
+  (ORDER.regels||[]).forEach(function(r){ if (r.vervallen) return; var b = r.netto * r.aantal; ex += b; btw += b * r.btw / 100; });
+  var vz = Number(String((V.kop||{}).verzendkosten||"").replace(",", ".")) || 0;
+  ex += vz; btw += vz * 0.21;
+  ORDER.totaal = { ex: Math.round(ex*100)/100, btw: Math.round(btw*100)/100, incl: Math.round((ex+btw)*100)/100, verzend: vz };
+}
+function demoBetaal(){
+  var incl = ORDER && ORDER.totaal ? ORDER.totaal.incl : 0, al = (V.betalingen||[]).reduce(function(s, b){ return s + b.bedrag; }, 0);
+  V.betaal = { aanbetaling: V.aanbetaling || Math.round(incl * 30) / 100, betaald: al, eigenBedrag: !!V.aanbetaling, link: "" };
+}
+async function demoApi(pad, b){
+  await new Promise(function(r){ setTimeout(r, 250); });
+  if (pad === "/voorstel/klant") {
+    V.klant = b.klant; if (b.debiteur !== undefined) V.debiteur = b.debiteur;
+    if (V.status === "wacht") { V.status = "concept"; demoLog(ik, "Gegevens aangepast na het versturen; de mail moet opnieuw"); }
+    V.mist = demoMist(V.klant);
+    return { ok: true, voorstel: V };
+  }
+  if (pad === "/voorstel/verstuur") {
+    V.status = "wacht"; V.verstuurd = { ts: Date.now(), naar: V.klant.email };
+    demoLog(ik, "Mail 'Bevestig je gegevens' verstuurd naar " + V.klant.email);
+    telToon("mail");
+    return { ok: true, voorstel: V };
+  }
+  if (pad === "/voorstel/kop") {
+    V.kop = Object.assign({}, V.kop, b.kop); if (b.kop && b.kop.vervaldatum !== undefined) V.vervaldatum = b.kop.vervaldatum;
+    ORDER.kop = Object.assign({}, ORDER.kop, b.kop); demoTotaal(); demoBetaal();
+    return { ok: true, voorstel: V, order: ORDER };
+  }
+  if (pad === "/voorstel/regel") {
+    var r = b.regel, rg = ORDER.regels;
+    if (b.weg) { rg.forEach(function(x){ if (String(x.id) === String(r.id)) { x.aantal = 0; x.vervallen = true; } }); }
+    else if (r.id) {
+      rg.forEach(function(x){ if (String(x.id) !== String(r.id)) return;
+        if (r.oms != null) x.oms = r.oms; if (r.aantal !== "" && r.aantal != null) x.aantal = Number(r.aantal) || 0;
+        if (r.netto !== "" && r.netto != null) x.netto = Number(r.netto) || 0; else if (r.korting !== "" && r.korting != null) x.netto = Math.round(x.bruto * (1 - Number(r.korting)/100) * 100) / 100; });
+    } else {
+      var a = b.artikel || {};
+      rg.push({ id: "d" + Date.now(), code: a.code || r.code, oms: a.oms || r.code, aantal: Number(r.aantal) || 1, bruto: a.prijs || 0, netto: a.prijs || 0, btw: a.btw || 21 });
+    }
+    demoTotaal(); demoBetaal();
+    return { ok: true, order: ORDER };
+  }
+  if (pad === "/voorstel/stuur") {
+    var opties = { klant: V.klant, regels: ORDER.regels, totaal: ORDER.totaal, kop: V.kop, aanbetaling: V.aanbetaling, tekst: b.tekst, adviseur: demoAdviseur() };
+    if (!b.stuur) {
+      var m = await api("/voorstel/demo", Object.assign({ stap: "voorstelmail" }, opties)), d = await api("/voorstel/demo", Object.assign({ stap: "voorstel" }, opties));
+      return { ok: true, naar: V.klant.email, onderwerp: b.onderwerp || "Je voorstel DEMO van Fonteyn", mail: m.html, voorstel: d.html };
+    }
+    V.voorstelVerstuurd = (V.voorstelVerstuurd||[]).concat([{ ts: Date.now(), naar: V.klant.email, totaal: ORDER.totaal.incl }]);
+    V.stuurTekst = b.tekst;
+    demoLog(ik, "Voorstel verstuurd naar " + V.klant.email); demoBetaal();
+    telToon("voorstelmail");
+    return { ok: true, voorstel: V };
+  }
+  if (pad === "/voorstel/print") { telToon("voorstel"); return { ok: true, url: "" }; }
+  if (pad === "/voorstel/aanbetaling") {
+    var ruw = String(b.bedrag || 0).trim(), n = Math.round((Number(/,/.test(ruw) ? ruw.replace(/\./g, "").replace(",", ".") : ruw) || 0) * 100) / 100;
+    V.aanbetaling = n || 0; demoBetaal(); return { ok: true, voorstel: V };
+  }
+  if (pad === "/voorstel/sluiten") { V.status = "gesloten"; demoLog(ik, "Voorstel gesloten"); return { ok: true, voorstel: V }; }
+  throw new Error("Dit gaat in de demo niet.");
+}
+/* De telefoon: de echte pagina's, maar klikken blijft in de tegel. */
+var TEL_VANGER = "<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a');if(!a)return;e.preventDefault();parent.postMessage({demo:'link',href:a.getAttribute('href')||''},'*');},true);" +
+  "document.addEventListener('submit',function(e){e.preventDefault();var d={};new FormData(e.target).forEach(function(v,k){d[k]=v;});parent.postMessage({demo:'form',data:d},'*');},true);<\/script>";
+var TEL_KOP = { mail: "📧 Mail: Bevestig je gegevens", bevestig: "🌐 mijn.fonteyn.nl", aanpassen: "🌐 mijn.fonteyn.nl", bedankt: "🌐 mijn.fonteyn.nl", voorstelmail: "📧 Mail: Je voorstel", voorstel: "🌐 mijn.fonteyn.nl", betaald: "🌐 mijn.fonteyn.nl" };
+async function telToon(stap){
+  TEL = stap;
+  if (!stap) { $("telPlek").innerHTML = '<div class="tel"><p class="tel-kop">Telefoon van de klant</p><div class="tel-scherm"><div class="tel-leeg">Hier zie je wat de klant op zijn telefoon krijgt.</div></div></div>'; return; }
+  var html = "";
+  try { var j = await api("/voorstel/demo", { stap: stap, klant: V.klant, regels: ORDER ? ORDER.regels : [], totaal: ORDER ? ORDER.totaal : {}, kop: V.kop, aanbetaling: V.aanbetaling, tekst: V.stuurTekst, betaald: (V.betaal||{}).betaald, adviseur: demoAdviseur() }); html = j.html; }
+  catch(e) { html = "<p style='font-family:Arial;padding:20px'>" + esc(e.message) + "</p>"; }
+  if (TEL !== stap) return;
+  if (!/^<!doctype/i.test(html)) html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'></head><body style='margin:0'>" + html + "</body></html>";
+  $("telPlek").innerHTML = '<div class="tel"><p class="tel-kop">' + esc(TEL_KOP[stap] || "") + '</p><div class="tel-scherm"><iframe id="telRaam" title="Telefoon van de klant"></iframe></div></div><p class="tel-onder">Klik gerust in de telefoon: zo doet de klant het.</p>';
+  $("telRaam").srcdoc = html.replace("</body>", TEL_VANGER + "</body>");
+}
+window.addEventListener("message", function(e){
+  if (!DEMO || !e.data || !e.data.demo) return;
+  var raam = $("telRaam"); if (!raam || e.source !== raam.contentWindow) return;
+  var d = e.data;
+  if (d.demo === "link") {
+    var h = String(d.href || "");
+    if (/\/bevestig/.test(h)) return telToon("bevestig");
+    if (h === "#aanpassen") return telToon("aanpassen");
+    if (/\/voorstel\/bekijk/.test(h)) return telToon("voorstel");
+    if (/betaal/.test(h)) return demoBetaald();
+    return;
+  }
+  if (d.demo === "form" && TEL === "bevestig" || d.demo === "form" && TEL === "aanpassen") demoBevestigd(d.data || {});
+});
+/* Zo gaat het ook echt: na Klopt staat het voorstel in Logic4 en gaat de tegel open. */
+function demoBevestigd(f){
+  if (V.status !== "wacht") return telToon("bedankt");
+  var verschil = [];
+  if (f.soort === "aangepast") {
+    var nieuw = { aanhef: f.aanhef||"", voornaam: f.voornaam||"", tussenvoegsel: f.tussenvoegsel||"", achternaam: f.achternaam||"", bedrijf: f.bedrijf != null ? f.bedrijf : V.klant.bedrijf, btw: f.btw != null ? f.btw : V.klant.btw,
+      straat: f.straat||"", huisnummer: f.huisnummer||"", toevoeging: f.toevoeging||"", postcode: f.postcode||"", plaats: f.plaats||"", land: (f.land||"NL").toUpperCase(),
+      email: f.email||"", telefoon: f.telefoon||"", mobiel: f.mobiel||"", afwijkend: f.afwijkend === "1",
+      aflevering: { naam: f.a_naam||"", straat: f.a_straat||"", huisnummer: f.a_huisnummer||"", toevoeging: f.a_toevoeging||"", postcode: f.a_postcode||"", plaats: f.a_plaats||"", land: f.a_land||"" } };
+    var L = { aanhef:"Aanhef", voornaam:"Voornaam", tussenvoegsel:"Tussenvoegsel", achternaam:"Achternaam", straat:"Straat", huisnummer:"Huisnummer", toevoeging:"Toevoeging", postcode:"Postcode", plaats:"Plaats", land:"Land", email:"E-mailadres", telefoon:"Telefoon", mobiel:"Mobiel" };
+    Object.keys(L).forEach(function(x){ if (String(V.klant[x]||"") !== String(nieuw[x]||"")) verschil.push({ veld: L[x], was: V.klant[x]||"", wordt: nieuw[x]||"" }); });
+    V.klant = nieuw;
+  }
+  V.status = "in-logic4"; V.orderid = "DEMO"; V.debiteur = V.debiteur || "DEMO";
+  V.bevestigd = { ts: Date.now(), aangepast: verschil.length > 0, verschil: verschil };
+  demoLog("de klant", verschil.length ? "Gegevens aangepast en bevestigd" : "Gegevens bevestigd");
+  demoLog("het Dashboard", "Voorstel DEMO staat in Logic4 (in de demo niet echt)");
+  ORDER = { id: "DEMO", status: "Offerte", statusId: 4, kop: { medewerker: IKMW || "", type4: 1 }, regels: [], betaald: 0 };
+  demoTotaal(); demoBetaal();
+  telToon("bedankt");
+  // Even wachten, zoals in het echt: de tegel kijkt elke paar seconden.
+  setTimeout(function(){ if (!DEMO) return; liveMelding("wacht"); teken(); demoNaarBoven(); }, 1200);
+}
+function demoBetaald(){
+  if (!ORDER || Number(ORDER.statusId) !== 4) return telToon("betaald");
+  var bedrag = (V.betaal||{}).aanbetaling || 0;
+  V.betalingen = (V.betalingen||[]).concat([{ ts: Date.now(), bedrag: bedrag, geboekt: Date.now(), status: "paid" }]);
+  demoBetaal();
+  ORDER.betaald = bedrag;
+  var vol = bedrag >= ORDER.totaal.incl - 0.01;
+  ORDER.statusId = vol ? 30 : 25; ORDER.status = vol ? "Volledig betaald" : "30% aanbetaald";
+  demoLog("de klant", "Aanbetaling van " + geld(bedrag) + " betaald");
+  demoLog("het Dashboard", "In Logic4 nu " + ORDER.status + " (in de demo niet echt)");
+  telToon("betaald");
+  setTimeout(function(){ if (!DEMO) return; liveMelding("in-logic4"); teken(); demoNaarBoven(); }, 1200);
+}
+/* Wat nu? Bovenaan de demo, per stap. */
+function demoWat(){
+  var t, regels = ORDER && (ORDER.regels||[]).some(function(r){ return !r.vervallen; });
+  if (V.status === "concept") t = "<b>Stap 1. Klantgegevens.</b> Typ postcode en huisnummer, bijvoorbeeld <b>3888 NK</b> en <b>52</b>: straat en plaats komen er vanzelf bij. Klik daarna op <b>Verstuur ‘Bevestig je gegevens’</b>.";
+  else if (V.status === "wacht") t = "<b>Stap 2. De klant bevestigt.</b> Rechts zie je de mail op de telefoon van de klant. Klik in de telefoon op <b>Bevestig je gegevens</b> en daarna op <b>Klopt</b> (of pas iets aan). Kijk wat er hier links gebeurt.";
+  else if (V.status === "gesloten") t = "<b>Gesloten.</b> Zo sluit je een voorstel af dat niet doorgaat. Klik op <b>Opnieuw</b> om de demo nog eens te doen.";
+  else if (ORDER && Number(ORDER.statusId) !== 4) t = "<b>Klaar.</b> De klant heeft aanbetaald en het voorstel is nu een order in Logic4. Zo gaat het van klant tot order. Klik op <b>Opnieuw</b> om de demo nog eens te doen.";
+  else if (!regels) t = "<b>Stap 3. Het voorstel invullen.</b> De gegevens zijn nu open. Zoek een artikel zoals in Logic4: op code, naam of een paar woorden (bijvoorbeeld <i>spa</i> of <i>lyon wit</i>). Kies met de pijltjes en zet het erop met Enter.";
+  else if (!(V.voorstelVerstuurd||[]).length) t = "<b>Stap 4. Naar de klant.</b> Pas prijzen of korting aan als je wilt. Klik daarna onderaan op <b>Voorbeeld en versturen</b> en dan op <b>Versturen</b>.";
+  else t = "<b>Stap 5. Aanbetalen.</b> De klant heeft het voorstel op de telefoon. Klik in de telefoon op <b>Bekijk je voorstel</b> en daarna op <b>Aanbetalen</b>. Het voorstel wordt meteen een order.";
+  $("demoBoven").innerHTML = '<div class="demo-band"><b>▶ Demo</b><span>Een voorbeeld met een verzonnen klant. Er gaat niets naar Logic4, naar een klant of naar de bank.</span>' +
+    '<span style="margin-left:auto;display:flex;gap:8px"><button type="button" class="klein" id="demoOpnieuw" title="Het Dashboard begint de demo opnieuw">Opnieuw</button><button type="button" class="klein" id="demoUit" title="Het Dashboard sluit de demo en laat je voorstellen zien">Demo sluiten</button></span></div>' +
+    '<div class="demo-wat">' + t + '</div>';
+  $("demoOpnieuw").onclick = demoStart;
+  $("demoUit").onclick = overzicht;
+}
+
+$("demoKnop").onclick = demoStart;
 $("lijstKnop").onclick = overzicht;
 $("nieuwKnop").onclick = nieuw;
 (async function(){

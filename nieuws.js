@@ -50,6 +50,9 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    { datum: "2026-11-04", bestand: "voorstel-maken.html", soort: "beter",
+      titel: "Voorstel maken: postcode, live meekijken en een demo",
+      wat:   "Typ postcode en huisnummer: straat en plaats komen er vanzelf bij. Heb je de mail Bevestig je gegevens verstuurd, dan kijkt de tegel live mee: zodra de klant bevestigt, gaat het voorstel vanzelf open en zie je een melding. Artikelen zoek je nu zoals in Logic4: alle artikelen, op code, naam, barcode of een paar woorden, met prijs en voorraad; kies met de pijltjes en zet het erop met Enter. Met de knop Demo laat je met een verzonnen klant zien hoe het werkt, met de telefoon van de klant ernaast." },
     { datum: "2026-11-04", bestand: "voorstel-maken.html", soort: "nieuw",
       titel: "Voorstel maken: aanbetalen",
       wat:   "Onder het voorstel dat de klant krijgt staat nu een knop Aanbetalen. Betaalt de klant, dan is het voorstel meteen een order in Logic4 en krijg je een bericht. Je kunt het bedrag aanpassen en de betaallink kopiëren, bijvoorbeeld voor een klant in de winkel. Betaald aan de kassa? Klik op Ververs en het wordt meteen een order." },

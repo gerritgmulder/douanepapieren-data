@@ -562,16 +562,63 @@ async function vsKlantZoek(env, H, q) {
   return { ok: true, treffers: (Array.isArray(r) ? r : []).filter(c => !/^\d+$/.test(q) || c.Id === Number(q)).map(vsKlantUitL4) };
 }
 
-/* ── Artikelen zoeken, met de prijs voor deze klant ─────────────────────── */
-async function vsArtikel(env, H, q, debiteur) {
+/* ── Artikelen zoeken ──────────────────────────────────────────────────────
+   Gerrit (4 nov 2026): "je moet alle producten kunnen toevoegen die bekend
+   zijn in Logic4, net zoals je dat in Logic4 ook zou doen." Logic4 zoekt zelf
+   op code, naam en barcode, ook op meer woorden tegelijk. De tegel liet er
+   maar 15 zien, zonder prijs en zonder vervallen artikelen. Nu: alles wat
+   Logic4 vindt, de code die precies klopt bovenaan, vervallen onderaan. */
+const VS_ZOEK_MAX = 300;
+async function vsArtikel(env, H, q) {
   q = String(q || "").trim();
   if (q.length < 2) return { ok: true, artikelen: [] };
-  const r = await vsL4(env, H, "/v3/Products/GetProducts", { FastSearchText: q, TakeRecords: 25 });
-  const l = (Array.isArray(r) ? r : []).filter(x => Number(x.StatusId) !== 10).slice(0, 15);
-  return { ok: true, artikelen: l.map(x => ({
-    code: String(x.ProductCode || ""), oms: String(x.ProductName1 || x.Description || ""),
-    prijs: Number(x.SellPriceExcl || x.SellPrice || 0) || null,
-  })).filter(x => x.code) };
+  const r = await vsL4(env, H, "/v3/Products/GetProducts", { FastSearchText: q, TakeRecords: VS_ZOEK_MAX });
+  const l = (Array.isArray(r) ? r : []).filter(x => x.ProductCode);
+  const ql = q.toLowerCase();
+  const plek = x => { const c = String(x.ProductCode).toLowerCase(); return (c === ql ? 0 : c.startsWith(ql) ? 1 : 2) * 10 + (Number(x.StatusId) === 10 ? 5 : 0); };
+  const rij = l.map((x, i) => ({ x, i, p: plek(x) })).sort((a, b) => a.p - b.p || a.i - b.i);
+  return { ok: true, meer: l.length >= VS_ZOEK_MAX, artikelen: rij.slice(0, 120).map(({ x }) => ({
+    code: String(x.ProductCode), oms: String(x.ProductName1 || x.Description || ""),
+    status: String(x.Statusname || ""), vervallen: Number(x.StatusId) === 10,
+    voorraad: x.FreeStock != null ? Number(x.FreeStock) : null,
+    prijs: Math.round((Number(x.SellPriceGross) || 0) * 100) / 100 || null, btw: Number(x.VatPercent) || 0,
+  })) };
+}
+
+/* ── Demo (Gerrit, 4 nov 2026) ─────────────────────────────────────────────
+   "Maak een demo waarmee ik mensen kan laten zien hoe dit werkt." De tegel
+   speelt het hele voorstel na met een voorbeeldklant; er gaat niets naar
+   Logic4, Mollie of een klant. Hier alleen de pagina's die de klant op zijn
+   telefoon ziet, precies zoals het echte voorstel ze maakt. */
+async function vsDemo(env, H, db, b, wie) {
+  const v = { klant: vsKlantSchoon(b.klant), aanbetaling: Number(b.aanbetaling) || 0 };
+  const pagina = async (titel, inhoud) => (await vsPagina(titel, inhoud).text());
+  const regels = (Array.isArray(b.regels) ? b.regels : []).filter(r => !r.vervallen && Number(r.aantal)).slice(0, 60).map(r => {
+    const netto = Number(r.netto) || 0, btw = Number(r.btw) || 0, bruto = Number(r.bruto) || 0;
+    return { code: vsS(r.code, 40), oms: vsS(r.oms, 250), aantal: Number(r.aantal), stukEx: netto, stukIncl: Math.round(netto * (1 + btw / 100) * 100) / 100, btw,
+      bruto, korting: bruto && netto < bruto ? Math.round((1 - netto / bruto) * 1000) / 10 : 0 };
+  });
+  const t = b.totaal || {};
+  const kop = b.kop || {};
+  const d = { nummer: "DEMO", datum: Date.now(), geldigTot: kop.vervaldatum || "", klant: v.klant, zakelijk: !!(v.klant.bedrijf || v.klant.btw),
+    referentie: vsS(kop.referentie), omschrijving: vsS(kop.omschrijving, 200), betaalmethode: "", transporteur: "", leverdatum: "",
+    adviseur: { naam: vsS(b.adviseur) || wie.replace(/@.*/, ""), mail: vsAdviseurMail(wie) },
+    regels, totaal: { ex: Number(t.ex) || 0, incl: Number(t.incl) || 0, btw: Number(t.btw) || 0, verzend: Number(t.verzend) || 0 } };
+  v.verstuurdeVersie = d;
+  if (b.betaald) v.betalingen = [{ geboekt: 1, bedrag: Number(b.betaald) }];
+  switch (b.stap) {
+    case "mail": return vsMailHtml(v, vsBasis(env) + "/bevestig?t=voorbeeld");
+    case "bevestig": return pagina("Bevestig je gegevens",
+      "<h1>Kloppen je gegevens?</h1><p>Kijk ze even na. Zo weten we zeker dat je gegevens kloppen en veilig bij jouw voorstel horen.</p>" + vsGegevensTabel(v.klant) +
+      "<form method='post' action='#'><input type='hidden' name='soort' value='klopt'><button class='knop groen' type='submit'>Klopt</button></form>" +
+      "<a class='knop grijs' href='#aanpassen'>Klopt niet, ik pas het aan</a>");
+    case "aanpassen": return pagina("Gegevens aanpassen", "<h1>Pas je gegevens aan</h1><p>Verander wat er anders moet en klik daarna op opslaan.</p>" + vsFormulier("demo", v.klant));
+    case "bedankt": return pagina("Bedankt", VS_BEDANKT);
+    case "voorstelmail": return vsVoorstelMailHtml(v, d, vsBasis(env) + "/voorstel/bekijk?t=voorbeeld", b.tekst);
+    case "voorstel": return vsDocHtml(d, { voet: vsBetaalBlok(v, "demo") });
+    case "betaald": return pagina("Bedankt", "<h1>Bedankt, je aanbetaling is binnen</h1><p>We hebben " + vsGeld(b.betaald) + " ontvangen. Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>");
+  }
+  return pagina("Demo", "<h1>Demo</h1>");
 }
 
 /* ── Mail "Bevestig je gegevens" ────────────────────────────────────────── */
@@ -912,7 +959,14 @@ export async function vsHandle(request, env, url, H) {
       return H.reply(200, { ok: true, keuzes: k, ikMedewerker: vsMedewerkerVan(k, wie) });
     }
     if (p === "/voorstel/klant-zoek" && request.method === "GET") return H.reply(200, await vsKlantZoek(env, H, url.searchParams.get("q")));
-    if (p === "/voorstel/artikel" && request.method === "GET") return H.reply(200, await vsArtikel(env, H, url.searchParams.get("q"), url.searchParams.get("debiteur")));
+    if (p === "/voorstel/artikel" && request.method === "GET") return H.reply(200, await vsArtikel(env, H, url.searchParams.get("q")));
+    if (p === "/voorstel/demo" && request.method === "POST") return H.reply(200, { ok: true, html: await vsDemo(env, H, db, body, wie) });
+    /* Live meekijken (Gerrit, 4 nov 2026): de tegel vraagt elke paar seconden
+       alleen dit op, zolang hij op de klant wacht. Eén regel uit D1, geen Logic4. */
+    if (p === "/voorstel/stand" && request.method === "GET") {
+      const v = await eigen(url.searchParams.get("id"));
+      return H.reply(200, { ok: true, status: v.status, betaald: vsBetaald(v), gewijzigd: v.gewijzigd });
+    }
     if (p === "/voorstel" && request.method === "GET") {
       const v = await eigen(url.searchParams.get("id"));
       let order = null;
