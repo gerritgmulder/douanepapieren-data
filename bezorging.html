@@ -83,7 +83,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+// Hetzelfde adres als de pagina zelf (mijn.fonteyn.nl), zodat er geen ander adres in de pagina staat.
+const WORKER = location.origin;
 const $ = (id) => document.getElementById(id);
 const code = new URLSearchParams(location.search).get("c") || "";
 

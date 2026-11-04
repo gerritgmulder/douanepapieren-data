@@ -21571,6 +21571,15 @@ const FP_WORKER = {
        voor de klant (het token in de link is de sleutel); de rest vraagt de
        teamsleutel en de groep service-planning. Zie service.js. */
     if (url.pathname.startsWith("/service/")) return svcHandle(request, env, url, SVC_HULP(env));
+    /* Logo's en foto's voor mails en klantpagina's (Gerrit, 4 nov 2026: nergens
+       g.mulder in een adres). Via mijn.fonteyn.nl/beeld/ en
+       partner.passionspas.com/beeld/, uit de repo, alleen deze vier namen. */
+    { const b = /^\/(?:dealers\/)?beeld\/(fonteyn-logo\.png|fonteyn-showroom\.jpg|passion-logo\.png|passion-logo-mail\.png)$/.exec(url.pathname);
+      if (b && request.method === "GET") {
+        const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/" + b[1], { cf: { cacheTtl: 86400, cacheEverything: true } });
+        if (!r.ok) return new Response("Not found", { status: 404 });
+        return new Response(r.body, { headers: { "Content-Type": b[1].endsWith(".jpg") ? "image/jpeg" : "image/png", "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" } });
+      } }
     /* Voorstel maken: de tegel en de pagina "Bevestig je gegevens" voor de klant. */
     if (url.pathname === "/bevestig" || url.pathname === "/voorstel" || url.pathname.startsWith("/voorstel/"))
       return vsHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij, dpCreateMolliePayment }));

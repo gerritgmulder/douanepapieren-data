@@ -32,8 +32,8 @@
    lukt dat niet, via Resend met de adviseur als antwoordadres.
    ═════════════════════════════════════════════════════════════════ */
 
-const VS_LOGO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png";
-const VS_FOTO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-showroom.jpg";
+const VS_LOGO = "https://mijn.fonteyn.nl/beeld/fonteyn-logo.png";
+const VS_FOTO = "https://mijn.fonteyn.nl/beeld/fonteyn-showroom.jpg";
 /* Na het bevestigen (Gerrit, 4 nov 2026): het gaat om privacy, niet om wat
    de adviseur nu doet. Kort, met een foto van Fonteyn. */
 const VS_BEDANKT = "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je gegevens zijn veilig bij ons en horen bij jouw voorstel. Zo klopt alles, van je voorstel tot de levering.</p>" +

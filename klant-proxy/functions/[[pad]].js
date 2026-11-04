@@ -13,7 +13,7 @@
  * adres onbereikbaar; de voordeur stuurt door naar fonteyn.nl.
  */
 const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
-const KLANT = /^\/(bevestig|voorstel\/(bekijk|betaal|betaald|mollie)|service\/antwoord)$/;
+const KLANT = /^\/(bevestig|voorstel\/(bekijk|betaal|betaald|mollie)|service\/antwoord|bezorging(\/status)?|beeld\/[a-z-]+\.(png|jpg))$/;
 
 export async function onRequest({ request }) {
   const bron = new URL(request.url);

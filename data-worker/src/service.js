@@ -90,7 +90,7 @@ const SVC_MONTEURS = ["Thieme", "Patrick", "Hans", "Bart", "Bertjan", "Kevin"]; 
 const SVC_UDDEL = [52.2449, 5.7797];   // als Uddel nog niet in geo_cache staat
 /* De hulpfuncties uit worker.js voor deze aanroep (zie svcHandle/svcRonde). */
 let _svcH = null;
-const SVC_LOGO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png";
+const SVC_LOGO = "https://mijn.fonteyn.nl/beeld/fonteyn-logo.png";
 
 /* ── Opslag ─────────────────────────────────────────────────────────────── */
 let _svcTabellen = false;
