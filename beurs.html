@@ -80,6 +80,7 @@ th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;
 td{padding:8px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
 td.taal{font-weight:700;white-space:nowrap}
 tr.mregel{cursor:pointer}tr.mregel:hover td{background:#faf7f7}tr.ongelezen td:first-child,tr.ongelezen td:nth-child(2){font-weight:700}
+.beantw{color:var(--groen);font-weight:600}
 .mlees{background:#faf9f7;border:1px solid var(--rand);border-radius:10px;padding:12px 14px}
 .mtekst{white-space:pre-wrap;overflow-wrap:break-word;font-size:13.5px;line-height:1.55;margin:0 0 12px;max-height:420px;overflow-y:auto}
 td small{display:block;color:var(--grijs);font-size:11.5px;margin-top:2px}
@@ -343,6 +344,8 @@ function tekenMailing(){
    Echte reacties bovenaan, automatische berichten (afwezig, onbestelbaar)
    apart eronder. Klik op een regel om het bericht te lezen. */
 var inbox = null, inboxMelding = "", inboxOpen = null, inboxAutoZien = false;
+// Wat in het antwoordvak staat blijft staan als de tegel opnieuw tekent.
+var antwoordTekst = "", antwoordBevestig = false, antwoordMelding = "";
 async function laadInbox(){
   inboxMelding = "Even laden...";
   tekenInbox();
@@ -356,6 +359,7 @@ async function laadInbox(){
 }
 async function openBericht(i){
   var b = inbox && inbox.berichten[i]; if (!b) return;
+  if (!inboxOpen || inboxOpen.i !== i) { antwoordTekst = ""; antwoordBevestig = false; antwoordMelding = ""; }
   inboxOpen = { i: i, laden: true };
   tekenInbox();
   try {
@@ -367,13 +371,31 @@ async function openBericht(i){
   } catch(e) { inboxOpen = { i: i, fout: e.message }; }
   tekenInbox();
 }
+async function stuurAntwoord(){
+  var m = inboxOpen && inboxOpen.bericht; if (!m) return;
+  antwoordTekst = ($("aTekst") || {}).value || antwoordTekst;
+  if (!antwoordTekst.trim()) { antwoordMelding = "Schrijf eerst een antwoord."; tekenInbox(); return; }
+  if (!antwoordBevestig) { antwoordBevestig = true; antwoordMelding = ""; tekenInbox(); return; }
+  antwoordBevestig = false; antwoordMelding = "Bezig met versturen...";
+  tekenInbox();
+  try {
+    var j = await mailPost("/dealers/beurs/antwoord", { id: m.id, aan: m.vanAdres, tekst: antwoordTekst, toch: !!m.beantwoord });
+    if (!j.ok) throw new Error(j.uitleg || j.error || "Lukte nog niet.");
+    m.beantwoord = { door: j.beantwoord.door, ts: j.beantwoord.ts, tekst: antwoordTekst };
+    inbox.berichten[inboxOpen.i].beantwoord = j.beantwoord;
+    antwoordMelding = "Verstuurd naar " + m.vanAdres + ".";
+    antwoordTekst = "";
+    try { if (window.fpLog) fpLog("beurs-antwoord", m.vanAdres); } catch(e) {}
+  } catch(e) { antwoordMelding = "Versturen lukte nog niet: " + e.message; }
+  tekenInbox();
+}
 function inboxDatum(t){ return t ? new Date(t).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) : ""; }
 function inboxRegels(lijst){
   return '<table><tbody>' + lijst.map(function(b){
     var i = inbox.berichten.indexOf(b), d = b.dealer;
     return '<tr class="mregel' + (b.gelezen ? '' : ' ongelezen') + '" onclick="openBericht(' + i + ')" title="Open dit bericht">' +
       '<td>' + esc(d ? d.bedrijf : b.van) + '<small>' + esc(b.vanAdres) + (d ? ' · ' + esc(d.land) : '') + '</small></td>' +
-      '<td>' + esc(b.onderwerp || "(zonder onderwerp)") + (b.bijlagen ? ' 📎' : '') + '</td>' +
+      '<td>' + esc(b.onderwerp || "(zonder onderwerp)") + (b.bijlagen ? ' 📎' : '') + (b.beantwoord ? '<small class="beantw">Beantwoord</small>' : '') + '</td>' +
       '<td style="white-space:nowrap">' + esc(inboxDatum(b.ontvangen)) + '</td></tr>' +
       (inboxOpen && inboxOpen.i === i ? '<tr><td colspan="3">' + inboxLees() + '</td></tr>' : '');
   }).join("") + '</tbody></table>';
@@ -387,7 +409,15 @@ function inboxLees(){
     '<br><b>Ontvangen:</b> ' + esc(inboxDatum(m.ontvangen)) +
     (m.bijlagen && m.bijlagen.length ? '<br><b>Bijlagen:</b> ' + m.bijlagen.map(function(a){ return esc(a.naam); }).join(", ") : '') + '</p>' +
     '<div class="mtekst">' + esc(m.tekst || "") + '</div>' +
-    '<button class="knop licht" type="button" onclick="inboxOpen=null;tekenInbox()" title="Sluit dit bericht">Sluiten</button></div>';
+    (m.beantwoord ? '<p class="lead beantw">Beantwoord door ' + esc(String(m.beantwoord.door || "").split("@")[0]) + ' op ' + esc(inboxDatum(m.beantwoord.ts)) + '.</p>' +
+      (m.beantwoord.tekst ? '<div class="mtekst" style="border-left:3px solid var(--groen);padding-left:10px">' + esc(m.beantwoord.tekst) + '</div>' : '') : '') +
+    '<p class="lead" style="margin-top:6px"><b>Antwoorden</b> vanuit beurs@passionspas.com. Het bericht van de dealer komt eronder te staan.</p>' +
+    '<textarea id="aTekst" rows="6" oninput="antwoordTekst=this.value;antwoordBevestig=false" placeholder="Je antwoord aan ' + esc(m.van || m.vanAdres) + '" style="width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;padding:8px;border:1px solid var(--rand);border-radius:8px">' + esc(antwoordTekst) + '</textarea>' +
+    '<div class="mrij" style="margin-top:8px">' +
+    (antwoordBevestig ? '<button class="knop groen" type="button" onclick="stuurAntwoord()" title="Verstuur dit antwoord nu naar ' + esc(m.vanAdres) + '">Ja, verstuur naar ' + esc(m.vanAdres) + '</button> <button class="knop licht" type="button" onclick="antwoordBevestig=false;tekenInbox()" title="Nog niet versturen">Nog even niet</button>'
+                      : '<button class="knop" type="button" onclick="stuurAntwoord()" title="Verstuur dit antwoord vanuit beurs@passionspas.com">' + (m.beantwoord ? 'Nog een antwoord sturen' : 'Verstuur antwoord') + '</button>') +
+    ' <button class="knop licht" type="button" onclick="inboxOpen=null;tekenInbox()" title="Sluit dit bericht">Sluiten</button></div>' +
+    '<p class="melding">' + esc(antwoordMelding) + '</p></div>';
 }
 function tekenInbox(){
   var el = $("t-reacties"); if (!el) return;

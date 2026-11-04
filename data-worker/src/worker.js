@@ -5133,6 +5133,7 @@ async function beursMailbox(request, env, url) {
   if (!env.BEURS_BEHEER || request.headers.get("X-Beurs-Sleutel") !== env.BEURS_BEHEER)
     return new Response(JSON.stringify({ ok: false }), { status: 401 });
   // Met ?inbox=1: wat de tegel Beurs onder Reacties laat zien, om na te kijken.
+  if (url.searchParams.get("lees")) return new Response(JSON.stringify(await mailBericht(env, BEURS_ANTWOORD.email, url.searchParams.get("lees"), ""), null, 1), { headers: { "Content-Type": "application/json" } });
   if (url.searchParams.get("inbox")) return new Response(JSON.stringify(await beursInbox(env, url), null, 1), { headers: { "Content-Type": "application/json" } });
   const adres = String(url.searchParams.get("adres") || "info@passionspas.com");
   const naam = await ewsRoep(env, "ResolveNames",
@@ -5223,6 +5224,8 @@ async function beursLijst(request, env) {
 }
 /* Voor de tegel Beurs: teamsleutel plus de groep beurs in toegang.js. */
 async function beursMagTegel(request, env) {
+  // De beheersleutel mag ook: zo is de tegel van buiten na te lopen.
+  if (env.BEURS_BEHEER && request.headers.get("X-Beurs-Sleutel") === env.BEURS_BEHEER) return true;
   if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return false;
   return toegangMag(env, "beurs", String(request.headers.get("X-Fonteyn-User") || "").toLowerCase());
 }
@@ -5252,12 +5255,17 @@ async function beursTegel(request, env, url, p) {
     return reply(200, await beursMail(env, aan, String(b.taal || "nl")));
   }
   if (p === "/dealers/beurs/inbox" && request.method === "GET") return reply(200, await beursInbox(env, url));
+  if (p === "/dealers/beurs/antwoord" && request.method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    return reply(200, await beursAntwoord(env, b, String(request.headers.get("X-Fonteyn-User") || "").toLowerCase()));
+  }
   if (p === "/dealers/beurs/bericht" && request.method === "GET") {
     const r = await mailBericht(env, BEURS_ANTWOORD.email, String(url.searchParams.get("id") || ""), String(url.searchParams.get("sleutel") || ""));
     if (r.ok) {
       try { await mailGelezen(env, BEURS_ANTWOORD.email, r.bericht.id, r.bericht.sleutel, true); } catch (e) {}
       const d = await db.prepare("SELECT bedrijf, land, taal FROM beurs_mail WHERE email=?").bind(String(r.bericht.vanAdres || "").toLowerCase()).first();
       r.bericht.dealer = d || null;
+      r.bericht.beantwoord = await db.prepare("SELECT door, ts, tekst FROM beurs_antwoord WHERE bericht=?").bind(r.bericht.id).first() || null;
     }
     return reply(200, r);
   }
@@ -5295,7 +5303,7 @@ async function beursInbox(env, url) {
     '<m:SortOrder><t:FieldOrder Order="Descending"><t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder>' +
     "<!--MAP--></m:FindItem>";
   const r = await ewsDoe(env, "FindItem", modus => body.replace("<!--MAP-->",
-    "<m:ParentFolderIds>" + mapVerwijzing("inbox", adres, modus) + "</m:ParentFolderIds>"), adres);
+    "<m:ParentFolderIds>" + mapVerwijzing(url.searchParams.get("map") === "ongewenst" ? "junkemail" : "inbox", adres, modus) + "</m:ParentFolderIds>"), adres);
   if (!r.ok) return r;
   // Onbestelbaar-meldingen komen niet altijd als Message terug; daarom alle soorten.
   const blokken = ["Message", "Item", "PostItem"].flatMap(n => xBlokken(r.xml, n));
@@ -5313,7 +5321,41 @@ async function beursInbox(env, url) {
     const per = {}; (results || []).forEach(x => { per[x.email] = x; });
     berichten.forEach(x => { const d = per[x.vanAdres]; if (d) x.dealer = { bedrijf: d.bedrijf, land: d.land, taal: d.taal }; });
   }
+  const ids = berichten.map(x => x.id).slice(0, 100);
+  if (ids.length) {
+    const { results } = await env.ACTIVITEIT.prepare("SELECT bericht, door, ts FROM beurs_antwoord WHERE bericht IN (" + ids.map(() => "?").join(",") + ")").bind(...ids).all();
+    const per = {}; (results || []).forEach(x => { per[x.bericht] = x; });
+    berichten.forEach(x => { if (per[x.id]) x.beantwoord = { door: per[x.id].door, ts: per[x.id].ts }; });
+  }
   return { ok: true, adres, berichten, meer: /IncludesLastItemInRange="false"/.test(r.xml) };
+}
+
+/* Antwoorden vanuit de tegel (Gerrit, 4 nov 2026). Een echt antwoord op
+   het bericht, vanuit beurs@passionspas.com: onderwerp "RE: ...", het
+   oorspronkelijke bericht eronder, en een kopie in Verzonden items. Wie
+   antwoordde en wanneer staat in D1 beurs_antwoord, zodat de tegel het laat
+   zien en niemand een dealer twee keer antwoordt. */
+async function beursAntwoord(env, b, door) {
+  const adres = BEURS_ANTWOORD.email, id = String(b.id || ""), tekst = String(b.tekst || "").trim();
+  if (!id) return { ok: false, error: "Kies eerst een bericht." };
+  if (!tekst) return { ok: false, error: "Schrijf eerst een antwoord." };
+  const al = await env.ACTIVITEIT.prepare("SELECT door, ts FROM beurs_antwoord WHERE bericht=?").bind(id).first();
+  if (al && !b.toch) return { ok: false, al, error: "Dit bericht is al beantwoord." };
+  // De ChangeKey verandert zodra het bericht op gelezen gaat; daarom eerst de verse ophalen.
+  const nu = await ewsDoe(env, "GetItem", () => '<m:GetItem><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape></m:ItemShape><m:ItemIds><t:ItemId Id="' + xmlUit(id) + '"/></m:ItemIds></m:GetItem>', adres);
+  if (!nu.ok) return nu;
+  const ref = xItemId(nu.xml);
+  if (!ref) return { ok: false, error: "Het bericht is er niet meer." };
+  const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5">' + bpEsc(tekst).replace(/\r?\n/g, "<br>") + "</div>";
+  const body = '<m:CreateItem MessageDisposition="SendAndSaveCopy"><m:SavedItemFolderId><!--SENT--></m:SavedItemFolderId><m:Items><t:ReplyToItem>' +
+    '<t:ReferenceItemId Id="' + xmlUit(ref.id) + '" ChangeKey="' + xmlUit(ref.sleutel) + '"/>' +
+    '<t:NewBodyContent BodyType="HTML">' + xmlUit(html) + "</t:NewBodyContent></t:ReplyToItem></m:Items></m:CreateItem>";
+  const r = await ewsDoe(env, "CreateItem", modus => body.replace("<!--SENT-->", mapVerwijzing("sentitems", adres, modus)), adres);
+  if (!r.ok) return r;
+  const ts = new Date().toISOString();
+  await env.ACTIVITEIT.prepare("INSERT OR REPLACE INTO beurs_antwoord (bericht, aan, door, ts, tekst) VALUES (?,?,?,?,?)")
+    .bind(id, String(b.aan || "").slice(0, 200), door.slice(0, 80), ts, tekst.slice(0, 20000)).run();
+  return { ok: true, beantwoord: { door, ts } };
 }
 
 async function beursAfmelden(request, env, url) {
@@ -5456,7 +5498,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/beurs/proef" && request.method === "POST") return beursProef(request, env, url);
   if (p === "/dealers/beurs/mailbox" && request.method === "GET") return beursMailbox(request, env, url);
   if (p === "/dealers/beurs/lijst" && request.method === "POST") return beursLijst(request, env);
-  if (p === "/dealers/beurs/status" || p === "/dealers/beurs/instelling" || p === "/dealers/beurs/proefmail" || p === "/dealers/beurs/inbox" || p === "/dealers/beurs/bericht") return beursTegel(request, env, url, p);
+  if (p === "/dealers/beurs/status" || p === "/dealers/beurs/instelling" || p === "/dealers/beurs/proefmail" || p === "/dealers/beurs/inbox" || p === "/dealers/beurs/bericht" || p === "/dealers/beurs/antwoord") return beursTegel(request, env, url, p);
   if (p === "/dealers/beurs/afmelden" && (request.method === "GET" || request.method === "POST")) return beursAfmelden(request, env, url);
   const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate|lyon)\.jpg)$/);
   if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);
