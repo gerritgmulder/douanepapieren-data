@@ -39,8 +39,8 @@ DP_PUBLIC_ORIGIN = "https://partner.passionspas.com"
 # Het adres in de links naar klanten (Bevestig je gegevens, het voorstel,
 # aanbetalen, de antwoordpagina van Service). Gerrit (4 nov 2026): geen
 # g.mulder in het adres. klant-proxy/ geeft door; wordt een fonteyn.nl-adres
-# zodra de CNAME er is.
-SVC_LINK_BASIS = "https://fonteyn.pages.dev"
+# sinds 4 nov 2026 (André, CNAME bij Savvii).
+SVC_LINK_BASIS = "https://mijn.fonteyn.nl"
 
 # Het taalmodel voor de tegel Vertalen. Zit op dit platform zelf, dus geen
 # extra account en geen sleutel; 10.000 neuronen per dag gratis, elke nacht
