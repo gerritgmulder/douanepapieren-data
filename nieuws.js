@@ -50,6 +50,9 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    { datum: "2026-11-04", bestand: "voorstel-maken.html", soort: "nieuw",
+      titel: "Voorstel maken: aanbetalen",
+      wat:   "Onder het voorstel dat de klant krijgt staat nu een knop Aanbetalen. Betaalt de klant, dan is het voorstel meteen een order in Logic4 en krijg je een bericht. Je kunt het bedrag aanpassen en de betaallink kopiëren, bijvoorbeeld voor een klant in de winkel. Betaald aan de kassa? Klik op Ververs en het wordt meteen een order." },
     { datum: "2026-11-04", bestand: "beurs.html", soort: "nieuw",
       titel: "Beurs: tabblad Reacties",
       wat:   "De antwoorden op de beursmail staan nu in de tegel. Echte reacties bovenaan, met bedrijf en land erbij; afwezigheidsmeldingen en onbestelbare mails apart eronder. Klik op een regel om het bericht te lezen en meteen te beantwoorden vanuit beurs@passionspas.com; je ziet wie al antwoordde. Arno kan de tegel nu ook openen." },

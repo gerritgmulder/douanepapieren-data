@@ -35,6 +35,14 @@
 const VS_LOGO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png";
 const VS_OFFERTE = 4;            // Logic4-status 'Offerte'
 const VS_GESLOTEN = 19;          // Logic4-status 'Offerte gesloten'
+/* Na een betaling is het voorstel een order (besluit 26 okt 2026, zie
+   orderstatusRonde in worker.js): iets betaald -> 30% aanbetaald, alles
+   betaald -> Volledig betaald. Alleen omhoog. */
+const VS_AANBETAALD = 25;
+const VS_BETAALD = 30;
+const VS_AANBETAAL_DEEL = 0.30;  // standaard aanbetaling: 30% van het totaal incl. btw
+const VS_DAGBOEK_MOLLIE = 42;    // zoals de aanbetalingen van Passion Partners
+const VS_VOORUIT = 78;           // Vooruit ontvangen bedragen (1350), verplicht bij AddPayment
 /* Het voorstel echt naar de klant mailen gaat pas aan na het akkoord van
    Gerrit op de opmaak (zie memory mails-eerst-laten-zien). Tot die tijd
    werken het voorbeeld en printen wel. */
@@ -150,7 +158,100 @@ function vsLog(v, wie, wat) {
 function vsVoorTegel(v) {
   const { token, ...rest } = v;
   rest.mist = vsKlantMist(rest.klant || {});
+  rest.betaal = { aanbetaling: vsAanbetaling(v), betaald: vsBetaald(v), eigenBedrag: Number(v.aanbetaling) > 0,
+    link: v.bekijkToken ? vsBasis(null) + "/voorstel/betaal?t=" + encodeURIComponent(v.bekijkToken) : "" };
   return rest;
+}
+
+/* ── Aanbetalen (Gerrit, 4 nov 2026) ──────────────────────────────────────
+   "Een aanbetaling doen op dit voorstel waardoor het direct in Logic4 wordt
+   omgezet in een order." Twee wegen:
+   - Online: in het voorstel dat de klant krijgt staat een knop Aanbetalen
+     (Mollie). Meldt Mollie dat het betaald is, dan boekt het Dashboard het
+     bedrag op de offerte in Logic4 (dagboek Mollie, zoals Passion Partners)
+     en zet het de status meteen op 30% aanbetaald of Volledig betaald.
+   - In de winkel: de kassa boekt de betaling op het voorstelnummer. Opent de
+     adviseur het voorstel in de tegel, dan ziet het Dashboard de betaling en
+     zet het de status meteen om. Elk uur doet orderstatusRonde dat ook. */
+function vsBasis(env) { return (env && env.SVC_LINK_BASIS) || "https://fonteyn-data-store.g-mulder.workers.dev"; }
+function vsAanbetaling(v, incl) {
+  if (Number(v.aanbetaling) > 0) return Math.round(Number(v.aanbetaling) * 100) / 100;
+  const tot = incl != null ? Number(incl) : Number((v.verstuurdeVersie && v.verstuurdeVersie.totaal && v.verstuurdeVersie.totaal.incl) || 0);
+  return Math.round(tot * VS_AANBETAAL_DEEL * 100) / 100;
+}
+function vsBetaald(v) {
+  return Math.round((v.betalingen || []).filter(b => b.geboekt).reduce((s, b) => s + (Number(b.bedrag) || 0), 0) * 100) / 100;
+}
+/* Staat er geld op de offerte, dan wordt hij order. Nooit terug. */
+async function vsNaarOrder(env, H, v, wie) {
+  const o = await vsOrderLees(env, H, v.orderid);
+  if (!o || !(o.betaald > 0)) return o;
+  const doel = o.betaald >= (o.totaal.incl || 0) - 0.01 ? VS_BETAALD : VS_AANBETAALD;
+  const nu = Number(o.statusId);
+  if (nu !== VS_OFFERTE && !(nu === VS_AANBETAALD && doel === VS_BETAALD)) return o;
+  await vsL4(env, H, "/v3/Orders/UpdateOrderStatus", { OrderId: Number(v.orderid), StatusId: doel });
+  v.orderSinds = v.orderSinds || Date.now();
+  vsLog(v, wie, vsGeld(o.betaald) + " betaald: in Logic4 nu " + (doel === VS_BETAALD ? "Volledig betaald" : "30% aanbetaald"));
+  return await vsOrderLees(env, H, v.orderid);
+}
+async function vsMollieLees(env, pid) {
+  const r = await fetch("https://api.mollie.com/v2/payments/" + encodeURIComponent(pid), { headers: { "Authorization": "Bearer " + env.MOLLIE_API_KEY } });
+  const p = await r.json().catch(() => null);
+  return r.ok && p ? p : null;
+}
+/* Uit de webhook van Mollie. Eerst vastleggen dat het geboekt is, dan pas
+   de status: een tweede melding van Mollie boekt zo nooit dubbel. */
+async function vsMollieVerwerk(env, H, db, pid) {
+  const p = await vsMollieLees(env, pid);
+  if (!p || !p.metadata || !p.metadata.voorstel) return { ok: false };
+  const v = await vsLees(db, String(p.metadata.voorstel));
+  if (!v || !v.orderid) return { ok: false };
+  const b = (v.betalingen || []).find(x => x.mollie === pid);
+  if (!b) return { ok: false };
+  b.status = p.status;
+  if (p.status !== "paid" || b.geboekt) { await vsSchrijf(db, v); return { ok: true, status: p.status }; }
+  const bedrag = Number(p.amount && p.amount.value) || 0;
+  await vsL4(env, H, "/v3/Orders/AddPayment", { OrderId: Number(v.orderid), AmountIncl: bedrag,
+    Description: "Aanbetaling voorstel " + v.orderid + " via Mollie " + pid, BookingId: VS_DAGBOEK_MOLLIE, MatchingLedgerId: VS_VOORUIT,
+    DateTime: new Date().toISOString().slice(0, 19) });
+  b.geboekt = Date.now(); b.bedrag = bedrag;
+  vsLog(v, "de klant", "Aanbetaling van " + vsGeld(bedrag) + " betaald via Mollie");
+  await vsSchrijf(db, v);
+  try { await vsNaarOrder(env, H, v, "het Dashboard"); }
+  catch (e) { vsLog(v, "het Dashboard", "Status in Logic4 omzetten lukte nog niet: " + String(e.message || e).slice(0, 200)); }
+  await vsSchrijf(db, v);
+  await vsBetaalBericht(env, H, v, bedrag).catch(() => {});
+  return { ok: true, status: "paid" };
+}
+async function vsBetaalBericht(env, H, v, bedrag) {
+  if (!H.berichtenLees || !H.berichtErbij) return;
+  const d = await H.berichtenLees(env);
+  const naam = vsNaam(v.klant || {});
+  H.berichtErbij(d, { id: "vs-betaald-" + v.id + "-" + Date.now(), aan: [v.adviseur], soort: "voorstel",
+    titel: "Aanbetaling binnen: " + naam,
+    tekst: naam + " heeft " + vsGeld(bedrag) + " aanbetaald op voorstel " + v.orderid + ". In Logic4 is het nu een order.",
+    ref: { voorstel: v.id, link: "voorstel-maken.html?id=" + encodeURIComponent(v.id) } });
+  await env.FONTEYN_DATA.put("berichten", JSON.stringify(d));
+}
+/* Het blok onder het voorstel dat de klant ziet. */
+function vsBetaalBlok(v, t) {
+  const bedrag = vsAanbetaling(v), al = vsBetaald(v);
+  if (!(bedrag > 0)) return "";
+  const binnen = al > 0 && al >= bedrag - 0.01;
+  return "<style>.betaal{max-width:800px;margin:16px auto 30px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 26px}" +
+    ".betaal h2{color:#144734;font-size:18px;margin:0 0 8px}.betaal p{font-size:15px;line-height:1.55;margin:0 0 12px}" +
+    ".betaal a{display:inline-block;background:#15803d;color:#fff;text-decoration:none;border-radius:10px;padding:14px 22px;font-size:16px;font-weight:bold}" +
+    "@media(max-width:600px){.betaal{margin:12px;padding:18px 16px}.betaal a{display:block;text-align:center}}@media print{.betaal{display:none}}</style>" +
+    "<div class='betaal'>" + (binnen
+      ? "<h2>Je aanbetaling is binnen</h2><p>Bedankt! We hebben " + vsGeld(al) + " ontvangen. Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>"
+      : "<h2>Akkoord? Doe je aanbetaling</h2><p>Met een aanbetaling van <b>" + vsGeld(bedrag - al) + "</b>" + (Number(v.aanbetaling) > 0 ? "" : " (30% van het totaal)") +
+        " zet je je bestelling vast. Je betaalt veilig online, ook met je telefoon.</p><a href='/voorstel/betaal?t=" + encodeURIComponent(t) + "'>Aanbetalen</a>") +
+    "</div>";
+}
+async function vsLinkVoorstel(db, t) {
+  const l = t ? await db.prepare("SELECT id FROM voorstel_link WHERE token = ?1 AND soort = 't'").bind(t).first() : null;
+  const v = l ? await vsLees(db, l.id) : null;
+  return v && v.verstuurdeVersie && v.status !== "gesloten" && v.orderid ? v : null;
 }
 
 /* ── Logic4 ─────────────────────────────────────────────────────────────── */
@@ -546,14 +647,14 @@ function vsDocHtml(d, opties) {
   const adres = [[k.straat, [k.huisnummer, k.toevoeging].filter(Boolean).join(" ")].filter(Boolean).join(" "), [k.postcode, k.plaats].filter(Boolean).join(" "), k.land && k.land !== "NL" ? k.land : ""].filter(Boolean);
   const incl = !d.zakelijk;   // particulier: prijzen met btw; zakelijk: zonder
   const rij = r => "<tr><td>" + vsEsc(r.oms) + (r.oms2 && r.oms2.trim() !== String(r.oms).trim() ? "<div class='klein'>" + vsEsc(r.oms2) + "</div>" : "") + "<div class='klein'>Artikel " + vsEsc(r.code) + (r.korting ? " &middot; " + vsEsc(String(r.korting).replace(".", ",")) + "% korting" : "") + "</div></td>" +
-    "<td class='g'>" + vsEsc(String(r.aantal).replace(".", ",")) + "</td><td class='g'>" + vsGeld(incl ? r.stukIncl : r.stukEx) + "</td><td class='g'>" + vsGeld((incl ? r.stukIncl : r.stukEx) * r.aantal) + "</td></tr>";
+    "<td class='g'>" + vsEsc(String(r.aantal).replace(".", ",")) + "</td><td class='g stuk'>" + vsGeld(incl ? r.stukIncl : r.stukEx) + "</td><td class='g'>" + vsGeld((incl ? r.stukIncl : r.stukEx) * r.aantal) + "</td></tr>";
   const t = d.totaal || {};
   return "<!doctype html><html lang='nl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
     "<title>Voorstel " + vsEsc(d.nummer) + " - Fonteyn</title><meta name='robots' content='noindex'><style>" +
     "body{margin:0;background:#f5f4ef;font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:14px}" +
     ".vel{max-width:800px;margin:20px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}" +
     ".kop{background:#144734;padding:18px 26px;display:flex;align-items:center;gap:16px}.kop img{height:52px;display:block}.kop .t{margin-left:auto;color:#fff;text-align:right}.kop .t b{display:block;font-size:20px}" +
-    ".in{padding:24px 26px 28px}.twee{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:18px}@media(max-width:600px){.twee{grid-template-columns:1fr}.in{padding:18px 14px}}" +
+    ".in{padding:24px 26px 28px}.twee{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:18px}@media(max-width:600px){.twee{grid-template-columns:1fr}.in{padding:18px 14px}.stuk{display:none}table.r th{letter-spacing:0}}" +
     "h3{margin:0 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#144734}p{margin:0;line-height:1.5}" +
     "table.geg{border-collapse:collapse}table.geg td{padding:2px 12px 2px 0;vertical-align:top}table.geg td:first-child{color:#6b7280}" +
     "table.r{width:100%;border-collapse:collapse;margin-top:6px}table.r th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;border-bottom:2px solid #144734;padding:7px 6px}" +
@@ -571,7 +672,7 @@ function vsDocHtml(d, opties) {
       regel("Je referentie", d.referentie) + regel("Betaling", d.betaalmethode) + regel("Levering", d.transporteur) + regel("Gewenste leverdatum", d.leverdatum ? vsDatum(d.leverdatum) : "") +
       regel("Je adviseur", d.adviseur.naam) + regel("E-mail", d.adviseur.mail) + "</table></div></div>" +
     (d.omschrijving ? "<p style='margin-bottom:12px'><b>" + vsEsc(d.omschrijving) + "</b></p>" : "") +
-    "<table class='r'><thead><tr><th>Omschrijving</th><th class='g'>Aantal</th><th class='g'>Prijs per stuk" + (incl ? " incl. btw" : " excl. btw") + "</th><th class='g'>Totaal</th></tr></thead><tbody>" + d.regels.map(rij).join("") + "</tbody></table>" +
+    "<table class='r'><thead><tr><th>Omschrijving</th><th class='g'>Aantal</th><th class='g stuk'>Prijs per stuk" + (incl ? " incl. btw" : " excl. btw") + "</th><th class='g'>Totaal</th></tr></thead><tbody>" + d.regels.map(rij).join("") + "</tbody></table>" +
     "<table class='tot'>" + (t.verzend ? "<tr><td>Verzendkosten excl. btw</td><td>" + vsGeld(t.verzend) + "</td></tr>" : "") +
       "<tr><td>Totaal excl. btw</td><td>" + vsGeld(t.ex) + "</td></tr><tr><td>Btw</td><td>" + vsGeld(t.btw) + "</td></tr><tr class='groot'><td>Totaal incl. btw</td><td>" + vsGeld(t.incl) + "</td></tr></table>" +
     "<p class='klein' style='margin-top:24px'>Vragen over dit voorstel? Mail of bel je adviseur" + (d.adviseur.naam ? ", " + vsEsc(d.adviseur.naam) : "") + ". We helpen je graag verder.</p>" +
@@ -724,8 +825,49 @@ export async function vsHandle(request, env, url, H) {
       return vsPagina("Voorstel", "<h1>Dit voorstel is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
     try {
       const d = t ? v.verstuurdeVersie : await vsDocGegevens(env, H, db, v);
-      return new Response(vsDocHtml(d), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+      return new Response(vsDocHtml(d, t ? { voet: vsBetaalBlok(v, t) } : {}), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
     } catch (e) { return vsPagina("Voorstel", "<h1>Even geduld</h1><p>" + vsEsc(e.message) + "</p>"); }
+  }
+  /* Aanbetalen: de klant komt hier via de knop onder zijn voorstel. */
+  if (p === "/voorstel/betaal" && request.method === "GET") {
+    const db = await vsDb(env);
+    const t = String(url.searchParams.get("t") || "");
+    const v = await vsLinkVoorstel(db, t);
+    if (!v) return vsPagina("Aanbetalen", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
+    const rest = Math.round((vsAanbetaling(v) - vsBetaald(v)) * 100) / 100;
+    if (rest < 0.01) return vsPagina("Aanbetalen", "<h1>Je aanbetaling is binnen</h1><p>Bedankt! Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>");
+    if (!H.dpCreateMolliePayment) return vsPagina("Aanbetalen", "<h1>Even geduld</h1><p>Online betalen gaat zo weer. Je adviseur helpt je graag verder.</p>");
+    const m = await H.dpCreateMolliePayment(env, rest, "Aanbetaling voorstel " + v.orderid + " - Fonteyn",
+      vsBasis(env) + "/voorstel/betaald?t=" + encodeURIComponent(t), vsBasis(env) + "/voorstel/mollie", { voorstel: v.id, orderid: v.orderid });
+    if (!m.ok || !m.checkoutUrl) return vsPagina("Aanbetalen", "<h1>Even geduld</h1><p>Online betalen gaat zo weer. Probeer het over een paar minuten nog eens, of vraag je adviseur.</p>");
+    v.betalingen = (v.betalingen || []).concat([{ mollie: m.id, bedrag: rest, ts: Date.now(), status: "open" }]).slice(-20);
+    vsLog(v, "de klant", "Begonnen met aanbetalen (" + vsGeld(rest) + ")");
+    await vsSchrijf(db, v);
+    return Response.redirect(m.checkoutUrl, 303);
+  }
+  if (p === "/voorstel/betaald" && request.method === "GET") {
+    const db = await vsDb(env);
+    const t = String(url.searchParams.get("t") || "");
+    const v = await vsLinkVoorstel(db, t);
+    if (!v) return vsPagina("Aanbetalen", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
+    const laatste = (v.betalingen || []).slice(-1)[0];
+    const terug = "<a class='knop grijs' href='/voorstel/bekijk?t=" + encodeURIComponent(t) + "'>Terug naar je voorstel</a>";
+    if (laatste && laatste.geboekt) return vsPagina("Bedankt", "<h1>Bedankt, je aanbetaling is binnen</h1><p>We hebben " + vsGeld(laatste.bedrag) + " ontvangen. Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>" + terug);
+    const mp = laatste ? await vsMollieLees(env, laatste.mollie) : null;
+    const st = mp ? mp.status : "";
+    if (st === "paid" || st === "open" || st === "pending" || st === "authorized")
+      return new Response((await vsPagina("Even geduld", "<h1>Je betaling wordt verwerkt</h1><p>Dit duurt meestal een paar seconden. Deze pagina ververst vanzelf.</p>" + terug).text())
+        .replace("<head>", "<head><meta http-equiv='refresh' content='4'>"), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+    return vsPagina("Aanbetalen", "<h1>De betaling is afgebroken</h1><p>Er is niets afgeschreven. Wil je het opnieuw proberen?</p>" +
+      "<a class='knop groen' href='/voorstel/betaal?t=" + encodeURIComponent(t) + "'>Opnieuw aanbetalen</a>" + terug);
+  }
+  /* De melding van Mollie. Altijd 200: anders blijft Mollie het proberen. */
+  if (p === "/voorstel/mollie" && request.method === "POST") {
+    try {
+      const pid = new URLSearchParams(await request.text()).get("id") || "";
+      if (pid && env.MOLLIE_API_KEY) await vsMollieVerwerk(env, H, await vsDb(env), pid);
+    } catch (e) { console.log("[voorstel] mollie: " + String(e.message || e)); }
+    return new Response("ok");
   }
   if (p === "/bevestig") {
     if (request.method === "GET") return vsBevestigGet(env, url);
@@ -765,7 +907,23 @@ export async function vsHandle(request, env, url, H) {
       const v = await eigen(url.searchParams.get("id"));
       let order = null;
       if (v.orderid) order = await vsOrderLees(env, H, v.orderid).catch(e => ({ fout: String(e.message || e) }));
+      // Betaald aan de kassa? Dan nu meteen een order, niet pas bij de ronde van het hele uur.
+      if (order && !order.fout && order.betaald > 0 && (Number(order.statusId) === VS_OFFERTE || Number(order.statusId) === VS_AANBETAALD)) {
+        try { const na = await vsNaarOrder(env, H, v, "het Dashboard"); if (na) order = na; await vsSchrijf(db, v); } catch (e) {}
+      }
       return H.reply(200, { ok: true, voorstel: vsVoorTegel(v), order, eerder: await vsEerder(db, v) });
+    }
+    /* De adviseur kan het bedrag van de aanbetaling aanpassen; 0 = weer 30%. */
+    if (p === "/voorstel/aanbetaling" && request.method === "POST") {
+      const v = await eigen(body.id);
+      const ruw = String(body.bedrag || 0).trim();
+      // "1.234,56" en "394,79" zoals mensen typen, "394.79" zoals de tegel het soms heeft.
+      const b = Math.round((Number(/,/.test(ruw) ? ruw.replace(/\./g, "").replace(",", ".") : ruw) || 0) * 100) / 100;
+      if (b < 0) return H.reply(400, { ok: false, error: "Vul een bedrag in." });
+      v.aanbetaling = b || undefined;
+      vsLog(v, wie, b ? "Aanbetaling op " + vsGeld(b) + " gezet" : "Aanbetaling terug op 30%");
+      await vsSchrijf(db, v);
+      return H.reply(200, { ok: true, voorstel: vsVoorTegel(v) });
     }
     /* Nieuw, of de klantgegevens bijwerken. Na het versturen van de mail
        kan de adviseur de gegevens alleen nog veranderen door opnieuw te
@@ -900,6 +1058,7 @@ export async function vsHandle(request, env, url, H) {
       const v = await eigen(body.id);
       if (!v.orderid || v.status !== "in-logic4") return H.reply(409, { ok: false, error: "Regels toevoegen kan pas als de klant zijn gegevens heeft bevestigd." });
       const order = await vsOrderLees(env, H, v.orderid);
+      if (order && Number(order.statusId) !== VS_OFFERTE) return H.reply(409, { ok: false, error: "Dit voorstel is al een order (" + order.status + "); de regels blijven zoals ze zijn." });
       const r = body.regel || {};
       const oud = r.id ? (order.regels || []).find(x => String(x.id) === String(r.id)) : null;
       if (r.id && !oud) return H.reply(404, { ok: false, error: "Deze regel is al van het voorstel af." });

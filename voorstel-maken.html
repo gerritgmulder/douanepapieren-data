@@ -293,6 +293,29 @@ function teken(){
       '<div id="stVak"></div></div>';
   }
 
+  /* Aanbetaling (Gerrit, 4 nov 2026): na een betaling is het voorstel meteen een order in Logic4. */
+  if (V.status === "in-logic4" && ORDER) {
+    var bt = V.betaal || {}, isOrder = Number(ORDER.statusId) !== 4;
+    var aanb = bt.aanbetaling || Math.round((ORDER.totaal && ORDER.totaal.incl || 0) * 30) / 100;
+    h += '<div class="kaart"><h2>Aanbetaling</h2>';
+    if (isOrder) {
+      h += '<p class="lead">✅ Dit voorstel is een order in Logic4: <b>'+esc(ORDER.status)+'</b>. Betaald: <b>'+esc(geld(ORDER.betaald))+'</b> van '+esc(geld(ORDER.totaal && ORDER.totaal.incl))+'.</p>';
+    } else {
+      h += '<p class="lead">Zodra de klant aanbetaalt, wordt dit voorstel meteen een order in Logic4 (30% aanbetaald; bij alles betaald Volledig betaald). ' +
+        (bt.link ? 'De klant betaalt met de knop <b>Aanbetalen</b> onder zijn voorstel, of via deze link, ook in de winkel op zijn telefoon.' : 'De klant ziet de knop <b>Aanbetalen</b> onder het voorstel zodra je het verstuurt.') +
+        ' Betaalt hij aan de kassa op dit voorstelnummer, klik dan op Ververs: dan zet het Dashboard het meteen om.</p>' +
+        '<div class="raster"><div class="s2"><label class="l" for="abBedrag">Aanbetaling incl. btw' + (bt.eigenBedrag ? '' : ' (30%)') + '</label><input id="abBedrag" inputmode="decimal" value="'+esc(String(aanb).replace(".", ","))+'"></div>' +
+        (bt.link ? '<div class="s4"><label class="l" for="abLink">Betaallink voor de klant</label><input id="abLink" readonly value="'+esc(bt.link)+'"></div>' : '') + '</div>' +
+        '<div class="knoppen"><button type="button" id="abBewaar" title="Het Dashboard bewaart dit bedrag; de klant betaalt dit bij Aanbetalen">Bedrag opslaan</button>' +
+        (bt.eigenBedrag ? '<button type="button" id="abTerug" title="Het Dashboard zet de aanbetaling terug op 30% van het totaal">Terug naar 30%</button>' : '') +
+        (bt.link ? '<button type="button" id="abKopie" title="Het Dashboard kopieert de betaallink, om te plakken in een mail of bericht">Kopieer betaallink</button>' : '') +
+        '<button type="button" id="abVervers" title="Het Dashboard kijkt in Logic4 of er al betaald is en zet het voorstel dan om naar een order">Ververs</button><span class="melding" id="abMelding"></span></div>';
+    }
+    var bl = (V.betalingen || []).slice().reverse();
+    if (bl.length) h += '<p class="lead" style="margin-top:10px">' + bl.map(function(x){ return esc(wanneer(x.ts))+' - '+esc(geld(x.bedrag))+' - '+(x.geboekt ? '<b style="color:#15803d">betaald, staat in Logic4</b>' : x.status === "open" ? 'klant is bezig met betalen' : 'afgebroken'); }).join('<br>') + '</p>';
+    h += '</div>';
+  }
+
   /* Sluiten (zoals Verwijderen in het offertescherm van Logic4) */
   if (V.id && V.status !== "gesloten") h += '<div class="kaart"><h2>Klaar met dit voorstel?</h2><div class="knoppen" style="margin-top:0"><input id="sluitReden" placeholder="Reden (mag leeg)" style="max-width:320px">' +
     '<button type="button" id="sluitKnop" title="Het Dashboard sluit dit voorstel; in Logic4 komt het op Offerte gesloten">Voorstel sluiten</button><span class="melding" id="sluitMelding"></span></div></div>';
@@ -307,6 +330,21 @@ function teken(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-o]"), function(x){ x.disabled = V.status !== "in-logic4"; });
   sluitKoppel();
   stuurKoppel();
+  aanbetaalKoppel();
+}
+function aanbetaalKoppel(){
+  if ($("abVervers")) $("abVervers").onclick = function(){ log("aanbetaling-ververs", V.id); openen(V.id); };
+  if ($("abKopie")) $("abKopie").onclick = function(){
+    var i = $("abLink"); i.select();
+    try { navigator.clipboard.writeText(i.value); } catch(e) { try { document.execCommand("copy"); } catch(e2) {} }
+    melding("abMelding", "Gekopieerd.");
+  };
+  async function zet(bedrag){
+    try { var j = await api("/voorstel/aanbetaling", { id: V.id, bedrag: bedrag }); V = j.voorstel; log("aanbetaling-bedrag", String(bedrag)); teken(); melding("abMelding", "Opgeslagen."); }
+    catch(e){ melding("abMelding", e.message, true); }
+  }
+  if ($("abBewaar")) $("abBewaar").onclick = function(){ zet($("abBedrag").value); };
+  if ($("abTerug")) $("abTerug").onclick = function(){ zet(0); };
 }
 
 function klantUitScherm(){
