@@ -46,6 +46,8 @@ const VS_GESLOTEN = 19;          // Logic4-status 'Offerte gesloten'
 const VS_AANBETAALD = 25;
 const VS_BETAALD = 30;
 const VS_AANBETAAL_DEEL = 0.30;  // standaard aanbetaling: 30% van het totaal incl. btw
+// Logic4 geeft de naam van de status niet altijd mee.
+const VS_STATUSNAAM = { 4: "Offerte", 19: "Offerte gesloten", 25: "30% aanbetaald", 30: "Volledig betaald" };
 const VS_DAGBOEK_MOLLIE = 42;    // zoals de aanbetalingen van Passion Partners
 const VS_VOORUIT = 78;           // Vooruit ontvangen bedragen (1350), verplicht bij AddPayment
 /* Het voorstel echt naar de klant mailen gaat pas aan na het akkoord van
@@ -188,8 +190,10 @@ function vsBetaald(v) {
   return Math.round((v.betalingen || []).filter(b => b.geboekt).reduce((s, b) => s + (Number(b.bedrag) || 0), 0) * 100) / 100;
 }
 /* Staat er geld op de offerte, dan wordt hij order. Nooit terug. */
-async function vsNaarOrder(env, H, v, wie) {
+async function vsNaarOrder(env, H, v, wie, minstens) {
   const o = await vsOrderLees(env, H, v.orderid);
+  // Net geboekt? Dan telt dat bedrag mee, ook als Logic4 het totaal nog niet bijwerkte.
+  if (o && minstens > o.betaald) o.betaald = minstens;
   if (!o || !(o.betaald > 0)) return o;
   const doel = o.betaald >= (o.totaal.incl || 0) - 0.01 ? VS_BETAALD : VS_AANBETAALD;
   const nu = Number(o.statusId);
@@ -222,7 +226,7 @@ async function vsMollieVerwerk(env, H, db, pid) {
   b.geboekt = Date.now(); b.bedrag = bedrag;
   vsLog(v, "de klant", "Aanbetaling van " + vsGeld(bedrag) + " betaald via Mollie");
   await vsSchrijf(db, v);
-  try { await vsNaarOrder(env, H, v, "het Dashboard"); }
+  try { await vsNaarOrder(env, H, v, "het Dashboard", vsBetaald(v)); }
   catch (e) { vsLog(v, "het Dashboard", "Status in Logic4 omzetten lukte nog niet: " + String(e.message || e).slice(0, 200)); }
   await vsSchrijf(db, v);
   await vsBetaalBericht(env, H, v, bedrag).catch(() => {});
@@ -398,7 +402,7 @@ async function vsOrderLees(env, H, orderid) {
   }
   const t = o.Totals || {};
   return {
-    id: o.Id, status: (o.OrderStatus && (o.OrderStatus.Description || o.OrderStatus.Id)) || "",
+    id: o.Id, status: (o.OrderStatus && (o.OrderStatus.Description || VS_STATUSNAAM[o.OrderStatus.Id] || o.OrderStatus.Id)) || "",
     statusId: o.OrderStatus && o.OrderStatus.Id,
     kop: {
       referentie: o.Reference || "", omschrijving: o.Description || "", memo: o.Notes || "",
@@ -420,7 +424,8 @@ async function vsOrderLees(env, H, orderid) {
       btw: Math.round(((Number(t.AmountIncl) || 0) - (Number(t.AmountEx) || 0) - (Number(t.ShippingCost) || 0)) * 100) / 100,
       verzend: Number(t.ShippingCost) || 0,
     },
-    betaald: Number(o.Calc_TotalPayed || 0) || 0,
+    // Staat in Totals (zie worker.js); bovenin de order staat het niet (proef 4 nov 2026).
+    betaald: Math.round((Number(t.Calc_TotalPayed || o.Calc_TotalPayed || 0) || 0) * 100) / 100,
   };
 }
 
