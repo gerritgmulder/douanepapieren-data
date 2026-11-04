@@ -79,6 +79,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--rand)}
 td{padding:8px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
 td.taal{font-weight:700;white-space:nowrap}
+tr.mregel{cursor:pointer}tr.mregel:hover td{background:#faf7f7}tr.ongelezen td:first-child,tr.ongelezen td:nth-child(2){font-weight:700}
+.mlees{background:#faf9f7;border:1px solid var(--rand);border-radius:10px;padding:12px 14px}
+.mtekst{white-space:pre-wrap;overflow-wrap:break-word;font-size:13.5px;line-height:1.55;margin:0 0 12px;max-height:420px;overflow-y:auto}
 td small{display:block;color:var(--grijs);font-size:11.5px;margin-top:2px}
 select,input[type=text]{font:inherit;font-size:13px;border:1px solid var(--rand);border-radius:8px;padding:6px 8px;background:#fff;max-width:100%}
 .st-concept{color:var(--grijs)}.st-nalezen{color:var(--oranje);font-weight:700}.st-klaar{color:var(--groen);font-weight:700}.st-verzonden{color:#1d4ed8;font-weight:700}
@@ -119,11 +122,13 @@ select,input[type=text]{font:inherit;font-size:13px;border:1px solid var(--rand)
   </div>
   <div class="tabs" id="tabs">
     <button class="tab" type="button" data-tab="mailing" title="De beursmail versturen en volgen">Mailing</button>
+    <button class="tab" type="button" data-tab="reacties" title="De antwoorden op de beursmail, uit beurs@passionspas.com">Reacties</button>
     <button class="tab aan" type="button" data-tab="lijst">Nog te bevestigen</button>
     <button class="tab" type="button" data-tab="talen">17 talen</button>
     <button class="tab" type="button" data-tab="pitch">Pitch en koopmotieven</button>
   </div>
   <section id="t-mailing" hidden></section>
+  <section id="t-reacties" hidden></section>
   <section id="t-lijst"></section>
   <section id="t-talen" hidden></section>
   <section id="t-pitch" hidden></section>
@@ -243,9 +248,10 @@ function tekenPitch(){
 }
 function teken(){
   document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
-  ["mailing", "lijst", "talen", "pitch"].forEach(function(t){ $("t-" + t).hidden = t !== tab; });
+  ["mailing", "reacties", "lijst", "talen", "pitch"].forEach(function(t){ $("t-" + t).hidden = t !== tab; });
   tekenLijst(); tekenTalen(); tekenPitch(); tekenMailing();
   if (tab === "mailing" && !mail) laadMailing();
+  if (tab === "reacties") { if (!inbox) laadInbox(); else tekenInbox(); }
 }
 function bewaar(meteen){
   clearTimeout(bewaarTimer);
@@ -307,7 +313,7 @@ function tekenMailing(){
   var aan = mail.inst && mail.inst.aan, perDag = (mail.inst && mail.inst.perDag) || 290;
   var dagen = Math.ceil(tot.wacht / perDag);
   var h = '<div class="kaart"><h3>Versturen</h3>' +
-    '<p class="lead">De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het aantal per dag op is. Elk land krijgt de mail in zijn eigen taal. Afzender: Dolf Nieland - Passion Spas. Antwoorden gaan naar info@passionspas.com. Na ' + new Date((mail.laatsteDag || "2026-11-19") + "T12:00").toLocaleDateString("nl-NL", { day: "numeric", month: "long" }) + ' stopt het versturen vanzelf: dan is de beurs bijna voorbij.</p>' +
+    '<p class="lead">De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het aantal per dag op is. Elk land krijgt de mail in zijn eigen taal. Afzender: Dolf Nieland - Passion Spas. Antwoorden komen binnen bij beurs@passionspas.com en staan in het tabblad Reacties. Na ' + new Date((mail.laatsteDag || "2026-11-19") + "T12:00").toLocaleDateString("nl-NL", { day: "numeric", month: "long" }) + ' stopt het versturen vanzelf: dan is de beurs bijna voorbij.</p>' +
     '<p>Stand: <span class="aanuit ' + (aan ? 'aan">Staat aan' : 'uit">Staat op pauze') + '</span>' +
     (mail.inst && mail.inst.door ? ' <small style="color:var(--grijs)">(' + esc(String(mail.inst.door).split("@")[0]) + ', ' + new Date(mail.inst.ts).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) + ')</small>' : '') + '</p>' +
     '<div class="mrij">' +
@@ -330,8 +336,72 @@ function tekenMailing(){
     return '<tr><td>' + esc(new Date(r.ts).toLocaleTimeString("nl-NL", { hour:"2-digit", minute:"2-digit" })) + '</td><td>' + esc(r.bedrijf) + '<small>' + esc(r.email) + '</small></td><td>' + esc(r.land) + '</td><td>' + esc(TAALNAAM[r.taal] || r.taal) + '</td></tr>'; }).join("") + '</tbody></table></div>';
   if (mail.fouten.length) h += '<div class="kaart"><h3>Teruggekomen</h3><table><tbody>' + mail.fouten.map(function(r){
     return '<tr><td>' + esc(r.bedrijf) + '<small>' + esc(r.email) + '</small></td><td>' + esc(r.land) + '</td><td><small>' + esc(r.fout) + '</small></td></tr>'; }).join("") + '</tbody></table></div>';
-  h += '<div class="kaart"><h3>Reacties</h3><p class="lead">Antwoorden komen nu binnen bij info@passionspas.com, in de mailbox van Arno. Zodra er een eigen mailbox voor de beurs is, staan de reacties hier, met automatische berichten apart.</p></div>' +
-    '<button class="knop licht" type="button" onclick="laadMailing()" title="Haal de nieuwste stand op">Ververs</button>';
+  h += '<button class="knop licht" type="button" onclick="laadMailing()" title="Haal de nieuwste stand op">Ververs</button>';
+  el.innerHTML = h;
+}
+/* ── Reacties: de inbox van beurs@passionspas.com (4 nov 2026) ─────────
+   Echte reacties bovenaan, automatische berichten (afwezig, onbestelbaar)
+   apart eronder. Klik op een regel om het bericht te lezen. */
+var inbox = null, inboxMelding = "", inboxOpen = null, inboxAutoZien = false;
+async function laadInbox(){
+  inboxMelding = "Even laden...";
+  tekenInbox();
+  try {
+    var r = await fetch(W + "/dealers/beurs/inbox", { headers: kop() });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.uitleg || j.error || ("HTTP " + r.status));
+    inbox = j; inboxMelding = "";
+  } catch(e) { inboxMelding = "Ophalen lukte nog niet: " + e.message; }
+  tekenInbox();
+}
+async function openBericht(i){
+  var b = inbox && inbox.berichten[i]; if (!b) return;
+  inboxOpen = { i: i, laden: true };
+  tekenInbox();
+  try {
+    var r = await fetch(W + "/dealers/beurs/bericht?id=" + encodeURIComponent(b.id) + "&sleutel=" + encodeURIComponent(b.sleutel), { headers: kop() });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.uitleg || j.error || ("HTTP " + r.status));
+    inboxOpen = { i: i, bericht: j.bericht };
+    b.gelezen = true;
+  } catch(e) { inboxOpen = { i: i, fout: e.message }; }
+  tekenInbox();
+}
+function inboxDatum(t){ return t ? new Date(t).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) : ""; }
+function inboxRegels(lijst){
+  return '<table><tbody>' + lijst.map(function(b){
+    var i = inbox.berichten.indexOf(b), d = b.dealer;
+    return '<tr class="mregel' + (b.gelezen ? '' : ' ongelezen') + '" onclick="openBericht(' + i + ')" title="Open dit bericht">' +
+      '<td>' + esc(d ? d.bedrijf : b.van) + '<small>' + esc(b.vanAdres) + (d ? ' · ' + esc(d.land) : '') + '</small></td>' +
+      '<td>' + esc(b.onderwerp || "(zonder onderwerp)") + (b.bijlagen ? ' 📎' : '') + '</td>' +
+      '<td style="white-space:nowrap">' + esc(inboxDatum(b.ontvangen)) + '</td></tr>' +
+      (inboxOpen && inboxOpen.i === i ? '<tr><td colspan="3">' + inboxLees() + '</td></tr>' : '');
+  }).join("") + '</tbody></table>';
+}
+function inboxLees(){
+  if (inboxOpen.laden) return '<p class="lead">Even laden...</p>';
+  if (inboxOpen.fout) return '<p class="melding">Openen lukte nog niet: ' + esc(inboxOpen.fout) + '</p>';
+  var m = inboxOpen.bericht, d = m.dealer;
+  return '<div class="mlees"><p class="lead"><b>Van:</b> ' + esc(m.van) + ' &lt;' + esc(m.vanAdres) + '&gt;' +
+    (d ? '<br><b>Uit de lijst:</b> ' + esc(d.bedrijf) + ', ' + esc(d.land) + ' (' + esc(TAALNAAM[d.taal] || d.taal) + ')' : '') +
+    '<br><b>Ontvangen:</b> ' + esc(inboxDatum(m.ontvangen)) +
+    (m.bijlagen && m.bijlagen.length ? '<br><b>Bijlagen:</b> ' + m.bijlagen.map(function(a){ return esc(a.naam); }).join(", ") : '') + '</p>' +
+    '<div class="mtekst">' + esc(m.tekst || "") + '</div>' +
+    '<button class="knop licht" type="button" onclick="inboxOpen=null;tekenInbox()" title="Sluit dit bericht">Sluiten</button></div>';
+}
+function tekenInbox(){
+  var el = $("t-reacties"); if (!el) return;
+  if (!inbox) { el.innerHTML = '<div class="kaart"><p class="lead">' + esc(inboxMelding || "Even laden...") + '</p></div>'; return; }
+  var echt = inbox.berichten.filter(function(b){ return !b.automatisch; });
+  var auto = inbox.berichten.filter(function(b){ return b.automatisch; });
+  var h = '<div class="kaart"><h3>Reacties van dealers</h3>' +
+    '<p class="lead">Antwoorden op de beursmail komen binnen bij beurs@passionspas.com. Herkent het Dashboard de afzender uit de verzendlijst, dan staan bedrijf en land erbij. De eerste 478 mails (3 november en 4 november tot half drie) hadden nog info@passionspas.com als antwoordadres; antwoorden daarop komen daar binnen.</p>' +
+    '<div class="tellers"><span class="teller">Echte reacties: <b>' + echt.length + '</b></span><span class="teller">Ongelezen: <b>' + echt.filter(function(b){ return !b.gelezen; }).length + '</b></span>' +
+    '<span class="teller">Automatisch: <b>' + auto.length + '</b></span></div>' +
+    (echt.length ? inboxRegels(echt) : '<p class="lead">Nog geen reacties binnen.</p>') + '</div>';
+  h += '<div class="kaart"><h3>Automatische berichten</h3><p class="lead">Afwezigheidsmeldingen, onbestelbare mails en ontvangstbevestigingen.</p>' +
+    (auto.length ? (inboxAutoZien ? inboxRegels(auto) : '<button class="knop licht" type="button" onclick="inboxAutoZien=true;tekenInbox()" title="Laat de automatische berichten zien">Laat ' + auto.length + ' zien</button>') : '<p class="lead">Nog niets binnen.</p>') + '</div>';
+  h += '<p class="melding">' + esc(inboxMelding) + '</p><button class="knop licht" type="button" onclick="laadInbox()" title="Haal de nieuwste berichten op">Ververs</button>';
   el.innerHTML = h;
 }
 async function laad(){

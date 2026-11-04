@@ -5082,7 +5082,10 @@ const BP_FLYER_NAAM = { en: "Become a Partner (EN)", nl: "Word partner (NL)", de
    <taal>.html; {{AFMELDEN}} wordt per adres een eigen afmeldlink.
    Afmelden staat in KV onder beurs-af:<adres>, zonder einddatum. */
 const BEURS_AFZENDER = { name: "Dolf Nieland - Passion Spas", email: "dolf@mail.passionspas.com" };
-const BEURS_ANTWOORD = { email: "info@passionspas.com", name: "Passion Spas" };
+/* Antwoorden komen in een eigen mailbox die het Dashboard mag lezen (André,
+   4 nov 2026, in de groep Dashboard Mailboxen). Mails van vóór die dag
+   hebben info@passionspas.com als antwoordadres; die antwoorden komen daar. */
+const BEURS_ANTWOORD = { email: "beurs@passionspas.com", name: "Passion Spas" };
 // De 17 talen van Dolfs mail (map Lyon_mail_HTML_alle_talen, 3 nov 2026).
 const BEURS_TALEN = ["bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "hu", "it", "nl", "no", "pl", "pt", "ro", "sv"];
 async function beursHandtekening(env, adres) {
@@ -5129,6 +5132,8 @@ async function beursProef(request, env, url) {
 async function beursMailbox(request, env, url) {
   if (!env.BEURS_BEHEER || request.headers.get("X-Beurs-Sleutel") !== env.BEURS_BEHEER)
     return new Response(JSON.stringify({ ok: false }), { status: 401 });
+  // Met ?inbox=1: wat de tegel Beurs onder Reacties laat zien, om na te kijken.
+  if (url.searchParams.get("inbox")) return new Response(JSON.stringify(await beursInbox(env, url), null, 1), { headers: { "Content-Type": "application/json" } });
   const adres = String(url.searchParams.get("adres") || "info@passionspas.com");
   const naam = await ewsRoep(env, "ResolveNames",
     '<m:ResolveNames ReturnFullContactData="true"><m:UnresolvedEntry>' + xmlUit(adres) + "</m:UnresolvedEntry></m:ResolveNames>",
@@ -5222,7 +5227,7 @@ async function beursMagTegel(request, env) {
   return toegangMag(env, "beurs", String(request.headers.get("X-Fonteyn-User") || "").toLowerCase());
 }
 async function beursTegel(request, env, url, p) {
-  if (!(await beursMagTegel(request, env))) return reply(403, { ok: false, error: "Deze tegel is voor Dolf en Gerrit." });
+  if (!(await beursMagTegel(request, env))) return reply(403, { ok: false, error: "Deze tegel is voor Dolf, Arno en Gerrit." });
   const db = env.ACTIVITEIT;
   if (p === "/dealers/beurs/status" && request.method === "GET") {
     const inst = await beursInstelling(env);
@@ -5246,7 +5251,69 @@ async function beursTegel(request, env, url, p) {
     if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(aan)) return reply(400, { ok: false, error: "Vul een geldig mailadres in." });
     return reply(200, await beursMail(env, aan, String(b.taal || "nl")));
   }
+  if (p === "/dealers/beurs/inbox" && request.method === "GET") return reply(200, await beursInbox(env, url));
+  if (p === "/dealers/beurs/bericht" && request.method === "GET") {
+    const r = await mailBericht(env, BEURS_ANTWOORD.email, String(url.searchParams.get("id") || ""), String(url.searchParams.get("sleutel") || ""));
+    if (r.ok) {
+      try { await mailGelezen(env, BEURS_ANTWOORD.email, r.bericht.id, r.bericht.sleutel, true); } catch (e) {}
+      const d = await db.prepare("SELECT bedrijf, land, taal FROM beurs_mail WHERE email=?").bind(String(r.bericht.vanAdres || "").toLowerCase()).first();
+      r.bericht.dealer = d || null;
+    }
+    return reply(200, r);
+  }
   return reply(404, { ok: false });
+}
+
+/* De inbox van beurs@passionspas.com. Automatische berichten (afwezig,
+   onbestelbaar, ontvangstbevestiging) staan apart van echte reacties
+   (Gerrit, 3 nov 2026). Exchange zegt het zelf via de berichtsoort; de rest
+   herkennen we aan afzender en onderwerp, in de talen van de mailing. */
+const BEURS_AUTO_VAN = /mailer-daemon|postmaster|no-?reply|do-?not-?reply|bounce|notification|autorespon|auto-?reply/i;
+const BEURS_AUTO_ONDERWERP = new RegExp([
+  "automatic reply", "auto(matic)?[- ]?(reply|response|answer)", "out of (the )?office", "undeliver", "delivery (status|failure|has failed)",
+  "mail delivery", "returned mail", "failure notice", "read:", "absence", "away from", "on leave", "vacation", "holiday",
+  "automatisch(e)? (antwoord|antwort)", "afwezig", "niet bestelbaar", "abwesen", "nicht im büro", "unzustellbar", "urlaub",
+  "réponse automatique", "absent", "absence", "non remis", "congés", "risposta automatica", "fuori sede", "assente", "non recapitabile",
+  "respuesta automática", "fuera de la oficina", "ausente", "resposta automática", "ausência", "fora do escritório",
+  "autosvar", "frånvar", "automaattinen vastaus", "poissa", "automatisk svar", "fravær", "fraværende", "odpowiedź automatyczna",
+  "nieobecn", "automatická odpověď", "nepřítom", "automatikus válasz", "házon kívül", "răspuns automat", "автоматичен отговор",
+  "αυτόματη απάντηση", "εκτός γραφείου",
+].join("|"), "i");
+function beursAutomatisch(soort, vanAdres, onderwerp) {
+  if (/^REPORT\.|OofTemplate|Rules\./i.test(soort || "")) return true;
+  return BEURS_AUTO_VAN.test(vanAdres || "") || BEURS_AUTO_ONDERWERP.test(onderwerp || "");
+}
+async function beursInbox(env, url) {
+  const adres = BEURS_ANTWOORD.email;
+  const vanaf = Math.max(Number(url.searchParams.get("vanaf")) || 0, 0);
+  const body =
+    '<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties>' +
+    '<t:FieldURI FieldURI="item:Subject"/><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURI FieldURI="item:ItemClass"/>' +
+    '<t:FieldURI FieldURI="item:HasAttachments"/><t:FieldURI FieldURI="message:From"/><t:FieldURI FieldURI="message:IsRead"/>' +
+    '</t:AdditionalProperties></m:ItemShape>' +
+    '<m:IndexedPageItemView MaxEntriesReturned="100" Offset="' + vanaf + '" BasePoint="Beginning"/>' +
+    '<m:SortOrder><t:FieldOrder Order="Descending"><t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder>' +
+    "<!--MAP--></m:FindItem>";
+  const r = await ewsDoe(env, "FindItem", modus => body.replace("<!--MAP-->",
+    "<m:ParentFolderIds>" + mapVerwijzing("inbox", adres, modus) + "</m:ParentFolderIds>"), adres);
+  if (!r.ok) return r;
+  // Onbestelbaar-meldingen komen niet altijd als Message terug; daarom alle soorten.
+  const blokken = ["Message", "Item", "PostItem"].flatMap(n => xBlokken(r.xml, n));
+  const berichten = blokken.map(b => {
+    const id = xItemId(b), van = xMailbox(b, "From");
+    const vanAdres = van ? String(van.adres || "").toLowerCase() : "", onderwerp = xVeld(b, "Subject"), soort = xVeld(b, "ItemClass");
+    return { id: id ? id.id : "", sleutel: id ? id.sleutel : "", onderwerp, van: van ? (van.naam || van.adres) : "", vanAdres,
+      ontvangen: xVeld(b, "DateTimeReceived"), gelezen: xVeld(b, "IsRead") === "true", bijlagen: xVeld(b, "HasAttachments") === "true",
+      automatisch: beursAutomatisch(soort, vanAdres, onderwerp) };
+  }).filter(x => x.id).sort((a, b) => String(b.ontvangen).localeCompare(String(a.ontvangen)));
+  // Bij een echte reactie: welk bedrijf uit de lijst is het?
+  const adressen = [...new Set(berichten.map(x => x.vanAdres).filter(Boolean))].slice(0, 99);   // D1: hooguit 100 waarden per vraag
+  if (adressen.length) {
+    const { results } = await env.ACTIVITEIT.prepare("SELECT email, bedrijf, land, taal FROM beurs_mail WHERE email IN (" + adressen.map(() => "?").join(",") + ")").bind(...adressen).all();
+    const per = {}; (results || []).forEach(x => { per[x.email] = x; });
+    berichten.forEach(x => { const d = per[x.vanAdres]; if (d) x.dealer = { bedrijf: d.bedrijf, land: d.land, taal: d.taal }; });
+  }
+  return { ok: true, adres, berichten, meer: /IncludesLastItemInRange="false"/.test(r.xml) };
 }
 
 async function beursAfmelden(request, env, url) {
@@ -5389,7 +5456,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/beurs/proef" && request.method === "POST") return beursProef(request, env, url);
   if (p === "/dealers/beurs/mailbox" && request.method === "GET") return beursMailbox(request, env, url);
   if (p === "/dealers/beurs/lijst" && request.method === "POST") return beursLijst(request, env);
-  if (p === "/dealers/beurs/status" || p === "/dealers/beurs/instelling" || p === "/dealers/beurs/proefmail") return beursTegel(request, env, url, p);
+  if (p === "/dealers/beurs/status" || p === "/dealers/beurs/instelling" || p === "/dealers/beurs/proefmail" || p === "/dealers/beurs/inbox" || p === "/dealers/beurs/bericht") return beursTegel(request, env, url, p);
   if (p === "/dealers/beurs/afmelden" && (request.method === "GET" || request.method === "POST")) return beursAfmelden(request, env, url);
   const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate|lyon)\.jpg)$/);
   if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);

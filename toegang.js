@@ -408,9 +408,10 @@
       "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
     ],
     /* Beurs: de uitnodigingscampagne voor Piscine Global Lyon 2026, voor Dolf
-       en Gerrit (25 okt 2026). */
+       en Gerrit (25 okt 2026). Arno erbij voor de reacties op de beursmail
+       (Gerrit, 3 nov 2026). */
     "beurs": [
-      "dolf", "fonteynbot", "gerrit",
+      "arno", "dolf", "fonteynbot", "gerrit",
     ],
     "urencontrole": [
       "dolf", "fonteynbot", "gerrit", "gerwin",
