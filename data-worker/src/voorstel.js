@@ -33,6 +33,11 @@
    ═════════════════════════════════════════════════════════════════ */
 
 const VS_LOGO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png";
+const VS_FOTO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-showroom.jpg";
+/* Na het bevestigen (Gerrit, 4 nov 2026): het gaat om privacy, niet om wat
+   de adviseur nu doet. Kort, met een foto van Fonteyn. */
+const VS_BEDANKT = "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je gegevens zijn veilig bij ons en horen bij jouw voorstel. Zo klopt alles, van je voorstel tot de levering.</p>" +
+  "<img src='" + VS_FOTO + "' alt='Fonteyn Outdoor Living Mall' style='width:100%;height:auto;display:block;border-radius:10px;margin:14px 0 6px'><p class='klein'>Tot ziens bij Fonteyn Outdoor Living Mall in Uddel.</p>";
 const VS_OFFERTE = 4;            // Logic4-status 'Offerte'
 const VS_GESLOTEN = 19;          // Logic4-status 'Offerte gesloten'
 /* Na een betaling is het voorstel een order (besluit 26 okt 2026, zie
@@ -750,13 +755,13 @@ async function vsBevestigGet(env, url) {
   if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
   const v = vsUit(r);
   if (v.status !== "wacht") {
-    return vsPagina("Bevestig je gegevens", "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je adviseur maakt nu je voorstel. Je hoort snel van ons.</p>" + vsGegevensTabel(v.klant || {}));
+    return vsPagina("Bevestig je gegevens", VS_BEDANKT);
   }
   if (url.searchParams.get("aanpassen") === "1") {
     return vsPagina("Gegevens aanpassen", "<h1>Pas je gegevens aan</h1><p>Verander wat er anders moet en klik daarna op opslaan.</p>" + vsFormulier(token, v.klant || {}));
   }
   return vsPagina("Bevestig je gegevens",
-    "<h1>Kloppen je gegevens?</h1><p>Kijk ze even na. Daarna maakt je adviseur je voorstel.</p>" + vsGegevensTabel(v.klant || {}) +
+    "<h1>Kloppen je gegevens?</h1><p>Kijk ze even na. Zo weten we zeker dat je gegevens kloppen en veilig bij jouw voorstel horen.</p>" + vsGegevensTabel(v.klant || {}) +
     "<form method='post' action='/bevestig'><input type='hidden' name='t' value='" + vsEsc(token) + "'><input type='hidden' name='soort' value='klopt'><button class='knop groen' type='submit'>Klopt</button></form>" +
     "<a class='knop grijs' href='/bevestig?t=" + encodeURIComponent(token) + "&aanpassen=1'>Klopt niet, ik pas het aan</a>");
 }
@@ -768,7 +773,7 @@ async function vsBevestigPost(env, request, H) {
   const r = token ? await db.prepare("SELECT * FROM voorstel WHERE token = ?1").bind(token).first() : null;
   if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
   const v = vsUit(r);
-  if (v.status !== "wacht") return vsPagina("Bevestig je gegevens", "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je adviseur maakt nu je voorstel.</p>");
+  if (v.status !== "wacht") return vsPagina("Bevestig je gegevens", VS_BEDANKT);
   let verschil = [];
   if (String(f.get("soort")) === "aangepast") {
     const g = (n) => f.get(n);
@@ -793,7 +798,7 @@ async function vsBevestigPost(env, request, H) {
   try { await vsNaarLogic4(env, H, db, v, "het Dashboard"); }
   catch (e) { v.logic4Fout = String(e.message || e).slice(0, 300); vsLog(v, "het Dashboard", "Logic4 lukte nog niet: " + v.logic4Fout); await vsSchrijf(db, v); }
   await vsBericht(env, H, v, verschil).catch(() => {});
-  return vsPagina("Bedankt", "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je adviseur maakt nu je voorstel. Je hoort snel van ons.</p>" + vsGegevensTabel(v.klant));
+  return vsPagina("Bedankt", VS_BEDANKT);
 }
 /* Bericht in het Dashboard van de adviseur. Bij "klopt niet" met wat er
    anders is; bij "klopt" kort dat hij verder kan. */
