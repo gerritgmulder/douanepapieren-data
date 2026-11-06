@@ -16382,6 +16382,11 @@ async function qbMogelijkDubbel(env, inv, rijen, token) {
     const j = await r.json().catch(() => null);
     for (const o of ((j && (j.Records || j)) || [])) {
       if (Date.parse(o.CreationDate || "") < grens) continue;
+      /* Noemt de order zelf een ander factuurnummer, dan is het een andere
+         factuur van dezelfde klant. 3852 van Hot Tub Liquidators bleef zo
+         wachten op order 3517240, en die is "B2B invoice 3379". */
+      const ander = String(o.Reference || "").match(/(?:invoice|quickbooks)\s*#?\s*(\d{4,5})\b/i);
+      if (ander && ander[1] !== String(inv.DocNumber || "").trim()) continue;
       const tot = Number((o.Totals || {}).AmountIncl) || 0;
       const eur = usd / AMERIKA_KOERS;
       if (Math.abs(tot - eur) <= eur * 0.10 || Math.abs(tot - usd) <= usd * 0.10) {

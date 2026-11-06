@@ -50,6 +50,9 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    { datum: "2026-11-06", bestand: "amerika.html", soort: "beter",
+      titel: "Amerika: betaalde facturen zonder order blijven in beeld",
+      wat:   "Een factuur die al betaald is en waar Ontv. Audrey bij aanstaat, blijft nu in Nieuwe orders uit QuickBooks staan zolang er nog geen Logic4-order van is. Zo kun je hem altijd accorderen. Twaalf facturen staan daardoor weer in de lijst, waaronder 3852." },
     { datum: "2026-11-04", bestand: "voorstel-maken.html", soort: "beter",
       titel: "Voorstel maken: postcode, live meekijken en een demo",
       wat:   "Typ postcode en huisnummer: straat en plaats komen er vanzelf bij. Heb je de mail Bevestig je gegevens verstuurd, dan kijkt de tegel live mee: zodra de klant bevestigt, gaat het voorstel vanzelf open en zie je een melding. Artikelen zoek je nu zoals in Logic4: alle artikelen, op code, naam, barcode of een paar woorden, met prijs en voorraad; kies met de pijltjes en zet het erop met Enter. Met de knop Demo laat je met een verzonnen klant zien hoe het werkt, met de telefoon van de klant ernaast." },

@@ -1631,7 +1631,11 @@ function renderQbInvoices(){
   // heeft hij ook een kopie in Ontvangen Audrey — zo blijft zichtbaar dat er
   // nog een restant openstaat (Chantal, 4 aug 2026).
   const q=((document.getElementById("qbZoek")||{}).value||"").trim().toLowerCase();
-  const nieuw=qbInvoices.filter(i=>!qbVerborgen[i.docNr] && !(i.audrey && i.betaald)).filter(i=>qbMatch(i,q));
+  /* Zonder Logic4-order blijft hij altijd hier staan. Chantal vinkte soms eerst
+     Ontv. Audrey aan; was hij dan al betaald, dan stond hij nergens meer: hier
+     niet, en in Ontvangen Audrey ook niet, want daar komen alleen geaccordeerde
+     facturen (Chantal, 6 nov 2026: 3852, 3773 en tien andere). */
+  const nieuw=qbInvoices.filter(i=>!qbVerborgen[i.docNr] && !(i.audrey && i.betaald && i.geaccordeerd)).filter(i=>qbMatch(i,q));
   let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px'>"+
     "<h3 style='margin:0'>Nieuwe orders uit QuickBooks — "+nieuw.length+"</h3>"+
     "<div style='display:flex;gap:10px;flex-wrap:wrap'><button id='qbSelAll' class='btn' type='button' title='Vink alle facturen in deze lijst aan'>Alles selecteren</button>"+
