@@ -160,7 +160,8 @@ function teken(){
       /* Beide nummers uit de klantenkaart (Kevin, 29 okt 2026); het tweede alleen als het anders is. */
       (k.tel2 ? '<div class="blokje"><a class="tel" style="display:inline-flex" href="' + esc(telAnoniem(k.tel2)) + '" title="' + esc(TEL_TITEL) + '">📞 ' + esc(k.tel2) + '</a></div>' : '') +
       '<div class="blokje">' + (k.adres ? '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(k.adres) + '" target="_blank" rel="noopener">' + esc(k.adres) + '</a>' : '') +
-        '<div class="pillen"><span class="pil paars">ITS ' + esc(s.its) + '</span><span class="pil grijs">' + esc(DAGDEEL[s.dagdeel]||"") + '</span>' +
+        /* Het debiteurnummer erbij (Kevin, document 3 nov 2026). */
+        '<div class="pillen"><span class="pil paars">ITS ' + esc(s.its) + '</span>' + (k.debiteur ? '<span class="pil paars">deb. ' + esc(k.debiteur) + '</span>' : '') + '<span class="pil grijs">' + esc(DAGDEEL[s.dagdeel]||"") + '</span>' +
         (s.status === "akkoord" ? '<span class="pil groen">klant akkoord</span>' : s.status === "voorstel" ? '<span class="pil oranje">wacht op bevestiging klant</span>' : '') +
         (/^ja/i.test(s.garantie||"") ? '<span class="pil groen">garantie</span>' : '') +
         (klaar ? '<span class="pil groen">werkbon klaar</span>' : s.bon === "concept" ? '<span class="pil">werkbon bezig</span>' : '') + '</div></div>' +

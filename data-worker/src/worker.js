@@ -23,6 +23,7 @@ import { ppMailVertaal, PP_MAIL_TALEN } from "./pp-mailteksten.js";
 // Service planning (Kevin, 23 okt 2026): meldingen, routes en de klantmails.
 import { svcHandle, svcRonde } from "./service.js";
 import { vsHandle } from "./voorstel.js";
+import { plHandle } from "./plaatsing.js";
 const SVC_HULP = (env) => ({ reply, l4Token, RIJ_START, rijNorm, itsTekst, ewsVerstuur,
   // DEV_OPEN bestaat alleen bij een lokale proefdraai, nooit in de uitrol.
   toegangMag: env && env.DEV_OPEN ? async (e, g, w) => !(g === "service-planning" && /thieme|kroes|putten/.test(String(w))) : toegangMag });
@@ -8473,8 +8474,10 @@ async function bonHandle(request, env, url) {
         if (!bon.handtekeningMonteur || !bon.handtekeningKlant) return reply(400, { ok: false, error: "zonder beide handtekeningen kan de bon niet worden afgerond" });
         const open = Object.entries(bon.checklist).filter(([, v]) => !v.a);
         if (open.length) return reply(400, { ok: false, error: open.length + " vraag(en) nog niet beantwoord" });
-        const zonderReden = Object.entries(bon.checklist).filter(([, v]) => v.a !== "ja" && !v.opm.trim());
-        if (zonderReden.length) return reply(400, { ok: false, error: "bij Nee of n.v.t. hoort een reden (" + zonderReden.length + " keer leeg)" });
+        /* Alleen bij Nee is een reden verplicht; n.v.t. mag leeg blijven
+           (Kevin, document 3 nov 2026). */
+        const zonderReden = Object.entries(bon.checklist).filter(([, v]) => v.a === "nee" && !v.opm.trim());
+        if (zonderReden.length) return reply(400, { ok: false, error: "bij Nee hoort een reden (" + zonderReden.length + " keer leeg)" });
       }
     }
     await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
@@ -21181,6 +21184,14 @@ const FP_WORKER = {
     if (url.pathname.startsWith("/keten/")) {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
       return ketenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    /* Foto's bij een klus en de verklaring huis en tuin (Planning en Mijn
+       route Plaatsing, Kevin 3 nov 2026). Zie plaatsing.js. */
+    if (url.pathname.startsWith("/planning/foto") || url.pathname.startsWith("/planning/schade")) {
+      // DEV_OPEN bestaat alleen bij een lokale proefdraai (wrangler dev --var), nooit in de uitrol.
+      if (!env.DEV_OPEN && (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel: ga één keer terug naar het Dashboard en open de tegel opnieuw" });
+      return plHandle(request, env, url, { reply, corsHeaders, bestandZet, bestandLees, bwLogic4, bwOrderKort, toegangMag: SVC_HULP(env).toegangMag })
+        .catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     /* De opleverbon van de monteur (tegel Mijn route) en het overzicht ervan
        in Planning. Zie bonHandle hieronder. */

@@ -396,6 +396,8 @@
       "dolf", "fonteynbot", "gerrit", "hans.van.putten", "patrick.kroes", "thieme.wennink",
       // Kevin, 27 okt 2026: Bart, Bertjan en Kevin rijden ook service; Gerwin, Kevin en Tim kunnen bij alle routes.
       "bart.vdb", "bertjan", "gerwin", "kevin", "tim",
+      // Het service-spa-account ook, net als Gerwin en Kevin (Kevin, document 3 nov 2026).
+      "mike",
     ],
     /* Opleverbonnen Service weghalen (en terugzetten): alleen Gerwin en Kevin
        (Kevin, 27 okt 2026). */

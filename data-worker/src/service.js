@@ -149,17 +149,24 @@ function svcRij(a, b) {
   return Math.round(svcKm(a, b) * 1.3 / 75 * 60) + 5;
 }
 function svcDagdeel(min) { return min < 600 ? 1 : min < 780 ? 2 : 3; }
-/* Aankomst bij elke stop en de tijd van terugkomst in Uddel. */
+const SVC_DAGDEEL_VAN = { 1: 0, 2: 600, 3: 780 };
+/* Aankomst bij elke stop en de tijd van terugkomst in Uddel. Een stop met
+   een vast dagdeel wacht tot dat dagdeel begint: gaat er een klant uit de
+   route, dan blijven de anderen op hun tijd staan (Kevin, document 3 nov
+   2026) en is het gat weer te vullen. */
 function svcTijden(route, stops, thuis) {
   let t = route.start, vorige = thuis;
   const aankomst = [];
-  for (const s of stops) { t += svcRij(vorige, s.geo); aankomst.push(t); t += s.duur; vorige = s.geo; }
+  for (const s of stops) { t += svcRij(vorige, s.geo); if (s.dagdeel) t = Math.max(t, SVC_DAGDEEL_VAN[s.dagdeel] || 0); aankomst.push(t); t += s.duur; vorige = s.geo; }
   if (stops.length) t += svcRij(vorige, thuis);
   return { aankomst, terug: t };
 }
 function svcDatumMag(m, datum, zonderVoorkeur) {
   const wd = new Date(datum + "T12:00:00Z").getUTCDay();
   if (wd === 0 || wd === 6) return false;
+  /* Uit een route gehaald omdat de klant die dag niet kan: nooit meer op
+     die dag (Kevin, document 3 nov 2026). */
+  if (Array.isArray(m.nietOp) && m.nietOp.includes(datum)) return false;
   // Een al afgesproken datum (klant overgezet uit Logic4) gaat voor alles.
   if (m.vast) return datum === m.vast;
   if (!zonderVoorkeur && Array.isArray(m.voorkeur) && m.voorkeur.length && !m.voorkeur.includes(wd)) return false;
@@ -460,8 +467,10 @@ function svcLinkBasis(env) { return (env.SVC_LINK_BASIS || "https://fonteyn-data
 async function svcMailStuur(env, db, a, m, soort, extra) {
   const inst = await svcInstellingen(env);
   a.json = a.json || {};
-  // Handmatig overgezet zonder mail: nooit mailen, ook geen herinnering.
-  if (m && m.geenMail) { a.json.geenMail = true; delete a.json.mailWacht; delete a.json.mailFout; return { ok: true, geenMail: true }; }
+  /* Handmatig overgezet zonder mail: nooit mailen, ook geen herinnering.
+     Behalve bij een zieke monteur: dan krijgt ook deze klant de mail met de
+     nieuwe datum (Kevin, document 3 nov 2026). */
+  if (m && m.geenMail && soort !== "ziek") { a.json.geenMail = true; delete a.json.mailWacht; delete a.json.mailFout; return { ok: true, geenMail: true }; }
   const naarKlant = String((m.klant && m.klant.mail) || "").toLowerCase().split(/[;,\s]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
   if (!naarKlant.length) { a.json.mailFout = "Er staat nog geen mailadres bij de klant."; a.json.mailWacht = soort; return { ok: false, error: a.json.mailFout }; }
   if (!inst.mailAan) { a.json.mailWacht = soort; if (extra && extra.oudeDatum) a.json.oudeDatum = extra.oudeDatum; return { ok: true, wacht: "mailen staat nog uit" }; }
@@ -518,16 +527,53 @@ async function svcHerreken(env, H, db, datum, nr) {
   const ms = (await db.prepare("SELECT its, json FROM svc_melding WHERE its IN (" + its.map((_, i) => "?" + (i + 1)).join(",") + ")").bind(...its).all()).results || [];
   const meld = {}; for (const r of ms) meld[r.its] = svcJson(r.json, {});
   const R = { start: Number(route.start) || SVC_START, eind: Number(route.eind) || SVC_EIND };
-  const t = svcTijden(R, lijst.map(a => ({ geo: (meld[a.its] || {}).geo || null, duur: Number((meld[a.its] || {}).duur) || 60 })), await svcThuis(env, H));
+  /* Gemaild of akkoord (ook zonder mail) is vast: dat dagdeel verandert niet
+     meer vanzelf, en de monteur wacht tot het begint. */
+  const isVast = (a) => (a.json.mails || []).length > 0 || a.status === "akkoord";
+  const t = svcTijden(R, lijst.map(a => ({ geo: (meld[a.its] || {}).geo || null, duur: Number((meld[a.its] || {}).duur) || 60, dagdeel: isVast(a) ? a.dagdeel : null })), await svcThuis(env, H));
   for (let i = 0; i < lijst.length; i++) {
     const a = lijst[i], nu = svcDagdeel(t.aankomst[i]);
-    const gemaild = (a.json.mails || []).length > 0;
+    const gemaild = isVast(a);
     let anders = false;
     if (!gemaild && a.dagdeel !== nu) { a.dagdeel = nu; anders = true; }
     if (gemaild) { const was = a.json.dagdeelNu || null, wordt = nu !== a.dagdeel ? nu : null; if (was !== wordt) { if (wordt) a.json.dagdeelNu = wordt; else delete a.json.dagdeelNu; anders = true; } }
     if (a.volg !== i + 1) { a.volg = i + 1; anders = true; }
     if (anders) await svcAfspraakSchrijf(db, a);
   }
+}
+/* Er gaat een klant uit de route: alleen de nummers aansluiten. De andere
+   klanten houden hun dagdeel (Kevin, document 3 nov 2026: "Niet alles moet
+   naar boven schuiven"). */
+async function svcHernummer(db, datum, nr) {
+  const lijst = (await db.prepare("SELECT id, volg FROM svc_afspraak WHERE datum = ?1 AND nr = ?2 AND status IN ('voorstel','akkoord') ORDER BY volg").bind(datum, nr).all()).results || [];
+  for (let i = 0; i < lijst.length; i++) if (Number(lijst[i].volg) !== i + 1) await db.prepare("UPDATE svc_afspraak SET volg = ?1 WHERE id = ?2").bind(i + 1, lijst[i].id).run();
+}
+/* De meest logische plek voor een klant in een bestaande route: waar hij de
+   minste extra rijtijd kost, zonder dat een vaste klant van zijn dagdeel af
+   raakt (Kevin, document 3 nov 2026: "niet achter aan de route"). Geeft het
+   volgnummer terug; svcHerreken nummert daarna netjes door. */
+async function svcBesteVolg(env, H, db, datum, nr, its, zonderId) {
+  const route = await db.prepare("SELECT * FROM svc_route WHERE datum = ?1 AND nr = ?2").bind(datum, nr).first();
+  const lijst = ((await db.prepare("SELECT * FROM svc_afspraak WHERE datum = ?1 AND nr = ?2 AND status IN ('voorstel','akkoord') ORDER BY volg").bind(datum, nr).all()).results || [])
+    .map(svcAfspraakUit).filter(a => a.id !== zonderId);
+  if (!route || !lijst.length) return 1;
+  const alle = [...new Set(lijst.map(a => String(a.its)).concat([String(its)]))];
+  const meld = {};
+  for (const r of ((await db.prepare("SELECT its, json FROM svc_melding WHERE its IN (" + alle.map((_, i) => "?" + (i + 1)).join(",") + ")").bind(...alle).all()).results || [])) meld[r.its] = svcJson(r.json, {});
+  const R = { start: Number(route.start) || SVC_START, eind: Number(route.eind) || SVC_EIND };
+  const thuis = await svcThuis(env, H);
+  const stops = lijst.map(a => ({ geo: (meld[a.its] || {}).geo || null, duur: Number((meld[a.its] || {}).duur) || 60,
+    dagdeel: (a.json.mails || []).length || a.status === "akkoord" ? a.dagdeel : null }));
+  const m = meld[String(its)] || {};
+  let beste = null;
+  for (let p = 0; p <= stops.length; p++) {
+    const nieuw = stops.slice(); nieuw.splice(p, 0, { geo: m.geo || null, duur: Number(m.duur) || 60, dagdeel: null });
+    const t = svcTijden(R, nieuw, thuis);
+    const past = t.terug <= R.eind && nieuw.every((s, i) => !s.dagdeel || svcDagdeel(t.aankomst[i]) === s.dagdeel);
+    const k = [past ? 0 : 1, t.terug];
+    if (!beste || k[0] < beste.k[0] || (k[0] === beste.k[0] && k[1] < beste.k[1])) beste = { p, k };
+  }
+  return beste.p < lijst.length ? Number(lijst[beste.p].volg) - 0.5 : Number(lijst[lijst.length - 1].volg) + 1;
 }
 function svcAfspraakUit(rij) { return { id: rij.id, its: rij.its, datum: rij.datum, nr: rij.nr, volg: rij.volg, dagdeel: rij.dagdeel, status: rij.status, token: rij.token, json: svcJson(rij.json, {}) }; }
 
@@ -575,7 +621,24 @@ async function svcPlannen(env, H, wie, opts) {
     gepland.push({ its: m.its, naam: (m.klant || {}).naam || "", plaats: (m.klant || {}).plaats || "", datum: plek.R.datum, nr: plek.R.nr, monteur: plek.R.monteur, dagdeel: stop.dagdeel, leeg: plek.leeg,
       buitenVoorkeur: !!plek.buitenVoorkeur, zelfdeMonteur: !!plek.zelfdeMonteur, geenMail: !!m.geenMail });
   };
-  for (const m of lijst) {
+  /* Maak route vol (Kevin, document 3 nov 2026): alleen deze ene route, en
+     telkens de klant die er het minst omrijden bij geeft, tot er niets meer
+     past. De wensen van de klant blijven gelden. */
+  if (opts.route) {
+    const R = routes.find(r => r.datum === String(opts.route.datum) && r.nr === Number(opts.route.nr));
+    if (!R) return { ok: false, error: "Deze route kan nu niet automatisch gevuld worden: zet er eerst een monteur bij, en kies een dag vanaf morgen." };
+    for (;;) {
+      let beste = null, wie = null;
+      for (const m of lijst) {
+        if (klaarIts.has(m.its) || !m.duur) continue;
+        const q = svcBestePlek1(m, [R], stopsPer, thuis, vandaag, false, false);
+        if (!q.geen && (!beste || q.extra < beste.extra)) { beste = q; wie = m; }
+      }
+      if (!beste) break;
+      zet(wie, beste);
+    }
+  }
+  for (const m of opts.route ? [] : lijst) {
     if (klaarIts.has(m.its)) continue;
     if (!m.duur) { over.push({ its: m.its, naam: (m.klant || {}).naam || "", reden: "De verwachte duur ontbreekt nog." }); continue; }
     const plek = svcBestePlek(m, routes, stopsPer, thuis, vandaag, false);
@@ -594,6 +657,7 @@ async function svcPlannen(env, H, wie, opts) {
     }
   }
   const vrijeRoutes = routes.filter(R => !(stopsPer[R.datum + "|" + R.nr] || []).length).length;
+  if (opts.route && !gepland.length) return { ok: true, voorbeeld: !!opts.voorbeeld, gepland, over, vrijeRoutes, leeg: "Er past nu geen open melding meer in deze route." };
   if (opts.voorbeeld) return { ok: true, voorbeeld: true, gepland, over, vrijeRoutes };
   // Bewaren: nieuwe afspraken, en de volgorde van elke route die veranderde.
   const nu = new Date().toISOString();
@@ -617,7 +681,7 @@ async function svcPlannen(env, H, wie, opts) {
     }
   }
   return { ok: true, gepland, over, vrijeRoutes, gemaild: gemaild.length, mailWacht: wacht.length, mailFout: fout.length,
-    waarschuwing: vrijeRoutes === 0 ? "Alle routes zijn nu in gebruik. Zet een monteur bij een nieuwe route als er meer ingepland moet worden." : null };
+    waarschuwing: vrijeRoutes === 0 && !opts.route ? "Alle routes zijn nu in gebruik. Zet een monteur bij een nieuwe route als er meer ingepland moet worden." : null };
 }
 
 /* ── Monteur ziek ───────────────────────────────────────────────────────── */
@@ -785,7 +849,11 @@ async function svcAfspraakActie(env, H, wie, b) {
     /* Met b.volg (slepen in Planning Service, Kevin 28 okt 2026) komt hij vóór
        die plek; zonder b.volg achteraan. svcHerreken nummert daarna opnieuw. */
     const naarAchter = (x && x.m ? Number(x.m) : 0) + 1;
-    a.datum = datum; a.nr = nr; a.volg = Number(b.volg) > 0 ? Number(b.volg) - 0.5 : naarAchter;
+    /* Zonder plek (knop of keuzelijst) op de meest logische plek in de route
+       (Kevin, document 3 nov 2026). Binnen dezelfde route blijft het achteraan. */
+    const anderRoute = datum !== oudeDatum || nr !== Number(oudeNr);
+    const volg = Number(b.volg) > 0 ? Number(b.volg) - 0.5 : anderRoute ? await svcBesteVolg(env, H, db, datum, nr, a.its, a.id) : naarAchter;
+    a.datum = datum; a.nr = nr; a.volg = volg;
     const mRij = await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(a.its).first();
     const zonderMail = !!svcJson(mRij && mRij.json, {}).geenMail;
     const andereDag = datum !== oudeDatum && !zonderMail;
@@ -796,7 +864,7 @@ async function svcAfspraakActie(env, H, wie, b) {
       a.json.mails = []; delete a.json.dagdeelNu; delete a.json.akkoordDoor; delete a.json.akkoordTs;
     }
     await svcAfspraakSchrijf(db, a);
-    await svcHerreken(env, H, db, oudeDatum, oudeNr);
+    if (anderRoute) await svcHernummer(db, oudeDatum, oudeNr);
     await svcHerreken(env, H, db, datum, nr);
     let mr = null;
     if (andereDag) {
@@ -817,17 +885,20 @@ async function svcAfspraakActie(env, H, wie, b) {
     const nogEen = await db.prepare("SELECT COUNT(*) AS n FROM svc_afspraak WHERE its = ?1 AND status IN ('voorstel','akkoord')").bind(a.its).first();
     if (!(nogEen && nogEen.n)) await db.prepare("UPDATE svc_melding SET status = 'vervallen', ts = ?2 WHERE its = ?1").bind(a.its, Date.now()).run();
     await nummer(await route());
-    await svcHerreken(env, H, db, a.datum, a.nr);
     await svcLog(db, a.its, wie, "afspraak van " + a.datum + " verwijderd");
     return { ok: true };
   }
   if (actie === "terug") {
     a.status = "vervallen"; a.json.reden = "terug naar de lijst door " + wie;
     await svcAfspraakSchrijf(db, a);
-    await db.prepare("UPDATE svc_melding SET status = 'open', ts = ?2 WHERE its = ?1").bind(a.its, Date.now()).run();
+    /* b.nietOp: de klant kan die dag niet. Plannen zet hem dan nooit meer op
+       die dag (Kevin, document 3 nov 2026). */
+    const mr = await db.prepare("SELECT json FROM svc_melding WHERE its = ?1").bind(a.its).first();
+    const m = svcJson(mr && mr.json, {});
+    if (b.nietOp) m.nietOp = [...new Set((m.nietOp || []).concat([a.datum]))].slice(-20);
+    await db.prepare("UPDATE svc_melding SET status = 'open', json = ?2, ts = ?3 WHERE its = ?1").bind(a.its, JSON.stringify(m), Date.now()).run();
     await nummer(await route());
-    await svcHerreken(env, H, db, a.datum, a.nr);
-    await svcLog(db, a.its, wie, "afspraak van " + a.datum + " terug naar de lijst");
+    await svcLog(db, a.its, wie, "afspraak van " + a.datum + " terug naar de lijst" + (b.nietOp ? "; klant kan die dag niet" : ""));
     return { ok: true };
   }
   if (actie === "akkoord") {
@@ -860,9 +931,9 @@ async function svcHandInplannen(env, H, wie, b) {
   if (!route) return { ok: false, error: "Die route bestaat nog niet." };
   if (!route.monteur) return { ok: false, error: "Zet eerst een monteur bij deze route." };
   const m = svcJson(mRij.json, {});
-  const x = await db.prepare("SELECT MAX(volg) AS m FROM svc_afspraak WHERE datum = ?1 AND nr = ?2 AND status IN ('voorstel','akkoord')").bind(datum, nr).first();
   const nu = new Date().toISOString();
-  const a = { id: "sa" + its + "-" + Date.now().toString(36), its, datum, nr, volg: Number(b.volg) > 0 ? Number(b.volg) - 0.5 : (x && x.m ? Number(x.m) : 0) + 1,
+  // Op de meest logische plek in de route, niet achteraan (Kevin, document 3 nov 2026).
+  const a = { id: "sa" + its + "-" + Date.now().toString(36), its, datum, nr, volg: Number(b.volg) > 0 ? Number(b.volg) - 0.5 : await svcBesteVolg(env, H, db, datum, nr, its, null),
               dagdeel: 1, status: "voorstel", token: svcToken(), json: { door: wie, gemaakt: nu, metDeHand: true } };
   await svcAfspraakSchrijf(db, a);
   await svcHerreken(env, H, db, datum, nr);
@@ -1004,8 +1075,8 @@ async function svcAntwoordPost(env, request, H) {
                  opmerking: String(f.get("opmerking") || "").trim().slice(0, 500), nietNodig, datumWas: a.datum };
   a.status = "anders"; a.json.klantWens = wens;
   await svcAfspraakSchrijf(db, a);
-  // De stops erna komen eerder; laat de planning zien of een dagdeel verschuift.
-  await svcHerreken(env, H, db, a.datum, a.nr).catch(() => {});
+  // De andere klanten blijven op hun tijd staan; alleen de nummers sluiten aan.
+  await svcHernummer(db, a.datum, a.nr).catch(() => {});
   m.klantWens = wens;
   if (wens.dagen.length) m.voorkeur = wens.dagen;
   if (wens.vanaf) m.vanaf = wens.vanaf;
@@ -1051,7 +1122,6 @@ const SVC_MONTEUR = [
 ];
 const SVC_VERZEND_SERVICEMONTEUR = 11;   // "Fonteyn Servicemonteur"
 const SVC_BETAAL_REKENING14 = 6;         // "Rekening 14 dagen"
-const SVC_BETAAL_GARANTIE = 30;          // "Garantie"
 const SVC_ART_KM = "8860", SVC_ART_UUR = "8861";
 const SVC_FACTUUR_STATUS = 1;            // Verkooporder (Kevin, 29 okt 2026); verwerken doet de planning in Logic4
 const SVC_BON_ANTWOORD = "servicespa@fonteyn.nl";   // zoals bij de opleverbonnen
@@ -1162,11 +1232,14 @@ async function svcMeldingVers(env, H, wie, planner, its) {
 async function svcMijn(env, wie, planner, url) {
   const db = await svcBonDb(env);
   const ik = svcMonteurVanInlog(wie);
-  const als = planner ? String(url.searchParams.get("als") || ik || "") : ik;
-  if (!als) return { ok: false, error: "Deze inlog hoort bij geen monteur." };
   const vandaag = svcVandaag();
   const datum = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("datum") || "") ? url.searchParams.get("datum") : vandaag;
   const routesAll = ((await db.prepare("SELECT datum, nr, monteur, ziek FROM svc_route WHERE datum >= ?1 AND datum <= ?2").bind(svcPlus(vandaag, -14), svcPlus(vandaag, 28)).all()).results || []);
+  /* De planning zonder eigen route (Gerwin, het service-spa-account) begint
+     bij de eerste monteur die op die dag rijdt, en kiest daarna zelf. */
+  let als = planner ? String(url.searchParams.get("als") || ik || "") : ik;
+  if (!als && planner) als = String((routesAll.find(r => r.datum === datum && r.monteur && !r.ziek) || {}).monteur || SVC_MONTEUR[0].naam).trim();
+  if (!als) return { ok: false, error: "Deze inlog hoort bij geen monteur." };
   const mijnRoutes = routesAll.filter(r => svcMonteurGelijk(r.monteur, als) && !r.ziek);
   const dagen = [...new Set(mijnRoutes.map(r => r.datum))].sort();
   const vandaagRoutes = mijnRoutes.filter(r => r.datum === datum).map(r => Number(r.nr));
@@ -1421,7 +1494,8 @@ async function svcFactuurPlan(env, H, bon, betaal, x) {
   }
   return { debiteur, klant: (bon.klant || {}).naam || "", adres: (m.klant && m.klant.adres) || (bon.klant || {}).adres || "", monteur: mont ? mont.naam : bon.monteur, userId: mont ? mont.l4 : null,
     verzend: { id: SVC_VERZEND_SERVICEMONTEUR, naam: "Fonteyn Servicemonteur" },
-    betaal: Number(betaal) === SVC_BETAAL_GARANTIE ? { id: SVC_BETAAL_GARANTIE, naam: "Garantie" } : { id: SVC_BETAAL_REKENING14, naam: "Rekening 14 dagen" },
+    // Altijd Rekening 14 dagen, nooit Garantie (Kevin, document 3 nov 2026).
+    betaal: { id: SVC_BETAAL_REKENING14, naam: "Rekening 14 dagen" },
     datum: bon.datum, km, kmHand: handKm, regels, garantie, problemen,
     totaalExcl: Math.round(regels.reduce((n, r) => n + (r.prijs || 0) * r.aantal, 0) * 100) / 100 };
 }
@@ -1540,7 +1614,8 @@ export async function svcHandle(request, env, url, H) {
     }
     if (p === "/service/route" && request.method === "POST") return H.reply(200, await svcRoute(env, wie, body));
     if (p === "/service/plannen" && request.method === "POST")
-      return H.reply(200, await svcPlannen(env, H, wie, { voorbeeld: !!body.voorbeeld, its: Array.isArray(body.its) ? body.its.map(x => String(x).replace(/\D/g, "")) : null }));
+      return H.reply(200, await svcPlannen(env, H, wie, { voorbeeld: !!body.voorbeeld, its: Array.isArray(body.its) ? body.its.map(x => String(x).replace(/\D/g, "")) : null,
+        route: body.route && /^\d{4}-\d{2}-\d{2}$/.test(String(body.route.datum || "")) ? { datum: String(body.route.datum), nr: Number(body.route.nr) } : null }));
     if (p === "/service/ziek" && request.method === "POST") return H.reply(200, await svcZiek(env, H, wie, body));
     if (p === "/service/afspraak" && request.method === "POST") return H.reply(200, await svcAfspraakActie(env, H, wie, body));
     if (p === "/service/afspraak/nieuw" && request.method === "POST") return H.reply(200, await svcHandInplannen(env, H, wie, body));

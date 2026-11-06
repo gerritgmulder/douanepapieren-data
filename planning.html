@@ -515,6 +515,17 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .zoekuit{font-size:11.5px;color:var(--grijs,#6b7280);margin-top:5px;min-height:14px}
 .zoekuit.ok{color:#15803d}.zoekuit.bad{color:#b91c1c}
 .formkaart{background:#fff;border-radius:14px;max-width:720px;width:100%;padding:16px 18px;margin:auto}
+/* Foto's bij een klus voor de monteurs (Kevin, 3 nov 2026). */
+.ffotos{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ffotos .fotovak{position:relative;display:inline-block}
+.ffotos img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--rand);background:#f3f3ef;cursor:zoom-in}
+.ffotos .fotoweg{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#b91c1c;color:#fff;font-size:15px;line-height:22px;padding:0;cursor:pointer}
+.ffotos .fotoknop{display:inline-flex;align-items:center;gap:6px;border:2px dashed var(--groen);color:var(--groen);border-radius:9px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer;background:#fff;margin:0}
+.ffotos .fotoknop input{display:none}
+.fotogroot{position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.fotogroot img{max-width:100%;max-height:100%;border-radius:8px}
+.fverkl{font-size:12.5px;color:var(--ink);margin-top:6px}
+.fverkl button{background:none;border:0;color:var(--groen);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;padding:0;text-decoration:underline}
 .formkaart h3{margin:0 0 8px;font-size:15px;color:var(--groen)}
 .formkaart label{display:block;font-size:11.5px;color:var(--grijs);margin:8px 0 3px}
 .formkaart input,.formkaart select,.formkaart textarea{width:100%;padding:6px 9px;border:1px solid var(--rand);
@@ -616,7 +627,7 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
     <button type="button" data-weergave="tijd">Tijdraster</button>
   </span>
   <div class="rasterzoek" id="rasterZoekBalk">
-    <input id="rasterZoek" placeholder="Zoek op ordernummer, ITS-nummer, klantnaam, postcode, mailadres of debiteurnummer" autocomplete="off">
+    <input id="rasterZoek" placeholder="Zoek op ordernummer, ITS-nummer, klantnaam, plaats, postcode, mailadres of debiteurnummer" autocomplete="off">
     <span id="rasterZoekUit"></span>
     <span id="liveAanwezig" class="live-wie"></span>
     <span id="liveMelding" class="live-melding"></span>
@@ -664,7 +675,7 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 <script>
 "use strict";
 
-var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var W = (location.hostname === "localhost" && new URLSearchParams(location.search).get("w")) || "https://fonteyn-data-store.g-mulder.workers.dev";
 var BUCKET = "planning";
 var DAGEN = ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"];
 var DAGKORT = ["ma","di","wo","do","vr","za","zo"];
@@ -2364,6 +2375,9 @@ function zoekRaak(a){
   var ql = q.toLowerCase(), kaal = ql.replace(/\s+/g,"");
   if (String(a.klant||"").toLowerCase().indexOf(ql) >= 0) return true;
   if (info.mail.toLowerCase().indexOf(ql) >= 0) return true;
+  /* Op plaatsnaam (Kevin, document 3 nov 2026): de plaats staat in het
+     adres, dus "uddel" of "Garderen" vindt elke klus daar. */
+  if (ql.length >= 3 && /[a-z]/.test(ql) && String(a.plaats||"").toLowerCase().indexOf(ql) >= 0) return true;
   // Postcode met of zonder spatie: "3888 NK" en "3888nk" zijn dezelfde.
   if (kaal.length >= 4 && /\d{4}/.test(kaal) && String(a.plaats||"").toLowerCase().replace(/\s+/g,"").indexOf(kaal) >= 0) return true;
   return false;
@@ -2666,6 +2680,96 @@ function navigeerNaar(adres, klant){
   });
 }
 
+/* ── foto's bij een klus (Kevin, document 3 nov 2026) ──
+   De planning zet ze erbij, de monteurs zien ze in Mijn route Plaatsing.
+   Eerst verkleind tot een JPEG van hooguit 1600 pixels, net als bij de
+   bakwagen. */
+var fotoUrl = {};
+function verklein(bestand){
+  return new Promise(function(ok, nee){
+    var u = URL.createObjectURL(bestand), img = new Image();
+    img.onload = function(){
+      var max = 1600, sch = Math.min(1, max / Math.max(img.width, img.height));
+      var c = document.createElement("canvas"); c.width = Math.round(img.width * sch); c.height = Math.round(img.height * sch);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      ok(c.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = function(){ URL.revokeObjectURL(u); nee(new Error("deze foto vraagt een ander formaat; kies hem opnieuw")); };
+    img.src = u;
+  });
+}
+async function fotoApi(pad, opties){
+  var r = await fetch(W+pad, Object.assign({ headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" } }, opties||{}));
+  var j = await r.json().catch(function(){ return {}; });
+  if (!r.ok || j.ok === false) throw new Error(j.error || ("HTTP "+r.status));
+  return j;
+}
+async function formFotos(afspraakId){
+  var box = $("fFotos"); if (!box) return;
+  var lijst = [];
+  try { lijst = ((await fotoApi("/planning/foto/lijst?afspraken="+encodeURIComponent(afspraakId))).fotos || {})[afspraakId] || []; } catch(e) {}
+  function teken2(){
+    if (!$("fFotos")) return;
+    box.innerHTML = lijst.map(function(f){ return '<span class="fotovak"><img data-ffoto="'+esc(f.id)+'" alt="foto" title="Klik om groot te bekijken">'+
+        (MAG_BEWERKEN ? '<button type="button" class="fotoweg" data-ffotoweg="'+esc(f.id)+'" title="Het Dashboard haalt deze foto weg bij deze klus">&times;</button>' : '')+'</span>'; }).join("")+
+      (MAG_BEWERKEN ? '<label class="fotoknop" title="Kies een of meer foto\'s; de monteurs zien ze in Mijn route Plaatsing">📷 Foto\'s toevoegen<input type="file" accept="image/*" multiple id="fFotoIn"></label>'
+        : (lijst.length ? '' : '<span style="font-size:12px;color:var(--grijs)">Nog geen foto\'s bij deze klus.</span>'));
+    box.querySelectorAll("img[data-ffoto]").forEach(async function(img){
+      var id = img.dataset.ffoto;
+      img.onclick = function(){ var u = fotoUrl[id]; if (!u) return; var g = document.createElement("div"); g.className = "fotogroot"; g.innerHTML = '<img alt="foto">'; g.querySelector("img").src = u; g.onclick = function(){ g.remove(); }; document.body.appendChild(g); };
+      if (!fotoUrl[id]) { try { var r = await fetch(W+"/planning/foto?id="+encodeURIComponent(id), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } }); if (r.ok) fotoUrl[id] = URL.createObjectURL(await r.blob()); } catch(e) {} }
+      if (fotoUrl[id]) img.src = fotoUrl[id];
+    });
+    box.querySelectorAll("[data-ffotoweg]").forEach(function(b){ b.addEventListener("click", async function(){
+      b.disabled = true;
+      try { await fotoApi("/planning/foto/weg", { method:"POST", body: JSON.stringify({ id: b.dataset.ffotoweg }) });
+        lijst = lijst.filter(function(f){ return f.id !== b.dataset.ffotoweg; });
+        try{ if (window.fpLog) window.fpLog("planning-foto-weg", "afspraak "+afspraakId); }catch(e){}
+        teken2(); }
+      catch(e) { b.disabled = false; var m = $("fFotoMelding"); if (m) m.textContent = "Weghalen vraagt nog een poging: "+e.message; }
+    }); });
+    var inp = $("fFotoIn");
+    if (inp) inp.addEventListener("change", async function(){
+      var m = $("fFotoMelding"), bestanden = [].slice.call(inp.files||[]), gelukt = 0;
+      for (var i = 0; i < bestanden.length; i++){
+        if (m) m.textContent = "Foto "+(i+1)+" van "+bestanden.length+" uploaden…";
+        try {
+          var data = await verklein(bestanden[i]);
+          var j = await fotoApi("/planning/foto", { method:"POST", body: JSON.stringify({ afspraak: afspraakId, data: data }) });
+          fotoUrl[j.id] = data; lijst.push({ id: j.id, ts: j.ts, door: ik }); gelukt++;
+        } catch(e) { if (m) m.textContent = "Een foto vraagt nog een poging ("+e.message+"). Kies hem gerust opnieuw."; }
+      }
+      if (gelukt && m) m.textContent = gelukt+" foto"+(gelukt===1?"":"'s")+" toegevoegd. De monteurs zien ze in Mijn route Plaatsing.";
+      try{ if (window.fpLog && gelukt) window.fpLog("planning-foto", "afspraak "+afspraakId+": "+gelukt+" foto('s)"); }catch(e){}
+      teken2();
+    });
+  }
+  teken2();
+}
+/* De getekende verklaringen huis en tuin bij deze order (Mijn route
+   Plaatsing), om terug te vinden. */
+async function formVerklaringen(ordernr){
+  var box = $("fVerkl"), nr = String(ordernr||"").replace(/\D/g,"");
+  if (!box || !nr) return;
+  try {
+    var j = await fotoApi("/planning/schade/lijst?order="+encodeURIComponent(nr));
+    if (!(j.lijst||[]).length || !$("fVerkl")) return;
+    box.innerHTML = '&#9997;&#65039; Verklaring huis en tuin getekend: '+j.lijst.map(function(v){
+      return '<button type="button" data-verkl="'+esc(v.id)+'" title="Het Dashboard toont de getekende verklaring">'+esc(new Date(v.ts).toLocaleDateString("nl-NL"))+'</button>'+
+        (v.gemaild ? ' <span style="color:var(--grijs)">(gemaild naar '+esc(v.gemaild.naar)+')</span>' : ''); }).join(", ");
+    box.querySelectorAll("[data-verkl]").forEach(function(b){ b.addEventListener("click", async function(){
+      try {
+        var x = await fotoApi("/planning/schade/bekijk?id="+encodeURIComponent(b.dataset.verkl));
+        var g = document.createElement("div"); g.className = "laag"; g.style.zIndex = 99980;
+        g.innerHTML = '<div class="formkaart"><div class="verklhtml"></div><div class="knoppen"><button type="button" class="doe" title="Terug naar de afspraak">Sluiten</button></div></div>';
+        g.querySelector(".verklhtml").innerHTML = x.html || "";
+        g.querySelector("button").onclick = function(){ g.remove(); };
+        document.body.appendChild(g);
+      } catch(e) {}
+    }); });
+  } catch(e) {}
+}
+
 /* ── formulier ── */
 function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   var a = id ? afspraken.find(function(x){ return x.id===id; }) : null;
@@ -2745,6 +2849,11 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
         : '<input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">')+
     '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="3" maxlength="400">'+esc(a.wat)+'</textarea>'+
     '</div></div>'+
+    /* Foto's bij de klus: de monteurs zien ze in Mijn route Plaatsing
+       (Kevin, document 3 nov 2026). Ze horen bij deze afspraak. */
+    '<label>Foto\'s voor de monteurs</label><div class="ffotos" id="fFotos"><span style="font-size:12px;color:var(--grijs)">Even ophalen…</span></div>'+
+    '<div class="melding" id="fFotoMelding"></div>'+
+    '<div class="fverkl" id="fVerkl"></div>'+
     '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fLetop" style="width:auto"'+(a.letop?" checked":"")+'> '+
       '<span>Let op: deze afspraak rood laten opvallen op het routebord en in het tijdsraster <span style="color:var(--grijs)">(als er iets bijzonders nodig is, zoals twee man, hijsen of een karretje mee)</span></span></label>'+
@@ -2783,6 +2892,8 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   if (telTap) telTap.addEventListener("click", function(){ belKlant(a.telefoon, a.klant); });
   var plTap = laag.querySelector("#fPlaatsTap");
   if (plTap) plTap.addEventListener("click", function(){ navigeerNaar(a.plaats, a.klant); });
+  formFotos(a.id);
+  formVerklaringen(a.ordernr);
   var soort = CATS[a.soort] ? a.soort : "intern";
   $("fCats").querySelectorAll("button").forEach(function(b){
     b.addEventListener("click", function(){

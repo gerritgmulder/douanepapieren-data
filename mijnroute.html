@@ -124,6 +124,36 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .leeg{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:22px;text-align:center;color:var(--grijs);font-size:13.5px;line-height:1.5}
 .fout{background:#fee2e2;color:var(--rood);border-radius:10px;padding:10px 12px;font-size:13px;margin:0 0 10px}
 .wacht{color:var(--grijs);font-size:12.5px;padding:6px 2px}
+/* Foto's van de planning bij een klus (Kevin, 3 nov 2026). */
+.fotos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.fotos img{width:84px;height:84px;object-fit:cover;border-radius:9px;border:1px solid var(--rand);background:#f3f3ef;cursor:zoom-in}
+.fotogroot{position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+.fotogroot img{max-width:100%;max-height:100%;border-radius:8px}
+/* De verklaring huis en tuin: knop boven alle routes, venster over het scherm. */
+.schadeknop{width:100%;margin:0 0 12px;background:var(--groen);color:#fff;border:0;border-radius:12px;padding:13px 14px;font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+.sv-laag{position:fixed;inset:0;z-index:150;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:12px}
+.sv-kaart{background:#fff;border-radius:14px;width:100%;max-width:560px;padding:16px;box-sizing:border-box}
+.sv-kaart h3{margin:0 0 10px;color:var(--groen);font-size:17px}
+.sv-kaart label{display:block;font-size:12px;font-weight:700;color:var(--grijs);margin:10px 0 3px}
+.sv-kaart input{width:100%;box-sizing:border-box;border:1px solid var(--rand);border-radius:9px;padding:10px 11px;font:inherit;font-size:15px}
+.sv-rij{display:flex;gap:8px}.sv-rij input{flex:1 1 auto;min-width:0}
+.sv-rij button,.sv-knoppen button{flex:0 0 auto;border-radius:10px;padding:10px 14px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--rand);background:#fff;color:var(--ink)}
+.sv-rij button.doe,.sv-knoppen button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
+.sv-tekst{background:#f4f9ec;border:1px solid #dbe7cc;border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.5;margin-top:12px}
+.sv-tekst p{margin:0 0 8px}.sv-tekst p:last-child{margin:0}
+.sv-hand{margin-top:6px;border:2px dashed #cbd5e1;border-radius:12px;min-height:110px;display:flex;align-items:center;justify-content:center;color:var(--grijs);font-size:14px;cursor:pointer;background:#fff;width:100%;font:inherit}
+.sv-hand img{max-width:100%;max-height:140px}
+.sv-knoppen{display:flex;gap:8px;margin-top:14px}.sv-knoppen button{flex:1}
+.sv-melding{font-size:13px;margin-top:8px;min-height:16px}.sv-melding.ok{color:#15803d}.sv-melding.bad{color:var(--rood)}
+.sv-eerder{font-size:12.5px;color:var(--grijs);margin-top:8px}
+.sv-eerder button{background:none;border:0;color:var(--groen);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;padding:0;text-decoration:underline}
+.tekenlaag{position:fixed;inset:0;z-index:200;background:#fff;display:flex;flex-direction:column;touch-action:none}
+.tekenkop{padding:12px 16px;font-size:16px;color:var(--groen);border-bottom:1px solid var(--rand)}
+.tekenvlak{flex:1;margin:10px;border:2px dashed #cbd5e1;border-radius:14px;overflow:hidden;touch-action:none}
+.tekenvlak canvas{display:block;touch-action:none}
+.tekenknoppen{display:flex;gap:10px;padding:10px 12px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--rand)}
+.tekenknoppen button{flex:1;padding:14px;font:inherit;font-size:16px;font-weight:700;border-radius:12px;border:1px solid var(--rand);background:#fff;cursor:pointer}
+.tekenknoppen button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
 /* Het ordermemo uit Logic4. Kevin (17 sep 2026): "het enige wat ik nog mis
    is het ordermemo, dat moet er ook bij komen te staan." */
 .memo{margin-top:8px;background:#fff7ed;border-left:4px solid var(--oranje);border-radius:8px;padding:7px 10px;font-size:13px;white-space:pre-wrap;line-height:1.45}
@@ -190,12 +220,15 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 </header>
 <main>
   <div class="dagkeus" id="dagen"></div>
+  <!-- Kevin (document 3 nov 2026): boven alle routes een knop waarmee de
+       klant tekent voor huis en tuin. -->
+  <button type="button" class="schadeknop" id="schadeKnop" title="Het Dashboard haalt de klant op bij het ordernummer en laat de klant tekenen; bij Afronden krijgt de klant een mail">&#9997;&#65039; Verklaring huis en tuin laten tekenen</button>
   <div id="fout"></div>
   <div id="inhoud"><p class="wacht">Bezig met ophalen&hellip;</p></div>
 </main>
 
 <script>
-var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var W = (location.hostname === "localhost" && new URLSearchParams(location.search).get("w")) || "https://fonteyn-data-store.g-mulder.workers.dev";
 var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
 function $(id){ return document.getElementById(id); }
 function esc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -402,6 +435,9 @@ function stopHtml(a){
     ((a.plaats || (a.wat && !a.itsId)) ? '<div class="blokje">'+
       (a.plaats ? '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a.plaats)+'" target="_blank" rel="noopener">'+esc(a.plaats)+'</a>' : '')+
       (a.wat && !a.itsId ? '<div class="product">'+esc(a.wat)+'</div>' : '')+'</div>' : '')+
+    /* Foto's die de planning bij de klus heeft gezet, altijd in beeld
+       (Kevin, document 3 nov 2026). */
+    ((fotoLijst[a.id]||[]).length ? '<div class="fotos" style="padding:0 12px 10px">'+fotoLijst[a.id].map(function(f){ return '<img data-foto="'+esc(f.id)+'" alt="foto van de planning" title="Tik om groot te bekijken">'; }).join("")+'</div>' : '')+
     '<div class="details">'+
     '<div class="kop"><div class="tijd">'+esc(a.tijd||"")+'</div><div style="flex:1;min-width:0">'+
     '<div class="naam">'+esc(a.klant||c.naam)+
@@ -549,7 +585,9 @@ function bonBlok(a, o){
     var ant = (bon.checklist[v.k]||{}).a || "", opm = (bon.checklist[v.k]||{}).opm || "";
     return '<div class="vraag"><span class="t">'+esc(v.t)+'</span><span class="keus">'+
       ["ja","nee","nvt"].map(function(x){ return '<button type="button" class="'+x+(ant===x?" aan":"")+'" data-vraag="'+v.k+'" data-a="'+x+'"'+dis+'>'+esc(OPLEVERBON_ANTWOORD[x])+'</button>'; }).join("")+'</span>'+
-      (ant && ant!=="ja" ? '<input type="text" class="reden" data-reden="'+v.k+'" placeholder="Reden / extra info (verplicht)" value="'+esc(opm)+'" maxlength="300"'+dis+'>' : '')+'</div>';
+      /* Bij Nee is de reden verplicht, bij n.v.t. mag het veld leeg blijven
+         (Kevin, document 3 nov 2026). */
+      (ant && ant!=="ja" ? '<input type="text" class="reden" data-reden="'+v.k+'" placeholder="'+(ant==="nee"?"Reden / extra info (verplicht)":"Extra info (mag leeg blijven)")+'" value="'+esc(opm)+'" maxlength="300"'+dis+'>' : '')+'</div>';
   }).join("");
   /* Wat er echt geleverd is (Kevin, 9 okt 2026): "anders weet ik niet wat er
      geleverd is en kan ik niet de order afboeken in Logic". Standaard alles
@@ -743,7 +781,7 @@ async function bonAfronden(id){
   } else if (!bon.alleenLeveren) {
     var open = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ return !(bon.checklist[v.k]||{}).a; });
     if (open.length){ bonMelding(id, open.length+" vraag(en) staan nog open: "+open.slice(0,3).map(function(v){ return v.t; }).join(", ")+(open.length>3?" ...":""), "bad"); return; }
-    var zonder = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ var c = bon.checklist[v.k]||{}; return c.a !== "ja" && !String(c.opm||"").trim(); });
+    var zonder = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ var c = bon.checklist[v.k]||{}; return c.a === "nee" && !String(c.opm||"").trim(); });
     if (zonder.length){ bonMelding(id, "Vul een reden in bij: "+zonder.map(function(v){ return v.t; }).join(", "), "bad"); return; }
   }
   if ((bon.betaling.methode==="bank"||bon.betaling.methode==="contant") && !(bon.betaling.bedrag>0)){ bonMelding(id, "Vul het bedrag in dat bij de klant is voldaan.", "bad"); return; }
@@ -781,6 +819,7 @@ function teken(){
     cb.addEventListener("change", function(){ vink(cb.dataset.nr, Number(cb.dataset.i), cb.checked); });
   });
   koppelBon(box);
+  laadFotos(box);
   box.querySelectorAll("[data-klap]").forEach(function(k){
     k.addEventListener("click", function(e){
       if (e.target.closest && e.target.closest("a")) return;   // bellen, niet openklappen
@@ -815,6 +854,14 @@ async function haalOrders(lijst){
       Object.keys(j.its||{}).forEach(function(k){ betaald["its:"+k]=j.its[k]; });
     }).catch(function(){}));
   }
+  var zonderFoto = [];
+  lijst.forEach(function(x){ x.stops.forEach(function(a){ if (a.id && !fotoLijst[a.id] && !fotoBezig[a.id]) zonderFoto.push(String(a.id)); }); });
+  if (zonderFoto.length){
+    zonderFoto.forEach(function(id){ fotoBezig[id] = 1; });
+    wacht.push(lees("/planning/foto/lijst?afspraken="+encodeURIComponent(zonderFoto.join(","))).then(function(j){
+      zonderFoto.forEach(function(id){ fotoLijst[id] = (j.fotos||{})[id] || []; });
+    }).catch(function(){ zonderFoto.forEach(function(id){ delete fotoBezig[id]; }); }));
+  }
   if (its.length && meldingen === null){
     bezig["its"]=1;
     wacht.push(lees("/planning/its").then(function(j){ meldingen = j.meldingen||[]; }).catch(function(){ meldingen = []; }));
@@ -848,6 +895,148 @@ async function vink(nr, i, aan){
     }
   }, 400);
 }
+
+/* ═══ Foto's van de planning bij een klus (Kevin, 3 nov 2026) ═══════════
+   De planning zet ze erbij in Planning Plaatsing; hier alleen bekijken. */
+var fotoLijst = {}, fotoBezig = {}, fotoUrl = {};
+async function laadFotos(waar){
+  var imgs = (waar || document).querySelectorAll("img[data-foto]");
+  for (var i = 0; i < imgs.length; i++){
+    var img = imgs[i], id = img.dataset.foto;
+    img.onclick = function(e){ e.stopPropagation(); var u = fotoUrl[this.dataset.foto]; if (!u) return; var g = document.createElement("div"); g.className = "fotogroot"; g.innerHTML = '<img alt="foto">'; g.querySelector("img").src = u; g.onclick = function(){ g.remove(); }; document.body.appendChild(g); };
+    if (fotoUrl[id]){ img.src = fotoUrl[id]; continue; }
+    try{
+      var r = await fetch(W+"/planning/foto?id="+encodeURIComponent(id), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
+      if (!r.ok) continue;
+      fotoUrl[id] = URL.createObjectURL(await r.blob());
+      document.querySelectorAll('img[data-foto="'+id+'"]').forEach(function(x){ x.src = fotoUrl[id]; });
+    }catch(e){}
+  }
+}
+
+/* ═══ Verklaring huis en tuin (Kevin, document 3 nov 2026) ══════════════
+   Ordernummer invullen, de klant komt uit Logic4, de klant tekent dat hij
+   zelf verantwoordelijk is voor eventuele schade aan huis of tuin. Bij
+   Afronden bewaart het Dashboard de verklaring en krijgt de klant een mail,
+   met spaplanning@fonteyn.nl in de cc. */
+function tekenVenster(was, klaar){
+  var laag = document.createElement("div");
+  laag.className = "tekenlaag";
+  laag.innerHTML = '<div class="tekenkop"><b>Laat de klant hier tekenen</b></div><div class="tekenvlak"><canvas></canvas></div>' +
+    '<div class="tekenknoppen"><button type="button" data-t="wis" title="Het Dashboard maakt het tekenvlak leeg">Wissen</button><button type="button" data-t="terug" title="Terug zonder iets te veranderen">Annuleren</button><button type="button" class="doe" data-t="klaar" title="Het Dashboard neemt deze handtekening over">Klaar</button></div>';
+  document.body.appendChild(laag);
+  var oudOverflow = document.body.style.overflow; document.body.style.overflow = "hidden";
+  var vlak = laag.querySelector(".tekenvlak"), cv = laag.querySelector("canvas"), ctx = cv.getContext("2d");
+  var breed = vlak.clientWidth, hoog = vlak.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(breed * dpr); cv.height = Math.round(hoog * dpr); cv.style.width = breed + "px"; cv.style.height = hoog + "px"; ctx.scale(dpr, dpr);
+  ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+  var getekend = false;
+  if (was){ var img = new Image(); img.onload = function(){ var sch = Math.min(breed / img.width, hoog / img.height); ctx.drawImage(img, 0, 0, img.width * sch, img.height * sch); getekend = true; }; img.src = was; }
+  var bezigT = false;
+  function pos(e){ var r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  cv.addEventListener("pointerdown", function(e){ e.preventDefault(); bezigT = true; getekend = true; cv.setPointerCapture(e.pointerId); var p = pos(e); ctx.beginPath(); ctx.moveTo(p[0], p[1]); });
+  cv.addEventListener("pointermove", function(e){ if (!bezigT) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p[0], p[1]); ctx.stroke(); });
+  ["pointerup", "pointercancel"].forEach(function(n){ cv.addEventListener(n, function(){ bezigT = false; }); });
+  function dicht(){ document.body.style.overflow = oudOverflow; laag.remove(); }
+  laag.querySelector('[data-t="wis"]').onclick = function(){ ctx.clearRect(0, 0, breed, hoog); getekend = false; };
+  laag.querySelector('[data-t="terug"]').onclick = dicht;
+  laag.querySelector('[data-t="klaar"]').onclick = function(){
+    var png = "";
+    if (getekend){ var k = document.createElement("canvas"); k.width = 900; k.height = Math.round(900 * hoog / breed); var kc = k.getContext("2d"); kc.fillStyle = "#fff"; kc.fillRect(0, 0, k.width, k.height); kc.drawImage(cv, 0, 0, k.width, k.height); png = k.toDataURL("image/png"); }
+    dicht(); klaar(png);
+  };
+}
+function verklaringBekijk(id){
+  lees("/planning/schade/bekijk?id="+encodeURIComponent(id)).then(function(j){
+    var laag = document.createElement("div"); laag.className = "sv-laag"; laag.style.zIndex = 160;
+    laag.innerHTML = '<div class="sv-kaart"><div class="sv-knoppen" style="margin:0 0 10px"><button type="button" class="doe" title="Terug">Sluiten</button></div><div class="sv-html"></div></div>';
+    laag.querySelector(".sv-html").innerHTML = j.html || "";
+    laag.querySelector("button").onclick = function(){ laag.remove(); };
+    laag.addEventListener("click", function(e){ if (e.target === laag) laag.remove(); });
+    document.body.appendChild(laag);
+  }).catch(function(e){ $("fout").innerHTML = '<div class="fout">De verklaring vraagt nog een poging: '+esc(e.message)+'</div>'; });
+}
+function verklaringOpen(){
+  var st = { ordernr:"", klant:null, tekenaar:"", hand:"", eerder:[], klaar:null };
+  var laag = document.createElement("div"); laag.className = "sv-laag";
+  document.body.appendChild(laag);
+  function dicht(){ laag.remove(); }
+  function melding(t, k){ var m = laag.querySelector(".sv-melding"); if (m){ m.textContent = t || ""; m.className = "sv-melding "+(k||""); } }
+  function teken2(){
+    var k = st.klant;
+    var h = '<div class="sv-kaart"><h3>Verklaring huis en tuin</h3>';
+    if (st.klaar){
+      var mail = st.klaar.mail || {};
+      h += '<p style="font-size:15px;line-height:1.5;margin:6px 0">&#10003; De verklaring is bewaard bij order '+esc(st.ordernr)+'.</p>'+
+        '<p style="font-size:14px;line-height:1.5;color:var(--grijs);margin:0 0 6px">'+
+        (mail.gemaild ? 'De klant krijgt hem per mail op '+esc(mail.gemaild.naar)+(mail.gemaild.cc ? ', met een kopie naar '+esc(mail.gemaild.cc) : '')+'.'
+          : mail.wacht ? 'De mail aan de klant staat klaar en gaat mee zodra het mailen aan staat. De planning kan hem dan versturen.'
+          : 'De mail aan de klant vraagt nog een poging ('+esc(mail.error||"")+'). De verklaring zelf staat veilig; de planning kan hem later mailen.')+'</p>'+
+        '<div class="sv-knoppen"><button type="button" data-sv="bekijk" title="Het Dashboard toont de verklaring zoals de klant hem krijgt">Bekijken</button><button type="button" class="doe" data-sv="dicht" title="Terug naar je route">Klaar</button></div></div>';
+      laag.innerHTML = h; koppel(); return;
+    }
+    h += '<label for="svOrder">Ordernummer</label><div class="sv-rij"><input id="svOrder" inputmode="numeric" maxlength="12" placeholder="bijv. 3524000" value="'+esc(st.ordernr)+'" autocomplete="off">'+
+      '<button type="button" class="doe" data-sv="haal" title="Het Dashboard haalt de klantgegevens van deze order op uit Logic4">Ophalen</button></div>';
+    if (st.eerder.length) h += '<div class="sv-eerder">Al eerder getekend voor deze order: '+st.eerder.map(function(v){
+      return '<button type="button" data-svbekijk="'+esc(v.id)+'" title="Het Dashboard toont deze verklaring">'+esc(new Date(v.ts).toLocaleDateString("nl-NL"))+'</button>'; }).join(", ")+'</div>';
+    if (k){
+      h += '<label for="svNaam">Naam klant</label><input id="svNaam" maxlength="120" value="'+esc(k.naam)+'">'+
+        '<label>Adres</label><div style="font-size:14px;padding:2px 2px 0">'+esc([k.adres, [k.postcode, k.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", ")||"(staat nog leeg in Logic4)")+'</div>'+
+        '<label for="svMail">Mailadres klant</label><input id="svMail" type="email" maxlength="160" value="'+esc(k.mail)+'" placeholder="naam@voorbeeld.nl">'+
+        '<div class="sv-tekst">'+(st.tekst||[]).map(function(t){ return '<p>'+esc(t)+'</p>'; }).join("")+'</div>'+
+        '<label for="svTekenaar">Naam van wie tekent</label><input id="svTekenaar" maxlength="80" value="'+esc(st.tekenaar || k.naam)+'">'+
+        '<label>Handtekening klant</label><button type="button" class="sv-hand" data-sv="hand" title="Het Dashboard opent een groot vlak waarin de klant tekent">'+
+          (st.hand ? '<img src="'+st.hand+'" alt="handtekening">' : 'Tik hier en laat de klant tekenen')+'</button>';
+    }
+    h += '<div class="sv-melding"></div><div class="sv-knoppen"><button type="button" data-sv="dicht" title="Terug zonder iets te bewaren">Annuleren</button>'+
+      (k ? '<button type="button" class="doe" data-sv="af" title="Het Dashboard bewaart de verklaring en mailt hem naar de klant, met spaplanning@fonteyn.nl in de cc">Afronden</button>' : '')+'</div></div>';
+    laag.innerHTML = h; koppel();
+  }
+  function bewaarVelden(){
+    if (!st.klant) return;
+    var n = laag.querySelector("#svNaam"), m = laag.querySelector("#svMail"), t = laag.querySelector("#svTekenaar");
+    if (n) st.klant.naam = n.value.trim(); if (m) st.klant.mail = m.value.trim(); if (t) st.tekenaar = t.value.trim();
+  }
+  async function haal(){
+    var nr = (laag.querySelector("#svOrder").value||"").replace(/\D/g,"");
+    if (!nr){ melding("Vul het ordernummer in.", "bad"); return; }
+    melding("Even ophalen uit Logic4…");
+    try{
+      var j = await lees("/planning/schade/klant?order="+encodeURIComponent(nr));
+      if (!j.ok) throw new Error(j.error||"");
+      st.ordernr = j.ordernr; st.klant = j.klant; st.eerder = j.eerder||[]; st.tekst = j.verklaring||[]; st.tekenaar = ""; st.hand = "";
+      teken2();
+    }catch(e){ melding(e.message || "Ophalen vraagt nog een poging.", "bad"); }
+  }
+  async function afronden(knop){
+    bewaarVelden();
+    if (!st.hand){ melding("Laat de klant eerst tekenen.", "bad"); return; }
+    if (st.klant.mail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(st.klant.mail)){ melding("Het mailadres klopt nog niet helemaal.", "bad"); return; }
+    knop.disabled = true; melding("Bezig met bewaren en mailen…");
+    try{
+      var j = await lees("/planning/schade", { method:"POST", body: JSON.stringify({ ordernr: st.ordernr, klant: st.klant, tekenaar: st.tekenaar, hand: st.hand }) });
+      if (!j.ok) throw new Error(j.error||"");
+      st.klaar = j;
+      try{ if (window.fpLog) window.fpLog("verklaring-huis-tuin", "order "+st.ordernr+(j.mail && j.mail.gemaild ? " gemaild" : "")); }catch(e){}
+      teken2();
+    }catch(e){ knop.disabled = false; melding(e.message || "Bewaren vraagt nog een poging.", "bad"); }
+  }
+  function koppel(){
+    laag.querySelectorAll("[data-sv]").forEach(function(b){ b.addEventListener("click", function(){
+      var w = b.dataset.sv;
+      if (w === "dicht") dicht();
+      else if (w === "haal") haal();
+      else if (w === "hand"){ bewaarVelden(); tekenVenster(st.hand, function(png){ if (png) st.hand = png; teken2(); }); }
+      else if (w === "af") afronden(b);
+      else if (w === "bekijk" && st.klaar) verklaringBekijk(st.klaar.id);
+    }); });
+    laag.querySelectorAll("[data-svbekijk]").forEach(function(b){ b.addEventListener("click", function(){ verklaringBekijk(b.dataset.svbekijk); }); });
+    var o = laag.querySelector("#svOrder");
+    if (o){ o.addEventListener("keydown", function(e){ if (e.key === "Enter") haal(); }); if (!st.klant) o.focus(); }
+  }
+  teken2();
+}
+$("schadeKnop").addEventListener("click", verklaringOpen);
 
 async function start(){
   // De teamsleutel komt bij een eerste login pas na een paar seconden binnen.

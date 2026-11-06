@@ -190,7 +190,8 @@ async function mailen(b){
 }
 async function factuur(b){
   var v = svc.venster('<h3>Factuur aanmaken in Logic4</h3><div id="fRomp"><p style="font-size:13.5px">Overzicht en prijzen ophalen…</p></div>', { breed: true });
-  var keuze = { betaal: /^ja/i.test(b.garantie||"") ? 30 : 6, adres: "", km: "" };
+  // Altijd Rekening 14 dagen, ook bij garantie (Kevin, document 3 nov 2026).
+  var keuze = { betaal: 6, adres: "", km: "" };
   var euro = function(n){ return "€ " + Number(n||0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   async function toon(){
     var romp = v.el.querySelector("#fRomp");
@@ -204,9 +205,8 @@ async function factuur(b){
         '<button type="button" class="svc-knop wit" id="fReken" style="padding:6px 12px" title="Het Dashboard rekent de factuur opnieuw uit met dit adres en deze kilometers">Opnieuw uitrekenen</button></td></tr>' +
       '<tr><th>Medewerker</th><td>' + esc(p.monteur || "?") + '</td></tr>' +
       '<tr><th>Transporteur</th><td>' + esc(p.verzend.naam) + '</td></tr>' +
-      '<tr><th>Betaalmethode</th><td><select id="fBetaal"><option value="6"' + (p.betaal.id === 6 ? " selected" : "") + '>Rekening 14 dagen</option><option value="30"' + (p.betaal.id === 30 ? " selected" : "") + '>Garantie</option></select></td></tr>' +
+      '<tr><th>Betaalmethode</th><td>' + esc(p.betaal.naam) + '</td></tr>' +
       '<tr><th>Ind. lev. dtm.</th><td>' + esc(svc.datumNL(p.datum)) + '</td></tr></table>' +
-      (p.garantie ? '<p class="svc-melding" style="color:#c2410c">Dit is een garantiemelding. Kies hierboven de betaalmethode die past.</p>' : '') +
       '<table class="fac"><tr><th>Artikel</th><th>Omschrijving</th><th>Aantal</th><th style="text-align:right">Prijs excl.</th><th style="text-align:right">Totaal excl.</th></tr>' +
         p.regels.map(function(r){ return '<tr><td>' + esc(r.code) + '</td><td>' + esc(r.oms) + '</td><td>' + esc(String(r.aantal).replace(".", ",")) + '</td><td style="text-align:right">' + (r.prijs ? euro(r.prijs) : '<b style="color:#b91c1c">geen prijs</b>') + '</td><td style="text-align:right">' + (r.prijs ? euro(r.prijs * r.aantal) : '') + '</td></tr>'; }).join("") +
         '<tr><th colspan="4" style="text-align:right">Totaal excl. btw</th><th style="text-align:right">' + euro(p.totaalExcl) + '</th></tr></table>' +
@@ -214,7 +214,6 @@ async function factuur(b){
       '<div class="svc-melding" id="fMeld"></div><div class="svc-knoppen"><button type="button" class="svc-knop wit" id="fTerug">Terug</button>' +
       (p.problemen.length ? '' : '<button type="button" class="svc-knop groen" id="fMaak" title="Het Dashboard zet de factuur in Logic4 klaar op Verkooporder; verwerken doe je zelf in Logic4">Factuur aanmaken</button>') + '</div>';
     romp.querySelector("#fTerug").onclick = v.dicht;
-    romp.querySelector("#fBetaal").onchange = function(){ keuze.betaal = this.value; toon(); };
     romp.querySelector("#fReken").onclick = function(){
       var a = romp.querySelector("#fAdres").value.trim(), k = romp.querySelector("#fKm").value.trim();
       var kmWas = String(p.km === null ? "" : p.km);

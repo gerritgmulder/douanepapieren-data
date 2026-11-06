@@ -52,6 +52,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 16px 50px}
 .balk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .balk .vul{flex:1}
 .balk input{font:inherit;font-size:14px;border:1px solid var(--rand);border-radius:9px;padding:9px 11px;width:170px}
+.balk select{font:inherit;font-size:13.5px;border:1px solid var(--rand);border-radius:9px;padding:8px 10px;background:#fff}
 .knop{background:var(--lime);color:var(--groen);border:0;border-radius:9px;padding:9px 16px;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer;white-space:nowrap}
 .knop:hover{background:#72a531;color:#fff}
 .knop.groen{background:var(--groen);color:#fff}.knop.groen:hover{background:#0d3325}
@@ -93,6 +94,15 @@ main{max-width:1200px;margin:0 auto;padding:16px 16px 50px}
     <button class="knop groen" id="planKnop" type="button">Plannen</button>
   </div>
   <div class="mailbalk" id="mailbalk"></div>
+  <!-- Zoeken en sorteren (Kevin, document 3 nov 2026). -->
+  <div class="balk">
+    <input id="zoek" type="search" placeholder="Zoek op klant, plaats, postcode, ITS, debiteur of telefoon…" autocomplete="off" style="flex:1;min-width:220px" title="Het Dashboard laat alleen de meldingen zien waar dit in voorkomt">
+    <select id="volgorde" title="In welke volgorde de meldingen staan">
+      <option value="">Langst wachtend eerst</option>
+      <option value="postcode">Op postcode</option>
+      <option value="its">Op ITS-nummer</option>
+    </select>
+  </div>
   <div id="lijst"></div>
 </main>
 <script>
@@ -106,33 +116,52 @@ function wensen(m){
   if (m.nietVan && m.nietTot) p.push('<span class="pil grijs">weg ' + esc(svc.datumNL(m.nietVan)) + ' t/m ' + esc(svc.datumNL(m.nietTot)) + '</span>');
   return p.join("");
 }
+/* De postcode uit het adres: 1234 AB, of vijf cijfers in Duitsland. */
+function postcode(m){
+  var a = String((m.klant||{}).adres || ""), x = a.match(/\b(\d{4})\s?([A-Za-z]{2})\b/) || a.match(/\b(\d{5})\b/);
+  return x ? (x[1] + (x[2] ? " " + x[2].toUpperCase() : "")) : "";
+}
+function past(m, q){
+  if (!q) return true;
+  var k = m.klant || {}, cijfers = q.replace(/\D/g, "");
+  var tekst = [m.its, k.naam, k.plaats, k.adres, k.debiteur, k.mail, m.titel, m.omschrijving].join(" ").toLowerCase();
+  if (tekst.indexOf(q) >= 0 || tekst.replace(/\s+/g, "").indexOf(q.replace(/\s+/g, "")) >= 0) return true;
+  return cijfers.length >= 4 && [k.tel, k.tel2].map(function(t){ return String(t||"").replace(/\D/g, ""); }).join(" ").indexOf(cijfers) >= 0;
+}
 function teken(){
-  var open = (data.meldingen||[]).filter(function(m){ return m.status === "open"; })
-    .sort(function(a,b){ return (b.klantWens||b.ziekVan ? 1 : 0) - (a.klantWens||a.ziekVan ? 1 : 0) || String(a.gemeld||a.gemaakt||"").localeCompare(String(b.gemeld||b.gemaakt||"")); });
+  var q = ($("zoek").value || "").trim().toLowerCase(), volg = $("volgorde").value;
+  var alleOpen = (data.meldingen||[]).filter(function(m){ return m.status === "open"; });
+  var open = alleOpen.filter(function(m){ return past(m, q); })
+    .sort(function(a,b){
+      if (volg === "postcode") return (postcode(a) || "~").localeCompare(postcode(b) || "~") || Number(a.its) - Number(b.its);
+      if (volg === "its") return Number(a.its) - Number(b.its);
+      return (b.klantWens||b.ziekVan ? 1 : 0) - (a.klantWens||a.ziekVan ? 1 : 0) || String(a.gemeld||a.gemaakt||"").localeCompare(String(b.gemeld||b.gemaakt||"")); });
   var gepland = (data.meldingen||[]).filter(function(m){ return m.status === "gepland"; }).length;
   var ml = data.mail || {};
   $("mailbalk").innerHTML = (ml.aan ? '✉️ Klantmails <b>staan aan</b>' + (ml.proef ? ' (proef: alles gaat naar ' + esc(ml.proef) + ')' : '') : '✉️ Klantmails <b>staan nog uit</b>: Plannen zet de mails klaar, ze gaan mee zodra het mailen aan staat')
     + ' · vandaag ' + (ml.vandaag||0) + ' van ' + (ml.max||40) + ' verstuurd'
     + ' <button class="knop wit klein" id="vbKnop" type="button">Voorbeeld klantmail</button>';
   $("vbKnop").onclick = svc.mailVoorbeeld;
+  if (!open.length && alleOpen.length) { $("lijst").innerHTML = '<div class="leeg">Geen melding gevonden voor "' + esc(q) + '". Er staan er ' + alleOpen.length + ' in de lijst.</div>'; return; }
   if (!open.length) {
     $("lijst").innerHTML = '<div class="leeg">Alles is ingepland. Zet hierboven een ITS-nummer neer om een nieuwe melding toe te voegen.</div>' +
       (gepland ? '<p class="tel">' + gepland + ' melding(en) staan ingepland in <a href="planning-service.html">Planning Service</a>.</p>' : '');
     return;
   }
-  $("lijst").innerHTML = '<p class="tel">' + open.length + ' melding(en) in te plannen' + (gepland ? ' · ' + gepland + ' al ingepland in <a href="planning-service.html">Planning Service</a>' : '') + '</p>' +
+  $("lijst").innerHTML = '<p class="tel">' + (open.length < alleOpen.length ? open.length + ' van ' + alleOpen.length : open.length) + ' melding(en) in te plannen' + (gepland ? ' · ' + gepland + ' al ingepland in <a href="planning-service.html">Planning Service</a>' : '') + '</p>' +
     '<div class="kaarten">' + open.map(function(m){
       var k = m.klant || {};
       var terug = m.klantWens || m.ziekVan;
       var w = m.klantWens;
       return '<div class="kaart' + (terug ? " terug" : "") + '" data-its="' + esc(m.its) + '">' +
         '<div class="kop"><span class="naam">' + esc(k.naam || m.titel || "ITS " + m.its) + '</span><span class="its">ITS ' + esc(m.its) + '</span></div>' +
-        '<div class="sub">' + esc(k.adres || "adres nog invullen") + (k.tel ? ' · ' + esc(k.tel) : '') + '</div>' +
+        '<div class="sub">' + esc(k.adres || "adres nog invullen") + (k.tel ? ' · ' + esc(k.tel) : '') + (k.debiteur ? ' · deb. ' + esc(k.debiteur) : '') + '</div>' +
         (m.titel || m.omschrijving ? '<div class="wat">' + esc(m.titel ? m.titel + (m.omschrijving ? ": " + m.omschrijving : "") : m.omschrijving) + '</div>' : '') +
         '<div class="pillen"><span class="pil">' + esc(svc.duurTekst(m.duur)) + '</span>' + wensen(m) +
           (/^ja/i.test(m.garantie||"") ? '<span class="pil groen">garantie</span>' : '') +
           (!k.mail ? '<span class="pil rood">mailadres invullen</span>' : '') +
           (!m.geo ? '<span class="pil oranje">adres nakijken</span>' : '') +
+          (m.nietOp && m.nietOp.length ? '<span class="pil grijs" title="Uit een route gehaald omdat de klant dan niet kan; Plannen slaat deze dagen over">niet op ' + m.nietOp.slice(-3).map(function(d){ return esc(svc.datumNL(d)); }).join(", ") + '</span>' : '') +
           (m.ziekVan ? '<span class="pil rood">monteur ziek op ' + esc(svc.datumNL(m.ziekVan)) + ': klant bellen</span>' : '') +
           (w && !w.nietNodig ? '<span class="pil oranje">klant koos andere datum (was ' + esc(svc.datumNL(w.datumWas)) + ')</span>' : '') +
         '</div>' +
@@ -183,6 +212,9 @@ async function laad(){
 $("nieuwKnop").onclick = function(){ svc.formulier({ its: $("nieuwIts").value.replace(/\D/g,""), opgeslagen: function(){ $("nieuwIts").value = ""; laad(); } }); };
 $("nieuwIts").addEventListener("keydown", function(e){ if (e.key === "Enter") $("nieuwKnop").click(); });
 $("planKnop").onclick = function(){ plan(null, false); };
+try { $("volgorde").value = localStorage.getItem("sm.volgorde") || ""; } catch(e) {}
+$("volgorde").onchange = function(){ try { localStorage.setItem("sm.volgorde", this.value); } catch(e) {} if (data) teken(); };
+$("zoek").addEventListener("input", function(){ if (data) teken(); });
 $("bekijkKnop").onclick = function(){ plan(null, true); };
 laad();
 setInterval(function(){ if (!document.querySelector(".svc-laag")) laad(); }, 60000);

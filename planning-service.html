@@ -90,6 +90,12 @@ main{max-width:none;margin:0 auto;padding:14px 14px 50px}
 .akknop.aan{background:#15803d;border-color:#15803d;color:#fff}
 .rplus{display:block;width:100%;margin-top:4px;font:inherit;font-size:11.5px;font-weight:600;border:1px dashed #cbd5c0;background:transparent;color:#144734;border-radius:8px;padding:4px;cursor:pointer}
 .stop.sleept{opacity:.4}
+.rvol{font:inherit;font-size:10.5px;font-weight:700;border:1px solid #8bc53f;background:#f7fbef;color:#144734;border-radius:999px;padding:1px 7px;cursor:pointer;white-space:nowrap}
+.rvol:hover{background:#8bc53f;color:#fff}
+#verplaatsBand{position:sticky;top:0;z-index:20;background:#fef9c3;border:1px solid #fde047;color:#713f12;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;margin-bottom:10px;display:none;gap:10px;align-items:center;flex-wrap:wrap}
+body.verplaatsen .route{cursor:copy}
+body.verplaatsen .route:hover{outline:2px dashed #ca8a04;outline-offset:2px}
+.stop.verplaatst{outline:2px solid #ca8a04;outline-offset:-2px;background:#fefce8}
 .route.doel{outline:2px dashed #15803d;outline-offset:2px}
 .stop .p{font-size:11.5px;color:var(--grijs);overflow-wrap:break-word}
 .stop .pillen{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
@@ -134,6 +140,7 @@ main{max-width:none;margin:0 auto;padding:14px 14px 50px}
   </div>
   <!-- Zoeken (Kevin, 30 okt 2026): op klant, plaats, ITS, debiteur, telefoon of mail. -->
   <div class="zoekbalk"><input id="zoek" type="search" placeholder="Zoek op klant, plaats, ITS-nummer, debiteurnummer, telefoon of mail…" autocomplete="off" title="Het Dashboard zoekt in alle meldingen en laat zien wanneer en bij welke monteur ze staan"><div id="zoekUit"></div></div>
+  <div id="verplaatsBand"></div>
   <div id="meldingen"></div>
   <div class="week" id="week"></div>
 </main>
@@ -152,9 +159,14 @@ if (!maandag) maandag = maandagVan(new Date().getDay() === 6 || new Date().getDa
 /* Zelfde schatting als de motor in de worker (service.js). */
 function km(a,b){ var r=Math.PI/180, dLa=(b[0]-a[0])*r, dLo=(b[1]-a[1])*r; var h=Math.pow(Math.sin(dLa/2),2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.pow(Math.sin(dLo/2),2); return 2*6371*Math.asin(Math.sqrt(h)); }
 function rij(a,b){ if(!a||!b) return 45; return Math.round(km(a,b)*1.3/75*60)+5; }
+var DAGDEEL_VAN = { 1: 0, 2: 600, 3: 780 };
 function terugOm(route, stops){
   var t = route.start, vorige = THUIS;
-  stops.forEach(function(s){ var m = melding(s.its)||{}; t += rij(vorige, m.geo) + (Number(m.duur)||60); vorige = m.geo; });
+  stops.forEach(function(s){ var m = melding(s.its)||{};
+    t += rij(vorige, m.geo);
+    // Gemaild of akkoord: de monteur wacht tot het dagdeel begint (zoals de motor).
+    if (((s.json||{}).mails||[]).length || s.status === "akkoord") t = Math.max(t, DAGDEEL_VAN[s.dagdeel] || 0);
+    t += Number(m.duur)||60; vorige = m.geo; });
   if (stops.length) t += rij(vorige, THUIS);
   return t;
 }
@@ -176,8 +188,8 @@ function stopHtml(a, i){
   var akKnop = (a.status === "voorstel" || a.status === "akkoord") && a.datum >= vandaag
     ? '<button type="button" class="akknop' + (a.status === "akkoord" ? " aan" : "") + '" data-ak="' + esc(a.id) + '" title="' + (a.status === "akkoord" ? "Het Dashboard haalt het akkoord weg; de afspraak wacht dan weer op de klant" : "Het Dashboard zet deze afspraak op akkoord, bijvoorbeeld als de klant telefonisch ja zei") + '">' + (a.status === "akkoord" ? "✓ akkoord" : "akkoord zetten") + '</button>' : '';
   if (j.geenMail) pillen += '<span class="pil grijs">zonder mail</span>';
-  var sleep = (a.status === "voorstel" || a.status === "akkoord") && a.datum > vandaag;
-  return '<li class="stop ' + a.status + '" data-id="' + esc(a.id) + '"' + (sleep ? ' draggable="true" title="Sleep naar een andere plek of route"' : '') + '><span class="nr">' + (i+1) + '</span><div class="wat">' +
+  var sleep = (a.status === "voorstel" || a.status === "akkoord") && a.datum >= vandaag;
+  return '<li class="stop ' + a.status + (a.id === verplaatsId ? " verplaatst" : "") + '" data-id="' + esc(a.id) + '"' + (sleep ? ' draggable="true" title="Sleep naar een andere plek of route"' : '') + '><span class="nr">' + (i+1) + '</span><div class="wat">' +
     '<div class="k">' + esc(k.naam || "ITS " + a.its) + akKnop + '</div>' +
     '<div class="p">' + esc(k.plaats || (k.adres||"").split(",").pop()) + ' · ITS ' + esc(a.its) + (k.debiteur ? ' · deb. ' + esc(k.debiteur) : '') + ' · ' + esc(svc.duurTekst(m.duur)) + '</div>' +
     '<div class="pillen">' + pillen + '</div></div></li>';
@@ -210,18 +222,39 @@ function teken(){
       var totaal = actief.length ? terugOm(r, actief) - r.start : 0;
       var duurRoute = actief.length ? '<span class="rduur" title="Klussen ' + esc(svc.duurTekst(klus)) + ' en rijden ' + esc(svc.duurTekst(totaal - klus)) + ' (heen, tussendoor en terug, geschat)">' + esc(svc.duurTekst(totaal)) + '</span>' : '';
       h += '<div class="route' + (r.ziek ? " ziek" : "") + '" data-nr="' + r.nr + '">' +
-        '<div class="rkop" title="Klik om de route aan te passen"><span class="rnr">' + r.nr + '</span><span class="rwie">' + esc(r.monteur || "monteur kiezen") + '</span>' + duurRoute +
+        '<div class="rkop" title="Klik om de route aan te passen"><span class="rnr">' + r.nr + '</span><span class="rwie">' + esc(r.monteur || "monteur kiezen") + '</span>' +
+          /* Kevin (document 3 nov 2026): met één knop de route vullen uit In te plannen meldingen. */
+          (d > vandaag && r.monteur && !r.ziek ? '<button type="button" class="rvol" data-rvol="' + d + '|' + r.nr + '" title="Het Dashboard vult deze route met open meldingen uit In te plannen meldingen die passen, en mailt de klanten een voorstel">Maak route vol</button>' : '') + duurRoute +
           (r.ziek ? '<span class="pil rood">ziek</span>' : afwijkend ? '<span class="rtijd">' + (r.start !== data.tijden.start ? "begint " + tijd(r.start) : "") + (r.start !== data.tijden.start && r.eind !== data.tijden.eind ? " · " : "") + (r.eind !== data.tijden.eind ? "terug " + tijd(r.eind) : "") + '</span>' : '') + '</div>' +
         (actief.length ? '<div class="vul" title="Zo vol is de dag ongeveer"><span' + (vul >= 95 ? ' class="vol"' : '') + ' style="width:' + vul + '%"></span></div>' : '') +
         (stops.length ? '<ul class="stops">' + stops.map(stopHtml).join("") + '</ul>' : '<div class="leegroute">' + (r.ziek ? "Afspraken zijn verdeeld." : "Nog leeg: Plannen vult deze route als de andere vol zijn.") + '</div>') +
         /* Kevin (28 okt 2026): met de hand een melding in deze route zetten, buiten In te plannen meldingen om. */
-        (d > vandaag && r.monteur && !r.ziek ? '<button class="rplus" type="button" data-rplus="' + d + '|' + r.nr + '" title="Het Dashboard zet een melding direct in deze route, achteraan">+ Melding in deze route</button>' : '') +
+        /* Ook op de dag zelf (Kevin, document 3 nov 2026). */
+        (d >= vandaag && r.monteur && !r.ziek ? '<button class="rplus" type="button" data-rplus="' + d + '|' + r.nr + '" title="Het Dashboard zet een melding direct in deze route, op de meest logische plek">+ Melding in deze route</button>' : '') +
         '</div>';
     });
     if (d >= vandaag) h += '<button class="plus" type="button" data-plus="' + d + '">+ Route met monteur</button>';
     h += '</div>';
   }
   $("week").innerHTML = h;
+  tekenVerplaats();
+  $("week").querySelectorAll("[data-rvol]").forEach(function(b){ b.onclick = function(e){ e.stopPropagation(); var x = b.dataset.rvol.split("|"); routeVol(x[0], Number(x[1])); }; });
+  /* Verplaatsen (Kevin, document 3 nov 2026): eerst de knop in de afspraak,
+     dan een klik op een route, ook in een andere week. Op een klant = ervóór,
+     ergens anders in de route = op de meest logische plek. */
+  $("week").querySelectorAll(".route").forEach(function(rt){
+    rt.addEventListener("click", function(e){
+      if (!verplaatsId) return;
+      e.stopPropagation(); e.preventDefault();
+      var dg = rt.closest(".dag").dataset.datum, nr = Number(rt.dataset.nr);
+      var r = (data.routes||[]).find(function(x){ return x.datum === dg && x.nr === nr; });
+      if (!r || !r.monteur || r.ziek || dg < vandaag) { $("fout").textContent = "Kies een route met een monteur, vandaag of later."; return; }
+      var op = e.target.closest && e.target.closest(".stop"), volg = null;
+      if (op && op.dataset.id !== verplaatsId) volg = Array.prototype.indexOf.call(op.parentNode.children, op) + 1;
+      var id = verplaatsId; verplaatsId = null; verplaatsVan = null;
+      verplaats(id, dg, nr, volg);
+    }, true);
+  });
   $("week").querySelectorAll(".rkop").forEach(function(el){ el.onclick = function(){ var dg = el.closest(".dag").dataset.datum, nr = Number(el.closest(".route").dataset.nr); routeVenster(data.routes.find(function(r){ return r.datum === dg && r.nr === nr; })); }; });
   $("week").querySelectorAll("[data-plus]").forEach(function(b){ b.onclick = function(){ routeVenster(null, b.dataset.plus); }; });
   $("week").querySelectorAll(".stop").forEach(function(el){ el.onclick = function(){ stopVenster(data.afspraken.find(function(a){ return a.id === el.dataset.id; })); }; });
@@ -234,7 +267,7 @@ function teken(){
   $("week").querySelectorAll(".route").forEach(function(rt){
     var dg = rt.closest(".dag").dataset.datum, nr = Number(rt.dataset.nr);
     var r = (data.routes||[]).find(function(x){ return x.datum === dg && x.nr === nr; });
-    if (!r || !r.monteur || r.ziek || dg <= vandaag) return;
+    if (!r || !r.monteur || r.ziek || dg < vandaag) return;
     rt.addEventListener("dragover", function(e){ if (!sleepId) return; e.preventDefault(); rt.classList.add("doel"); });
     rt.addEventListener("dragleave", function(e){ if (!rt.contains(e.relatedTarget)) rt.classList.remove("doel"); });
     rt.addEventListener("drop", function(e){
@@ -253,7 +286,35 @@ function teken(){
     laad();
   }; });
 }
-var sleepId = null;
+var sleepId = null, verplaatsId = null, verplaatsVan = null;
+function tekenVerplaats(){
+  var band = $("verplaatsBand");
+  document.body.classList.toggle("verplaatsen", !!verplaatsId);
+  if (!verplaatsId) { band.style.display = "none"; return; }
+  band.style.display = "flex";
+  band.innerHTML = '<span style="flex:1;min-width:200px">Klik op de route waar <b>' + esc(verplaatsVan || "deze klant") + '</b> heen moet. Blader gerust naar een andere week. Klik je op een klant, dan komt hij daarvóór.</span>' +
+    '<button type="button" class="knop wit klein" id="verplaatsStop" title="Het Dashboard laat de afspraak staan waar hij staat">Annuleren</button>';
+  $("verplaatsStop").onclick = function(){ verplaatsId = null; verplaatsVan = null; teken(); };
+}
+/* Maak route vol: eerst laten zien wie erbij komt, dan pas echt. */
+async function routeVol(datum, nr){
+  var r = (data.routes||[]).find(function(x){ return x.datum === datum && x.nr === nr; }) || {};
+  var v = svc.venster('<h3>Route ' + nr + ' vol maken · ' + esc(r.monteur || "") + ' · ' + esc(svc.datumLang(datum)) + '</h3><div id="rvRomp"><p style="font-size:13.5px">Uitzoeken wie er past…</p></div>', { breed: true });
+  var j = await svc.api("/service/plannen", { route: { datum: datum, nr: nr }, voorbeeld: true }).catch(function(e){ return { ok:false, error:e.message }; });
+  var romp = v.el.querySelector("#rvRomp");
+  if (j.ok && j.leeg) { romp.innerHTML = '<p style="font-size:13.5px">' + esc(j.leeg) + '</p><div class="svc-knoppen"><button type="button" class="svc-knop" id="rvOk">Sluiten</button></div>'; romp.querySelector("#rvOk").onclick = v.dicht; return; }
+  romp.innerHTML = svc.uitslagHtml(j) + '<div class="svc-knoppen"><button type="button" class="svc-knop wit" id="rvTerug">Terug</button>' +
+    (j.ok && (j.gepland||[]).length ? '<button type="button" class="svc-knop" id="rvJa" title="Het Dashboard zet deze klanten in de route en mailt ze een voorstel met Akkoord en Andere datum kiezen">Toevoegen en klanten mailen</button>' : '') + '</div>';
+  romp.querySelector("#rvTerug").onclick = v.dicht;
+  var ja = romp.querySelector("#rvJa");
+  if (ja) ja.onclick = async function(){
+    ja.disabled = true; ja.textContent = "Bezig…";
+    var x = await svc.api("/service/plannen", { route: { datum: datum, nr: nr } }).catch(function(e){ return { ok:false, error:e.message }; });
+    try { if (window.fpLog) fpLog("service-route-vol", datum + " route " + nr + ": " + ((x.gepland||[]).length) + " erbij"); } catch(e) {}
+    romp.innerHTML = svc.uitslagHtml(x) + '<div class="svc-knoppen"><button type="button" class="svc-knop" id="rvKlaar">Klaar</button></div>';
+    romp.querySelector("#rvKlaar").onclick = function(){ v.dicht(); laad(); };
+  };
+}
 async function verplaats(id, datum, nr, volg){
   var a = data.afspraken.find(function(x){ return x.id === id; }); if (!a) return;
   var m = melding(a.its) || {};
@@ -372,6 +433,7 @@ async function stopVenster(a){
       '<button type="button" class="svc-dag" data-a="omhoog">↑ Eerder in de route</button><button type="button" class="svc-dag" data-a="omlaag">↓ Later in de route</button>' +
       (a.status === "akkoord" ? '<button type="button" class="svc-dag" data-a="akkoordUit">Akkoord weghalen</button>' : '<button type="button" class="svc-dag" data-a="akkoord">Klant gaf akkoord (telefonisch)</button>') +
       (a.status === "voorstel" ? '<button type="button" class="svc-dag" data-a="mail">Voorstel opnieuw mailen</button>' : '') +
+      ((a.status === "voorstel" || a.status === "akkoord") && a.datum >= vandaag ? '<button type="button" class="svc-dag" data-a="verplaats" title="Daarna klik je op de route waar de klant heen moet, ook in een andere week">⇄ Verplaats naar andere route</button>' : '') +
     '</div>' +
     ((dagRoutes.length || andereRoutes.length) ? '<div class="svc-velden"><label class="breed">Naar een andere route<select id="sNaar"><option value="">kies een route…</option>' +
       dagRoutes.map(function(r){ return '<option value="' + r.datum + '|' + r.nr + '">zelfde dag, route ' + r.nr + ' · ' + esc(r.monteur) + '</option>'; }).join("") +
@@ -391,7 +453,8 @@ async function stopVenster(a){
     b.onclick = async function(){
       var x = b.dataset.a;
       if (x === "bewerk") { v.dicht(); svc.formulier({ melding: m, opgeslagen: laad }); return; }
-      if (x === "terug") { v.dicht(); if (await svc.vraag("De afspraak van <b>" + esc(k.naam||"") + "</b> op " + esc(svc.datumLang(a.datum)) + " gaat uit de route en de melding komt terug in de lijst. Laat het de klant zelf weten als hij al gemaild was.", "Terug naar de lijst", "Laten staan")) { await svc.api("/service/afspraak", { id: a.id, actie: "terug" }); laad(); } return; }
+      if (x === "verplaats") { v.dicht(); verplaatsId = a.id; verplaatsVan = k.naam || "ITS " + a.its; teken(); return; }
+      if (x === "terug") { v.dicht(); terugNaarLijst(a, k); return; }
       if (x === "akkoordUit") return doe({ actie: "akkoord", uit: true });
       if (x === "weg") { v.dicht(); if (await svc.vraag("De afspraak van <b>" + esc(k.naam||"") + "</b> op " + esc(svc.datumLang(a.datum)) + " gaat uit de planning, en de melding gaat uit de lijst. Laat het de klant zelf weten als hij al gemaild was.", "Verwijderen", "Laten staan")) { var rw = await svc.api("/service/afspraak", { id: a.id, actie: "weg" }).catch(function(e){ return { ok:false, error:e.message }; }); try { if (window.fpLog) fpLog("service-afspraak", "verwijderd ITS " + a.its); } catch(e) {} if (!rw.ok) $("fout").textContent = rw.error; laad(); } return; }
       doe({ actie: x });
@@ -404,6 +467,22 @@ async function stopVenster(a){
   if (el) el.innerHTML = (lg.log||[]).length ? lg.log.map(function(x){ return '<div>' + esc(new Date(x.ts).toLocaleString("nl-NL", { day:"numeric", month:"numeric", hour:"2-digit", minute:"2-digit" })) + ' · ' + esc(String(x.wie||"").split("@")[0]) + ' · ' + esc(x.wat) + '</div>'; }).join("") : "Nog geen geschiedenis.";
 }
 
+/* Terug naar de lijst. Kan de klant die dag niet, dan zet Plannen hem daar
+   nooit meer neer (Kevin, document 3 nov 2026). De andere klanten blijven
+   op hun tijd staan. */
+function terugNaarLijst(a, k){
+  var v = svc.venster('<h3>Terug naar de lijst</h3><p style="font-size:13.5px;line-height:1.5">De afspraak van <b>' + esc(k.naam||"") + '</b> op ' + esc(svc.datumLang(a.datum)) + ' gaat uit de route en de melding komt terug bij In te plannen meldingen. De andere klanten blijven op hun tijd staan. Laat het de klant zelf weten als hij al gemaild was.</p>' +
+    '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:6px 0 4px"><input type="checkbox" id="tNiet" checked> De klant kan op ' + esc(svc.datumLang(a.datum)) + ' niet: daar niet meer inplannen</label>' +
+    '<div class="svc-melding fout" id="tMeld"></div><div class="svc-knoppen"><button type="button" class="svc-knop wit" id="tTerug">Laten staan</button><button type="button" class="svc-knop" id="tJa" title="Het Dashboard haalt de afspraak uit de route en zet de melding terug in de lijst">Terug naar de lijst</button></div>');
+  v.el.querySelector("#tTerug").onclick = v.dicht;
+  v.el.querySelector("#tJa").onclick = async function(){
+    var niet = v.el.querySelector("#tNiet").checked;
+    var r = await svc.api("/service/afspraak", { id: a.id, actie: "terug", nietOp: niet }).catch(function(e){ return { ok:false, error:e.message }; });
+    if (!r.ok) { v.el.querySelector("#tMeld").textContent = r.error; return; }
+    try { if (window.fpLog) fpLog("service-afspraak", "terug naar de lijst ITS " + a.its + (niet ? ", kan die dag niet" : "")); } catch(e) {}
+    v.dicht(); laad();
+  };
+}
 async function laad(){
   try {
     var j = await svc.api("/service/overzicht?van=" + plus(maandag, -1) + "&tot=" + plus(maandag, 6));
