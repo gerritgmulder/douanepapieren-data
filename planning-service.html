@@ -66,6 +66,9 @@ main{max-width:none;margin:0 auto;padding:14px 14px 50px}
 .dag.vandaag{border-color:var(--groen);box-shadow:0 0 0 2px rgba(20,71,52,.12)}
 .dag.voorbij{opacity:.7}
 .dag h3{margin:0 0 8px;font-size:13.5px;color:var(--groen);display:flex;gap:6px;align-items:baseline}
+/* Kevin (document 3 nov 2026, aanvulling): weekbalk, zoeken, meldingen en de dagkoppen blijven in beeld bij scrollen. */
+#vast{position:sticky;top:0;z-index:25;background:var(--bg);margin:-14px -14px 0;padding:14px 14px 2px}
+.dag h3{position:sticky;top:var(--vastH,0px);z-index:5;background:#fff;margin:-10px -10px 8px;padding:10px 10px 6px;border-radius:12px 12px 0 0}
 .dag h3 small{color:var(--grijs);font-weight:500}
 .route{border:1px solid #ecebe4;border-radius:10px;margin-bottom:8px;overflow:hidden;background:#fbfbf8}
 .route.ziek{border-color:#fca5a5;background:#fef2f2}
@@ -92,7 +95,7 @@ main{max-width:none;margin:0 auto;padding:14px 14px 50px}
 .stop.sleept{opacity:.4}
 .rvol{font:inherit;font-size:10.5px;font-weight:700;border:1px solid #8bc53f;background:#f7fbef;color:#144734;border-radius:999px;padding:1px 7px;cursor:pointer;white-space:nowrap}
 .rvol:hover{background:#8bc53f;color:#fff}
-#verplaatsBand{position:sticky;top:0;z-index:20;background:#fef9c3;border:1px solid #fde047;color:#713f12;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;margin-bottom:10px;display:none;gap:10px;align-items:center;flex-wrap:wrap}
+#verplaatsBand{background:#fef9c3;border:1px solid #fde047;color:#713f12;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;margin-bottom:10px;display:none;gap:10px;align-items:center;flex-wrap:wrap}
 body.verplaatsen .route{cursor:copy}
 body.verplaatsen .route:hover{outline:2px dashed #ca8a04;outline-offset:2px}
 .stop.verplaatst{outline:2px solid #ca8a04;outline-offset:-2px;background:#fefce8}
@@ -117,7 +120,7 @@ body.verplaatsen .route:hover{outline:2px dashed #ca8a04;outline-offset:2px}
 .log{font-size:12px;color:var(--grijs);max-height:180px;overflow:auto;margin-top:8px;border-top:1px solid #f0efe8;padding-top:6px}
 .log div{padding:2px 0}
 @media (max-width:1100px){ .week{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))} }
-@media (max-width:600px){ main{padding:10px 8px 40px} .week{grid-template-columns:1fr} .balk input{width:100%} }
+@media (max-width:600px){ main{padding:10px 8px 40px} #vast{position:static;margin:0;padding:0} .dag h3{position:static;margin:0 0 8px;padding:0} .week{grid-template-columns:1fr} .balk input{width:100%} }
 </style>
 </head>
 <body>
@@ -130,6 +133,7 @@ body.verplaatsen .route:hover{outline:2px dashed #ca8a04;outline-offset:2px}
 </header>
 <main>
   <div id="fout"></div>
+  <div id="vast">
   <div class="balk">
     <button class="knop wit" id="vorige" type="button">&larr;</button>
     <button class="knop wit" id="dezeWeek" type="button">Deze week</button>
@@ -142,12 +146,15 @@ body.verplaatsen .route:hover{outline:2px dashed #ca8a04;outline-offset:2px}
   <div class="zoekbalk"><input id="zoek" type="search" placeholder="Zoek op klant, plaats, ITS-nummer, debiteurnummer, telefoon of mail…" autocomplete="off" title="Het Dashboard zoekt in alle meldingen en laat zien wanneer en bij welke monteur ze staan"><div id="zoekUit"></div></div>
   <div id="verplaatsBand"></div>
   <div id="meldingen"></div>
+  </div>
   <div class="week" id="week"></div>
 </main>
 <script>
 var $ = function(id){ return document.getElementById(id); };
 var esc = svc.esc, data = null, maandag = null;
 var THUIS = [52.2449, 5.7797];
+/* De dagkoppen plakken net onder het vaste bovenstuk; dat wordt hoger of lager met de meldingen. */
+if (window.ResizeObserver) new ResizeObserver(function(){ document.documentElement.style.setProperty("--vastH", (getComputedStyle($("vast")).position === "sticky" ? $("vast").offsetHeight : 0) + "px"); }).observe($("vast"));
 function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function plus(isoD, n){ var d = new Date(isoD+"T12:00:00"); d.setDate(d.getDate()+n); return iso(d); }
 function maandagVan(isoD){ var d = new Date(isoD+"T12:00:00"); var w = (d.getDay()+6)%7; d.setDate(d.getDate()-w); return iso(d); }

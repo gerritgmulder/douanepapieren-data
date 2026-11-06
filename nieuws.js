@@ -51,6 +51,9 @@
 
   var NIEUWS = [
     { datum: "2026-11-06", bestand: "planning-service.html", soort: "beter",
+      titel: "Planning Service: bovenkant blijft in beeld",
+      wat:   "De weekknoppen, het zoekveld, de meldingen en de namen van de dagen blijven bovenaan staan als je naar beneden scrolt." },
+    { datum: "2026-11-06", bestand: "planning-service.html", soort: "beter",
       titel: "Planning Service: route vol maken, verplaatsen en klanten blijven op hun tijd",
       wat:   "Naast de naam van de monteur staat de knop Maak route vol: het Dashboard vult de route met open meldingen die passen en mailt die klanten een voorstel. Een klant die je toevoegt komt op de meest logische plek in de route. Met Verplaats naar andere route in een afspraak klik je daarna op een andere route, ook in een andere week. Haal je een klant uit de route, dan blijven de anderen op hun tijd staan; kan de klant die dag niet, dan plant het Dashboard hem daar ook niet meer in. Op de dag zelf kun je nog meldingen toevoegen en schuiven. Bij een zieke monteur krijgen ook de klanten zonder mail de mail met de nieuwe datum." },
     { datum: "2026-11-06", bestand: "service-meldingen.html", soort: "beter",
