@@ -55,6 +55,15 @@ body.demo main{max-width:1440px}
 .raster{display:grid;grid-template-columns:repeat(6,1fr);gap:8px 10px}
 .raster > div{min-width:0}
 .s1{grid-column:span 1}.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s6{grid-column:span 6}
+/* Dolf (video 6 nov 2026): "het is een heel scherm, een heel gezoek". Invullen gaat onder elkaar. */
+.raster.onder{grid-template-columns:minmax(0,1fr);max-width:560px}
+.raster.onder > div{grid-column:1 / -1}
+.btw-uitleg{font-size:11.5px;margin-top:4px;color:var(--grijs)}.btw-uitleg.goed{color:#15803d}.btw-uitleg.let{color:var(--oranje)}
+.auto{font-size:12.5px;padding:7px 9px;border:1px dashed var(--rand);border-radius:8px;background:#fafaf7;color:#4b5563}
+.beursomzet{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.beursomzet div{background:#f8faf5;border:1px solid #e3ecd6;border-radius:10px;padding:8px 10px}.beursomzet b{display:block;font-size:16px;color:var(--groen)}
+.beursomzet span{font-size:11.5px;color:var(--grijs)}
+@media(max-width:760px){.beursomzet{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.raster{grid-template-columns:repeat(2,1fr)}.s1,.s2,.s3{grid-column:span 1}.s4,.s6{grid-column:span 2}.stappen{grid-template-columns:1fr}}
 label.l{display:block;font-size:11px;color:var(--grijs);margin:0 0 3px;white-space:nowrap}
 input,select,textarea{width:100%;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--rand);border-radius:8px;background:#fff;color:var(--ink)}
@@ -146,7 +155,7 @@ function geld(v){ return "€ "+(Number(v)||0).toLocaleString("nl-NL",{minimumFr
 function wanneer(ts){ if(!ts) return ""; var d=new Date(ts); return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
 async function api(pad, body){
   // In de demo blijft alles in de tegel; zoeken in Logic4 gaat wel echt (alleen lezen).
-  if (DEMO && body && pad !== "/voorstel/demo") return demoApi(pad, body);
+  if (DEMO && body && pad !== "/voorstel/demo" && pad !== "/voorstel/btw") return demoApi(pad, body);
   var r = await fetch(W+pad, { method: body ? "POST" : "GET", headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" }, body: body ? JSON.stringify(body) : undefined });
   var j = await r.json().catch(function(){ return null; });
   if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("Het Dashboard wacht nog op antwoord (" + r.status + "). Probeer het zo nog eens."));
@@ -173,19 +182,82 @@ async function overzicht(){
         l.map(function(v){ return '<tr class="rij" data-id="'+esc(v.id)+'"><td><b>'+esc(v.klant||"(nog zonder naam)")+'</b><br><small style="color:#6b7280">'+esc(v.email)+'</small></td><td>'+esc(v.plaats)+'</td>' +
           '<td><span class="chip '+esc(v.status)+'">'+esc(STATUS[v.status]||v.status)+'</span>'+(v.aangepast?' <span title="De klant heeft de gegevens zelf aangepast">✎</span>':'')+'</td>' +
           '<td>'+(v.orderid?esc(v.orderid):'')+'</td><td>'+esc(String(v.adviseur||"").replace(/@.*/,""))+'</td><td>'+esc(wanneer(v.gewijzigd))+'</td></tr>'; }).join("") + '</tbody></table>'
-        : '<div class="slot">Nog geen voorstellen. Begin met <b>+ Nieuw voorstel</b>.</div>') + '</div>';
+        : '<div class="slot">Nog geen voorstellen. Begin met <b>+ Nieuw voorstel</b>.</div>') + '</div>' +
+      '<div id="beursVak"></div><div id="instVak"></div>';
     Array.prototype.forEach.call(document.querySelectorAll("tr.rij"), function(tr){ tr.onclick = function(){ openen(tr.dataset.id); }; });
     if ($("alleV")) $("alleV").onchange = function(){ alleTonen = this.checked; overzicht(); };
+    await keuzesLaden();
+    beursKaart();
+    if (BEHEER) instKaart();
   }catch(e){ $("vak").innerHTML = '<div class="kaart"><p class="melding fout">'+esc(e.message)+'</p></div>'; }
 }
 
+/* Beursomzet (Dolf, 6 nov 2026): wat er op de beurs is verkocht, zonder
+   dat iemand het hoeft op te tellen. Van een week voor tot een maand na de beurs. */
+async function beursKaart(naam){
+  var vak = $("beursVak"); if (!vak) return;
+  var nu = new Date().toISOString().slice(0, 10);
+  var dichtbij = (BEURZEN||[]).filter(function(b){ var van = new Date(b.van), tot = new Date(b.tot); return nu >= new Date(van - 7*864e5).toISOString().slice(0,10) && nu <= new Date(+tot + 31*864e5).toISOString().slice(0,10); });
+  if (!naam && !dichtbij.length && !BEHEER) return;
+  if (!naam && dichtbij.length) naam = dichtbij[0].naam;
+  try {
+    var j = await api("/voorstel/beursomzet" + (naam ? "?naam=" + encodeURIComponent(naam) : ""));
+    if (!j.beurs || !$("beursVak")) return;
+    var t = j.totaal || { voorstellen: 0, voorstelTotaal: 0, orders: 0, orderTotaal: 0, betaald: 0 };
+    var b = j.beurs, d = function(x){ return new Date(x + "T12:00").toLocaleDateString("nl-NL", { day: "numeric", month: "long" }); };
+    vak.innerHTML = '<div class="kaart"><h2>🎪 Beursomzet' + ((j.beurzen||[]).length > 1 ? '<span class="rechts"><select id="beursKies" title="Het Dashboard laat de omzet van deze beurs zien">' + j.beurzen.map(function(x){ return '<option'+(x.naam===b.naam?' selected':'')+'>'+esc(x.naam)+'</option>'; }).join("") + '</select></span>' : '') + '</h2>' +
+      '<p class="lead"><b>' + esc(b.naam) + '</b>, ' + esc(d(b.van)) + ' t/m ' + esc(d(b.tot)) + '. Voorstellen die in deze dagen zijn begonnen tellen vanzelf mee' + (j.alles ? '' : ' (hier staan alleen die van jou)') + '.</p>' +
+      '<div class="beursomzet"><div><b>' + t.voorstellen + '</b><span>voorstellen</span></div><div><b>' + esc(geld(t.voorstelTotaal)) + '</b><span>waarde van de voorstellen</span></div>' +
+      '<div><b>' + t.orders + '</b><span>orders (aanbetaald)</span></div><div><b>' + esc(geld(t.orderTotaal)) + '</b><span>beursomzet, waarvan ' + esc(geld(t.betaald)) + ' betaald</span></div></div>' +
+      (j.alles && (j.per||[]).length ? '<table class="lijst"><thead><tr><th>Adviseur</th><th>Voorstellen</th><th>Waarde</th><th>Orders</th><th>Omzet</th></tr></thead><tbody>' +
+        j.per.map(function(x){ return '<tr><td>'+esc(String(x.wie).replace(/@.*/,""))+'</td><td>'+x.voorstellen+'</td><td>'+esc(geld(x.voorstelTotaal))+'</td><td>'+x.orders+'</td><td>'+esc(geld(x.orderTotaal))+'</td></tr>'; }).join("") + '</tbody></table>' : '') + '</div>';
+    if ($("beursKies")) $("beursKies").onchange = function(){ beursKaart(this.value); };
+  } catch(e) { vak.innerHTML = ""; }
+}
+/* Instellingen voor de beheerders (Dolf): welke vervoerders de adviseurs
+   zien, wie met welke code een aangepaste aanbetaling mag doen, en de beurzen. */
+async function instKaart(){
+  var vak = $("instVak"); if (!vak) return;
+  vak.innerHTML = '<div class="kaart"><h2>⚙️ Instellingen <span class="rechts"><button type="button" class="klein" id="instOpen" title="Het Dashboard laat de instellingen van deze tegel zien">Openen</button></span></h2><p class="lead" style="margin:0">Vervoerders, codes voor een aangepaste aanbetaling en de beurzen. Alleen voor de beheerders.</p><div id="instIn"></div></div>';
+  $("instOpen").onclick = async function(){
+    this.disabled = true;
+    try { var j = await api("/voorstel/instellingen"); instTeken(j.instellingen, j.transporteurs || []); }
+    catch(e) { $("instIn").innerHTML = '<p class="melding fout">' + esc(e.message) + '</p>'; this.disabled = false; }
+  };
+}
+function instTeken(inst, alle){
+  var aan = (inst.transporteurs||[]).map(String);
+  var codes = (inst.codes||[]).concat([{ naam: "", code: "" }]), beurzen = (inst.beurzen||[]).concat([{ naam: "", van: "", tot: "" }]);
+  $("instIn").innerHTML =
+    '<h3 style="font-size:13px;margin:14px 0 6px">Vervoerders die de adviseurs zien</h3><div style="columns:2 260px;font-size:12.5px">' +
+      alle.map(function(x){ return '<label class="vink" style="margin:2px 0"><input type="checkbox" data-tr="'+esc(x.id)+'"'+(aan.indexOf(String(x.id))>=0?' checked':'')+'> '+esc(x.naam)+(x.bedrag?' <small style="color:#6b7280">'+esc(geld(x.bedrag))+' ex</small>':'')+'</label>'; }).join("") + '</div>' +
+    '<h3 style="font-size:13px;margin:14px 0 6px">Codes voor een aangepaste aanbetaling</h3><p class="lead">Wie een code heeft, kan bij Betalen kiezen voor Aangepast en zelf het bedrag invullen.</p>' +
+      '<div id="instCodes">' + codes.map(function(c){ return '<div class="raster" style="margin-bottom:6px"><div class="s3"><input data-cn placeholder="Naam, bijvoorbeeld Don" value="'+esc(c.naam)+'"></div><div class="s3"><input data-cc placeholder="Code (minstens 4 tekens)" value="'+esc(c.code)+'"></div></div>'; }).join("") + '</div>' +
+      '<button type="button" class="klein" id="codeErbij" title="Het Dashboard zet er een lege regel bij">+ Code</button>' +
+    '<h3 style="font-size:13px;margin:14px 0 6px">Beurzen</h3><p class="lead">Voorstellen die tussen deze dagen beginnen, tellen mee voor de beursomzet.</p>' +
+      '<div id="instBeurzen">' + beurzen.map(function(b){ return '<div class="raster" style="margin-bottom:6px"><div class="s2"><input data-bn placeholder="Naam van de beurs" value="'+esc(b.naam)+'"></div><div class="s2"><input data-bv type="date" value="'+esc(b.van)+'" title="Eerste dag"></div><div class="s2"><input data-bt type="date" value="'+esc(b.tot)+'" title="Laatste dag"></div></div>'; }).join("") + '</div>' +
+    '<div class="knoppen"><button type="button" class="doe" id="instBewaar" title="Het Dashboard bewaart deze instellingen voor iedereen">Opslaan</button><span class="melding" id="instMelding"></span></div>';
+  $("codeErbij").onclick = function(){ var d = document.createElement("div"); d.className = "raster"; d.style.marginBottom = "6px"; d.innerHTML = '<div class="s3"><input data-cn placeholder="Naam"></div><div class="s3"><input data-cc placeholder="Code (minstens 4 tekens)"></div>'; $("instCodes").appendChild(d); };
+  $("instBewaar").onclick = async function(){
+    var k = this; k.disabled = true;
+    var rijen = function(sel){ return Array.prototype.slice.call(document.querySelectorAll(sel)); };
+    var cn = rijen("[data-cn]"), cc = rijen("[data-cc]"), bn = rijen("[data-bn]"), bv = rijen("[data-bv]"), bt = rijen("[data-bt]");
+    var nieuw = {
+      transporteurs: rijen("[data-tr]").filter(function(x){ return x.checked; }).map(function(x){ return Number(x.dataset.tr); }),
+      codes: cn.map(function(x, i){ return { naam: x.value.trim(), code: cc[i].value.trim() }; }).filter(function(c){ return c.naam || c.code; }),
+      beurzen: bn.map(function(x, i){ return { naam: x.value.trim(), van: bv[i].value, tot: bt[i].value }; }).filter(function(b){ return b.naam; }) };
+    try { var j = await api("/voorstel/instellingen", { instellingen: nieuw }); KEUZES = null; await keuzesLaden(); instTeken(j.instellingen, alle); melding("instMelding", "Opgeslagen."); log("instellingen", ""); beursKaart(); }
+    catch(e) { melding("instMelding", e.message, true); k.disabled = false; }
+  };
+}
+
 /* ── Eén voorstel ─────────────────────────────────────────────────────── */
-var V = null, ORDER = null, KEUZES = null, IKMW = null, EERDER = null;
+var V = null, ORDER = null, KEUZES = null, IKMW = null, EERDER = null, BEHEER = false, BEURS_NU = null, BEURZEN = [];
 var NIEUWS = "", OPLICHT = null;   // een melding en wat oplicht bij de volgende keer tekenen
 var DEMO = false;
 async function keuzesLaden(){
   if (KEUZES) return KEUZES;
-  try { var j = await api("/voorstel/keuzes"); KEUZES = j.keuzes || {}; IKMW = j.ikMedewerker; } catch(e){ KEUZES = {}; }
+  try { var j = await api("/voorstel/keuzes"); KEUZES = j.keuzes || {}; IKMW = j.ikMedewerker; BEHEER = !!j.beheer; BEURS_NU = j.beursNu || null; BEURZEN = j.beurzen || []; } catch(e){ KEUZES = {}; }
   return KEUZES;
 }
 async function openen(id){
@@ -237,17 +309,25 @@ function teken(){
     h += '<div class="raster" style="margin-bottom:10px"><div class="s3 zoek"><label class="l" for="klantZoek">Bestaande klant uit Logic4</label><input id="klantZoek" placeholder="E-mailadres of debiteurnummer" autocomplete="off"><div class="treffers verberg" id="klantTreffers"></div></div>' +
       '<div class="s3" style="align-self:end"><span class="lead" id="klantZoekUitleg">'+(V.debiteur?'Gekoppeld aan debiteur '+esc(V.debiteur)+'. <button type="button" class="klein" id="ontkoppel" title="Het Dashboard maakt bij de bevestiging een nieuwe debiteur aan">Nieuwe klant</button>':'Nieuwe klant? Vul dan hieronder alles in.')+'</span></div></div>';
   }
-  h += '<div class="raster">' +
+  var TL = (KEUZES && KEUZES.talen) || { nl: "Nederlands", en: "English", de: "Deutsch", fr: "Français", es: "Español", it: "Italiano" };
+  var bc = V.btwCheck;
+  h += '<div class="raster' + (vast ? '' : ' onder') + '">' +
     '<div class="s1"><label class="l" for="k_aanhef">Aanhef</label><select id="k_aanhef" data-k="aanhef"><option value=""></option><option value="1"'+(k.aanhef==="1"?" selected":"")+'>De heer</option><option value="2"'+(k.aanhef==="2"?" selected":"")+'>Mevrouw</option></select></div>' +
     veld("voornaam","Voornaam",k.voornaam,"s2") + veld("tussenvoegsel","Tussenv.",k.tussenvoegsel,"s1") + veld("achternaam","Achternaam",k.achternaam,"s2") +
-    veld("bedrijf","Bedrijfsnaam (als het een bedrijf is)",k.bedrijf,"s3") + veld("btw","Btw-nummer",k.btw,"s3") +
+    veld("bedrijf","Bedrijfsnaam (als het een bedrijf is)",k.bedrijf,"s3") +
+    '<div class="s3"><label class="l" for="k_btw">Btw-nummer (bij een bedrijf in het buitenland verplicht)</label><input id="k_btw" data-k="btw" value="'+esc(k.btw||"")+'" placeholder="bijvoorbeeld DE123456789" title="Het Dashboard kijkt het nummer na bij de EU">' +
+      '<div class="btw-uitleg' + (bc ? (bc.geldig ? ' goed' : ' let') : '') + '" id="btwUitleg">' + (bc ? esc(bc.geldig ? "✓ Btw-nummer klopt" + (bc.naam ? ": " + bc.naam : "") : (bc.storing ? "Nakijken lukte even niet: " + bc.uitleg : "Dit btw-nummer is niet bekend bij de EU.")) : '') + '</div></div>' +
     /* Eerst postcode en huisnummer: straat en plaats komen er dan vanzelf bij. */
     veld("postcode","Postcode",k.postcode,"s2",' autocomplete="off" placeholder="1234 AB"') + veld("huisnummer","Huisnr.",k.huisnummer,"s1") + veld("toevoeging","Toev.",k.toevoeging,"s1") + veld("land","Land",k.land||"NL","s2",' maxlength="2"') +
     '<div class="s6 pc-uitleg" id="pcUitleg"></div>' +
     veld("straat","Straat",k.straat,"s3") + veld("plaats","Plaats",k.plaats,"s3") +
     veld("email","E-mailadres",k.email,"s2",' type="email"') + veld("telefoon","Telefoon",k.telefoon,"s2",' type="tel"') + veld("mobiel","Mobiel",k.mobiel,"s2",' type="tel"') +
+    /* Dolf (6 nov 2026): een klant uit Duitsland krijgt alles in het Duits. */
+    '<div class="s2"><label class="l" for="k_taal">Taal voor de klant</label><select id="k_taal" title="In deze taal krijgt de klant de mails, het voorstel en de betaalpagina">' +
+      '<option value="">Vanzelf, uit het land' + (V.taal && !V.taalGekozen ? ' (' + esc(TL[V.taal] || V.taal) + ')' : '') + '</option>' +
+      Object.keys(TL).map(function(t){ return '<option value="'+t+'"'+(V.taalGekozen===t?' selected':'')+'>'+esc(TL[t])+'</option>'; }).join("") + '</select></div>' +
     '<div class="s6"><label class="vink"><input type="checkbox" id="k_afwijkend"'+(k.afwijkend?" checked":"")+'> Afleveren op een ander adres</label></div>' +
-    '<div class="s6 '+(k.afwijkend?'':'verberg')+'" id="aflBlok"><div class="raster">' +
+    '<div class="s6 '+(k.afwijkend?'':'verberg')+'" id="aflBlok"><div class="raster'+(vast?'':' onder')+'">' +
       '<div class="s6"><label class="l">Naam</label><input data-a="naam" value="'+esc(a.naam||"")+'"></div>' +
       '<div class="s2"><label class="l">Postcode</label><input data-a="postcode" autocomplete="off" placeholder="1234 AB" value="'+esc(a.postcode||"")+'"></div>' +
       '<div class="s1"><label class="l">Huisnr.</label><input data-a="huisnummer" value="'+esc(a.huisnummer||"")+'"></div>' +
@@ -276,22 +356,36 @@ function teken(){
   var kopOpen = V.status === "in-logic4";
   /* Kop: alles uit het bovenste deel van het offertescherm */
   var kop = Object.assign({}, V.kop||{}, ORDER ? ORDER.kop : {});
-  var K = KEUZES || {}, T = K.types || {};
+  var K = KEUZES || {};
   if (!kop.medewerker && IKMW) kop.medewerker = IKMW;
-  if (!kop.type4) kop.type4 = 1;   // Magazijn: zo maakt het Dashboard het voorstel ook aan (Marcel)
+  /* Dolf (video 6 nov 2026): filiaal, referentie, orderbron, type 2 en 3 en
+     het magazijn vult het Dashboard zelf in; de btw volgt uit land en
+     btw-nummer. De adviseur ziet een korte lijst vervoerders, en kiest er
+     een, dan staan de verzendkosten er meteen bij. */
+  var vervoer = (K.transporteursKort || []).slice();
+  if (kop.transporteur && !vervoer.some(function(x){ return String(x.id) === String(kop.transporteur); })) {
+    var hier = (K.transporteurs || []).find(function(x){ return String(x.id) === String(kop.transporteur); }); if (hier) vervoer.push(hier);
+  }
+  var bt0 = V.betaal || {}, wijze = bt0.wijze || "30";
+  var beursNaam = V.beurs || (BEURS_NU && BEURS_NU.naam) || "";
+  var btwA = V.btwAuto || {};
   h += '<div class="kaart" id="kaartKop"><h2>Gegevens van het voorstel' + (V.orderid ? '<span class="rechts">Nummer in Logic4: <b>'+esc(V.orderid)+'</b></span>' : '') + '</h2>' +
     (kopOpen ? '' : '<div class="slot" style="margin-bottom:10px">🔒 Invullen kan zodra de klant zijn gegevens heeft bevestigd.</div>') +
-    '<div class="raster">' +
-    '<div class="s2"><label class="l" for="o_referentie">Uw referentie</label><input id="o_referentie" data-o="referentie" value="'+esc(kop.referentie||"")+'"></div>' +
-    '<div class="s4"><label class="l" for="o_omschrijving">Omschrijving</label><input id="o_omschrijving" data-o="omschrijving" value="'+esc(kop.omschrijving||"")+'"></div>' +
-    keuze("filiaal","Filiaal",K.filialen,kop.filiaal,"s2") + keuze("medewerker","Medewerker",K.medewerkers,kop.medewerker,"s2") +
-    keuze("transporteur","Transporteur",K.transporteurs,kop.transporteur,"s2") +
-    '<div class="s1"><label class="l" for="o_verzendkosten">Verzending (ex)</label><input id="o_verzendkosten" data-o="verzendkosten" inputmode="decimal" value="'+esc(kop.verzendkosten!=null?kop.verzendkosten:"")+'"></div>' +
-    keuze("betaalmethode","Betaalmethode",K.betaalmethoden,kop.betaalmethode,"s2") +
-    keuze("btwcode","Btw-code",K.btwcodes,kop.btwcode,"s2","Zoals bij het artikel") +
-    '<div class="s1"><label class="l" for="o_leverdatum">Ind. leverdatum</label><input id="o_leverdatum" data-o="leverdatum" type="date" value="'+esc(kop.leverdatum||"")+'"></div>' +
-    '<div class="s1"><label class="l" for="o_vervaldatum">Vervaldatum</label><input id="o_vervaldatum" data-o="vervaldatum" type="date" value="'+esc(V.vervaldatum||kop.vervaldatum||"")+'"></div>' +
-    [1,2,3,4].map(function(n){ var t = T[n] || { naam: "Type "+n, keuzes: [] }; return keuze("type"+n, t.naam, t.keuzes, kop["type"+n], "s1"); }).join("") +
+    '<div class="raster onder">' +
+    (beursNaam ? '<div class="s6"><label class="vink" title="Voorstellen op de beurs tellen mee voor de beursomzet"><input type="checkbox" id="o_beurs"'+(V.beurs?' checked':'')+'> Gemaakt op de beurs: <b>'+esc(beursNaam)+'</b> (telt mee voor de beursomzet)</label></div>' : '') +
+    '<div class="s6"><label class="l" for="o_omschrijving">Omschrijving</label><input id="o_omschrijving" data-o="omschrijving" value="'+esc(kop.omschrijving||"")+'"></div>' +
+    keuze("medewerker","Medewerker",K.medewerkers,kop.medewerker,"s6") +
+    '<div class="s6"><label class="l" for="o_transporteur">Transporteur</label><select id="o_transporteur" data-o="transporteur" title="Kies je een vervoerder, dan zet het Dashboard de verzendkosten erbij"><option value=""></option>' +
+      vervoer.map(function(x){ return '<option value="'+esc(x.id)+'" data-bedrag="'+esc(x.bedrag||0)+'"'+(String(x.id)===String(kop.transporteur)?' selected':'')+'>'+esc(x.naam)+(x.bedrag?' ('+esc(geld(x.bedrag))+' ex)':'')+'</option>'; }).join("") + '</select></div>' +
+    '<div class="s6"><label class="l" for="o_verzendkosten">Verzendkosten (excl. btw)</label><input id="o_verzendkosten" data-o="verzendkosten" inputmode="decimal" value="'+esc(kop.verzendkosten!=null?kop.verzendkosten:"")+'"></div>' +
+    '<div class="s6"><label class="l" for="o_wijze">Betalen</label><select id="o_wijze" title="Zo betaalt de klant; het bedrag van de aanbetaling volgt hieruit">' +
+      '<option value="30"'+(wijze==="30"?' selected':'')+'>30% aanbetaling</option><option value="alles"'+(wijze==="alles"?' selected':'')+'>Alles betalen</option><option value="aangepast"'+(wijze==="aangepast"?' selected':'')+'>Aangepast</option></select></div>' +
+    '<div class="s6 '+(wijze==="aangepast"?'':'verberg')+'" id="eigenBlok"><div class="raster onder">' +
+      '<div class="s6"><label class="l" for="o_aanb">Aanbetaling incl. btw</label><input id="o_aanb" inputmode="decimal" value="'+esc(wijze==="aangepast" && bt0.aanbetaling ? String(bt0.aanbetaling.toFixed(2)).replace(".", ",") : "")+'" placeholder="bijvoorbeeld 500,00"></div>' +
+      '<div class="s6"><label class="l" for="o_code">Code</label><input id="o_code" type="password" autocomplete="off" placeholder="Je persoonlijke code" title="Een aangepaste aanbetaling kan alleen met een persoonlijke code"></div></div></div>' +
+    '<div class="s6"><label class="l">Btw</label><div class="auto" title="Het Dashboard kiest de btw uit het land en het btw-nummer van de klant">'+esc(btwA.tekst || "Zoals bij het artikel")+'</div></div>' +
+    '<div class="s6"><label class="l" for="o_leverdatum">Gewenste leverdatum</label><input id="o_leverdatum" data-o="leverdatum" type="date" value="'+esc(kop.leverdatum && kop.leverdatum < "2099" ? kop.leverdatum : "")+'"></div>' +
+    '<div class="s6"><label class="l" for="o_vervaldatum">Geldig tot</label><input id="o_vervaldatum" data-o="vervaldatum" type="date" value="'+esc(V.vervaldatum||kop.vervaldatum||"")+'"></div>' +
     '<div class="s6"><label class="l" for="o_memo">Order memo</label><textarea id="o_memo" data-o="memo">'+esc(kop.memo||"")+'</textarea></div>' +
     '</div><div class="knoppen'+(kopOpen?'':' verberg')+'"><button type="button" id="kopBewaar" title="Het Dashboard bewaart deze gegevens'+(V.orderid?' en zet ze meteen in Logic4':'')+'">Opslaan</button><span class="melding" id="kopMelding"></span></div></div>';
 
@@ -308,13 +402,13 @@ function teken(){
       '<div class="s6 pc-uitleg">Zoek zoals in Logic4: op artikelcode, naam, barcode of een paar woorden tegelijk (bijvoorbeeld <i>lyon wit</i>). Met de pijltjes kies je, met Enter zet je het erop.</div></div>';
     var rg = ORDER ? ORDER.regels : [];
     h += rg.length ? '<table class="regels"><colgroup><col style="width:11%"><col><col style="width:8%"><col class="smal" style="width:11%"><col style="width:8%"><col style="width:11%"><col class="smal" style="width:6%"><col style="width:11%"><col style="width:12%"></colgroup>' +
-      '<thead><tr><th>Code</th><th>Omschrijving</th><th class="getal">Aantal</th><th class="getal smal">Bruto</th><th class="getal">Korting %</th><th class="getal">Netto</th><th class="getal smal">Btw</th><th class="getal">Totaal</th><th></th></tr></thead><tbody>' +
+      '<thead><tr><th>Code</th><th>Omschrijving</th><th class="getal">Aantal</th><th class="getal smal">Bruto</th><th class="getal" title="Korting in procenten"></th><th class="getal">Netto</th><th class="getal smal">Btw</th><th class="getal">Totaal</th><th></th></tr></thead><tbody>' +
       rg.map(function(r){ var w = r.vervallen;
         return '<tr data-r="'+esc(r.id)+'" class="'+(w?'weg':'')+'"><td>'+esc(r.code)+'</td>' +
           '<td>'+(w?esc(r.oms):'<input data-f="oms" value="'+esc(r.oms)+'">')+'</td>' +
           '<td class="getal">'+(w?'0':'<input data-f="aantal" class="getal" inputmode="decimal" value="'+esc(r.aantal)+'">')+'</td>' +
           '<td class="getal smal">'+esc(geld(r.bruto))+'</td>' +
-          '<td class="getal">'+(w?'':'<input data-f="korting" class="getal" inputmode="decimal" value="'+esc(r.bruto&&r.netto<r.bruto?Math.round((1-r.netto/r.bruto)*10000)/100:"")+'">')+'</td>' +
+          '<td class="getal">'+(w?'':'<input data-f="korting" class="getal" inputmode="decimal" title="Korting in procenten" value="'+esc(r.bruto&&r.netto<r.bruto?Math.round((1-r.netto/r.bruto)*10000)/100:"")+'">')+'</td>' +
           '<td class="getal">'+(w?'':'<input data-f="netto" class="getal" inputmode="decimal" value="'+esc(Math.round(r.netto*100)/100)+'">')+'</td>' +
           '<td class="getal smal">'+esc(r.btw)+'%</td><td class="getal">'+esc(geld(r.netto*r.aantal))+'</td>' +
           '<td>'+(w?'':'<button type="button" class="klein" data-bewaar title="Het Dashboard zet deze regel zo in Logic4">Opslaan</button> <button type="button" class="klein" data-weg title="Het Dashboard laat deze regel vervallen (aantal 0)">✕</button>')+'</td></tr>'; }).join("") + '</tbody></table>'
@@ -341,7 +435,8 @@ function teken(){
   /* Aanbetaling (Gerrit, 4 nov 2026): na een betaling is het voorstel meteen een order in Logic4. */
   if (V.status === "in-logic4" && ORDER) {
     var bt = V.betaal || {}, isOrder = Number(ORDER.statusId) !== 4;
-    var aanb = bt.aanbetaling || Math.round((ORDER.totaal && ORDER.totaal.incl || 0) * 30) / 100;
+    var tot = ORDER.totaal && ORDER.totaal.incl || 0;
+    var aanb = bt.wijze === "alles" ? tot : bt.wijze === "aangepast" ? bt.aanbetaling : Math.round(tot * 30) / 100;
     h += '<div class="kaart" id="kaartAanbetaling"><h2>Aanbetaling</h2>';
     if (isOrder) {
       h += '<p class="lead">✅ Dit voorstel is een order in Logic4: <b>'+esc(ORDER.status)+'</b>. Betaald: <b>'+esc(geld(ORDER.betaald))+'</b> van '+esc(geld(ORDER.totaal && ORDER.totaal.incl))+'.</p>';
@@ -349,10 +444,9 @@ function teken(){
       h += '<p class="lead">Zodra de klant aanbetaalt, wordt dit voorstel meteen een order in Logic4 (30% aanbetaald; bij alles betaald Volledig betaald). ' +
         (bt.link ? 'De klant betaalt met de knop <b>Aanbetalen</b> onder zijn voorstel, of via deze link, ook in de winkel op zijn telefoon.' : 'De klant ziet de knop <b>Aanbetalen</b> onder het voorstel zodra je het verstuurt.') +
         ' Betaalt hij aan de kassa op dit voorstelnummer, klik dan op Ververs: dan zet het Dashboard het meteen om.</p>' +
-        '<div class="raster"><div class="s2"><label class="l" for="abBedrag">Aanbetaling incl. btw' + (bt.eigenBedrag ? '' : ' (30%)') + '</label><input id="abBedrag" inputmode="decimal" value="'+esc((Number(aanb)||0).toFixed(2).replace(".", ","))+'"></div>' +
-        (bt.link ? '<div class="s4"><label class="l" for="abLink">Betaallink voor de klant</label><input id="abLink" readonly value="'+esc(bt.link)+'"></div>' : '') + '</div>' +
-        '<div class="knoppen"><button type="button" id="abBewaar" title="Het Dashboard bewaart dit bedrag; de klant betaalt dit bij Aanbetalen">Bedrag opslaan</button>' +
-        (bt.eigenBedrag ? '<button type="button" id="abTerug" title="Het Dashboard zet de aanbetaling terug op 30% van het totaal">Terug naar 30%</button>' : '') +
+        '<p class="lead">De klant betaalt <b>'+esc(geld(aanb))+'</b>' + (bt.wijze === "alles" ? ' (alles)' : bt.wijze === "aangepast" ? ' (aangepast)' : ' (30% van het totaal)') + '. Dat kies je hierboven bij <b>Betalen</b>.</p>' +
+        (bt.link ? '<div class="raster"><div class="s6"><label class="l" for="abLink">Betaallink voor de klant</label><input id="abLink" readonly value="'+esc(bt.link)+'"></div></div>' : '') +
+        '<div class="knoppen">' +
         (bt.link ? '<button type="button" id="abKopie" title="Het Dashboard kopieert de betaallink, om te plakken in een mail of bericht">Kopieer betaallink</button>' : '') +
         '<button type="button" id="abVervers" title="Het Dashboard kijkt in Logic4 of er al betaald is en zet het voorstel dan om naar een order">Ververs</button><span class="melding" id="abMelding"></span></div>';
     }
@@ -373,12 +467,18 @@ function teken(){
   if (OPLICHT) { OPLICHT.forEach(function(id){ var e=$(id); if(e) e.classList.add("oplicht"); }); OPLICHT = null; }
   koppel(vast || V.status === "gesloten");
   // Gegevens van het voorstel: op slot tot de klant heeft bevestigd.
-  Array.prototype.forEach.call(document.querySelectorAll("[data-o]"), function(x){ x.disabled = V.status !== "in-logic4"; });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-o],#o_wijze,#o_aanb,#o_code,#o_beurs"), function(x){ x.disabled = V.status !== "in-logic4"; });
+  kopExtraKoppel();
   sluitKoppel();
   stuurKoppel();
   aanbetaalKoppel();
   wachtStart();
   if (DEMO) demoWat();
+}
+function kopExtraKoppel(){
+  var tr = $("o_transporteur"), vz = $("o_verzendkosten"), w = $("o_wijze");
+  if (tr && vz) tr.onchange = function(){ var o = tr.options[tr.selectedIndex]; if (o && o.dataset.bedrag != null) vz.value = Number(o.dataset.bedrag) ? Number(o.dataset.bedrag).toFixed(2) : "0"; };
+  if (w) w.onchange = function(){ $("eigenBlok").classList.toggle("verberg", w.value !== "aangepast"); if (w.value === "aangepast") $("o_aanb").focus(); };
 }
 function aanbetaalKoppel(){
   if ($("abVervers")) $("abVervers").onclick = function(){ log("aanbetaling-ververs", V.id); if (DEMO) teken(); else openen(V.id); };
@@ -409,7 +509,7 @@ function kopUitScherm(){
   return o;
 }
 async function klantBewaren(){
-  var j = await api("/voorstel/klant", { id: V.id, klant: klantUitScherm(), debiteur: V.debiteur || null });
+  var j = await api("/voorstel/klant", { id: V.id, klant: klantUitScherm(), debiteur: V.debiteur || null, taal: $("k_taal") ? $("k_taal").value : undefined });
   var nieuwId = !V.id;
   V = j.voorstel; EERDER = j.eerder || null;
   if (nieuwId) { history.replaceState(null, "", "?id="+encodeURIComponent(V.id) + (location.search.indexOf("w=")>=0 ? "&w="+encodeURIComponent(W) : "")); log("begonnen", V.id); }
@@ -421,6 +521,8 @@ function koppel(vast){
   $("k_afwijkend").disabled = vast;
   $("k_afwijkend").onchange = function(){ $("aflBlok").classList.toggle("verberg", !this.checked); };
   postcodeKoppel("k", $("pcUitleg")); postcodeKoppel("a", $("pcUitlegA"));
+  if ($("k_taal")) $("k_taal").disabled = vast;
+  btwKoppel();
 
   if (!vast) {
     $("klantBewaar").onclick = async function(){
@@ -459,7 +561,10 @@ function koppel(vast){
     this.disabled = true;
     try {
       if (!V.id) await klantBewaren();
-      var j = await api("/voorstel/kop", { id: V.id, kop: kopUitScherm() });
+      var body = { id: V.id, kop: kopUitScherm(), betaalwijze: $("o_wijze").value };
+      if (body.betaalwijze === "aangepast") { body.aanbetaling = $("o_aanb").value; body.code = $("o_code").value; }
+      if ($("o_beurs")) body.beurs = $("o_beurs").checked;
+      var j = await api("/voorstel/kop", body);
       V = j.voorstel; if (j.order) ORDER = j.order; log("kop", V.id); teken(); melding("kopMelding", V.orderid ? "Opgeslagen en in Logic4 gezet." : "Opgeslagen.");
     } catch(e){ melding("kopMelding", e.message, true); this.disabled = false; }
   };
@@ -587,6 +692,28 @@ function zoeker(inp, lijst, pad, html, kies, precies){
   inp.onfocus = function(){ if (laatste && inp.value.trim() === vraag && rijen().length) lijst.classList.remove("verberg"); };
 }
 
+/* Btw-nummer (Dolf, 6 nov 2026): het Dashboard kijkt het meteen na bij de
+   EU, zoals Chantal dat nu met de hand doet, en zegt of de naam klopt. */
+function btwKoppel(){
+  var b = $("k_btw"), u = $("btwUitleg"), beurt = 0;
+  if (!b || b.disabled) return;
+  async function kijk(){
+    var nr = b.value.trim(), mijn = ++beurt;
+    if (nr.replace(/[^A-Za-z0-9]/g, "").length < 5) { u.textContent = ""; u.className = "btw-uitleg"; return; }
+    u.textContent = "Even nakijken bij de EU…"; u.className = "btw-uitleg";
+    try {
+      var j = await api("/voorstel/btw", { nummer: nr, bedrijf: ($("k_bedrijf")||{}).value || "" });
+      if (mijn !== beurt) return;
+      if (j.storing) { u.textContent = "Nakijken lukte even niet: " + (j.uitleg || "probeer het zo nog eens."); u.className = "btw-uitleg let"; return; }
+      if (!j.geldig) { u.textContent = j.uitleg || "Dit btw-nummer is niet bekend bij de EU. Kijk het nog even na."; u.className = "btw-uitleg let"; return; }
+      u.textContent = "✓ Btw-nummer klopt" + (j.naam ? ": " + j.naam : " (dit land geeft de naam niet door)") + (j.naamKlopt === false ? ". Let op: de naam is anders dan de bedrijfsnaam." : "");
+      u.className = "btw-uitleg " + (j.naamKlopt === false ? "let" : "goed");
+    } catch(e) { if (mijn === beurt) { u.textContent = ""; } }
+  }
+  b.addEventListener("change", kijk);
+  b.addEventListener("blur", kijk);
+}
+
 /* Postcode en huisnummer: straat en plaats komen er vanzelf bij (Gerrit,
    4 nov 2026). Uit de gratis adressenlijst van de overheid (PDOK), alleen
    voor adressen in Nederland. Lukt het niet, dan typ je ze gewoon zelf. */
@@ -702,6 +829,7 @@ function demoStop(){
 function demoAdviseur(){ var m = ((KEUZES||{}).medewerkers||[]).find(function(x){ return String(x.id) === String(IKMW); }); return m ? m.naam : ""; }
 function demoNaarBoven(){ try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch(e) { window.scrollTo(0, 0); } }
 function demoLog(wie, wat){ V.log = (V.log||[]).concat([{ ts: Date.now(), wie: wie, wat: wat }]); }
+function demoTaal(l){ l = String(l||"NL").toUpperCase(); return /^(NL|BE|SR)$/.test(l) ? "nl" : /^(DE|AT|CH|LI)$/.test(l) ? "de" : /^(FR|LU|MC)$/.test(l) ? "fr" : l === "ES" ? "es" : /^(IT|SM)$/.test(l) ? "it" : "en"; }
 function demoMist(k){
   var m = [];
   if (!k.achternaam && !k.bedrijf) m.push("achternaam");
@@ -719,12 +847,14 @@ function demoTotaal(){
 }
 function demoBetaal(){
   var incl = ORDER && ORDER.totaal ? ORDER.totaal.incl : 0, al = (V.betalingen||[]).reduce(function(s, b){ return s + b.bedrag; }, 0);
-  V.betaal = { aanbetaling: V.aanbetaling || Math.round(incl * 30) / 100, betaald: al, eigenBedrag: !!V.aanbetaling, link: "" };
+  var w = V.betaalwijze || "30";
+  V.betaal = { aanbetaling: w === "alles" ? incl : w === "aangepast" ? V.aanbetaling : Math.round(incl * 30) / 100, betaald: al, eigenBedrag: w === "aangepast", wijze: w, link: "" };
 }
 async function demoApi(pad, b){
   await new Promise(function(r){ setTimeout(r, 250); });
   if (pad === "/voorstel/klant") {
     V.klant = b.klant; if (b.debiteur !== undefined) V.debiteur = b.debiteur;
+    if (b.taal !== undefined) { V.taalGekozen = b.taal; V.taal = b.taal || demoTaal(V.klant.land); }
     if (V.status === "wacht") { V.status = "concept"; demoLog(ik, "Gegevens aangepast na het versturen; de mail moet opnieuw"); }
     V.mist = demoMist(V.klant);
     return { ok: true, voorstel: V };
@@ -737,6 +867,12 @@ async function demoApi(pad, b){
   }
   if (pad === "/voorstel/kop") {
     V.kop = Object.assign({}, V.kop, b.kop); if (b.kop && b.kop.vervaldatum !== undefined) V.vervaldatum = b.kop.vervaldatum;
+    if (b.betaalwijze === "aangepast") {
+      // In de demo werkt elke code van 4 tekens of meer.
+      if (String(b.code||"").length < 4 && V.betaalwijze !== "aangepast") throw new Error("Deze code klopt niet. In de demo werkt elke code van 4 tekens of meer.");
+      V.aanbetaling = Number(String(b.aanbetaling||"").replace(/\./g, "").replace(",", ".")) || 0;
+    }
+    if (b.betaalwijze) V.betaalwijze = b.betaalwijze;
     ORDER.kop = Object.assign({}, ORDER.kop, b.kop); demoTotaal(); demoBetaal();
     return { ok: true, voorstel: V, order: ORDER };
   }
@@ -755,7 +891,7 @@ async function demoApi(pad, b){
     return { ok: true, order: ORDER };
   }
   if (pad === "/voorstel/stuur") {
-    var opties = { klant: V.klant, regels: ORDER.regels, totaal: ORDER.totaal, kop: V.kop, aanbetaling: V.aanbetaling, tekst: b.tekst, adviseur: demoAdviseur() };
+    var opties = { klant: V.klant, regels: ORDER.regels, totaal: ORDER.totaal, kop: V.kop, aanbetaling: V.aanbetaling, betaalwijze: V.betaalwijze, taal: V.taalGekozen, tekst: b.tekst, adviseur: demoAdviseur() };
     if (!b.stuur) {
       var m = await api("/voorstel/demo", Object.assign({ stap: "voorstelmail" }, opties)), d = await api("/voorstel/demo", Object.assign({ stap: "voorstel" }, opties));
       return { ok: true, naar: V.klant.email, onderwerp: b.onderwerp || "Je voorstel DEMO van Fonteyn", mail: m.html, voorstel: d.html };
@@ -782,7 +918,7 @@ async function telToon(stap){
   TEL = stap;
   if (!stap) { $("telPlek").innerHTML = '<div class="tel"><p class="tel-kop">Telefoon van de klant</p><div class="tel-scherm"><div class="tel-leeg">Hier zie je wat de klant op zijn telefoon krijgt.</div></div></div>'; return; }
   var html = "";
-  try { var j = await api("/voorstel/demo", { stap: stap, klant: V.klant, regels: ORDER ? ORDER.regels : [], totaal: ORDER ? ORDER.totaal : {}, kop: V.kop, aanbetaling: V.aanbetaling, tekst: V.stuurTekst, betaald: (V.betaal||{}).betaald, adviseur: demoAdviseur() }); html = j.html; }
+  try { var j = await api("/voorstel/demo", { stap: stap, klant: V.klant, regels: ORDER ? ORDER.regels : [], totaal: ORDER ? ORDER.totaal : {}, kop: V.kop, aanbetaling: V.aanbetaling, betaalwijze: V.betaalwijze, taal: V.taalGekozen, tekst: V.stuurTekst, betaald: (V.betaal||{}).betaald, adviseur: demoAdviseur() }); html = j.html; }
   catch(e) { html = "<p style='font-family:Arial;padding:20px'>" + esc(e.message) + "</p>"; }
   if (TEL !== stap) return;
   if (!/^<!doctype/i.test(html)) html = "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'></head><body style='margin:0'>" + html + "</body></html>";

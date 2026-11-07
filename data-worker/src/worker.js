@@ -21598,7 +21598,7 @@ const FP_WORKER = {
       } }
     /* Voorstel maken: de tegel en de pagina "Bevestig je gegevens" voor de klant. */
     if (url.pathname === "/bevestig" || url.pathname === "/voorstel" || url.pathname.startsWith("/voorstel/"))
-      return vsHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij, dpCreateMolliePayment }));
+      return vsHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij, dpCreateMolliePayment, btwControle }));
     if (url.pathname.startsWith("/bakwagen/")) {
       if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);

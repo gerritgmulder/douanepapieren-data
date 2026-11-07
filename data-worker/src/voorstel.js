@@ -36,8 +36,11 @@ const VS_LOGO = "https://mijn.fonteyn.nl/beeld/fonteyn-logo.png";
 const VS_FOTO = "https://mijn.fonteyn.nl/beeld/fonteyn-showroom.jpg";
 /* Na het bevestigen (Gerrit, 4 nov 2026): het gaat om privacy, niet om wat
    de adviseur nu doet. Kort, met een foto van Fonteyn. */
-const VS_BEDANKT = "<h1>Bedankt, je gegevens zijn bevestigd</h1><p>Je gegevens zijn veilig bij ons en horen bij jouw voorstel. Zo klopt alles, van je voorstel tot de levering.</p>" +
-  "<img src='" + VS_FOTO + "' alt='Fonteyn Outdoor Living Mall' style='width:100%;height:auto;display:block;border-radius:10px;margin:14px 0 6px'><p class='klein'>Tot ziens bij Fonteyn Outdoor Living Mall in Uddel.</p>";
+function vsBedankt(taal) {
+  const T = vsT(taal);
+  return "<h1>" + vsEsc(T.bedankt) + "</h1><p>" + vsEsc(T.bedankt_p) + "</p>" +
+    "<img src='" + VS_FOTO + "' alt='Fonteyn Outdoor Living Mall' style='width:100%;height:auto;display:block;border-radius:10px;margin:14px 0 6px'><p class='klein'>" + vsEsc(T.tot_ziens) + "</p>";
+}
 const VS_OFFERTE = 4;            // Logic4-status 'Offerte'
 const VS_GESLOTEN = 19;          // Logic4-status 'Offerte gesloten'
 /* Na een betaling is het voorstel een order (besluit 26 okt 2026, zie
@@ -65,6 +68,245 @@ const VS_TYPES = {
   3: { naam: "Type 3", bekend: {} },
   4: { naam: "Magazijntype", bekend: { 1: "Magazijn", 2: "Spa Service Magazijn" } },
 };
+
+/* ── Dolf (video 6 nov 2026): het scherm moet eenvoudiger ─────────────────
+   - Filiaal, referentie, orderbron en type 1-3 vult de adviseur niet meer in.
+     Filiaal is altijd Uddel (Hoofdfiliaal), het magazijn volgt uit de regels.
+   - Een korte lijst vervoerders (Dolf en Don kiezen welke); kies je er een,
+     dan staan de verzendkosten er meteen bij (BasicAmount uit Logic4).
+   - Drie manieren van betalen: 30% aanbetaling, alles betalen, of
+     aangepast. Aangepast kan alleen met een persoonlijke code.
+   - De btw-code volgt uit het land en het btw-nummer, dat het Dashboard
+     zelf nakijkt bij de EU (VIES).
+   - Op een beurs weet de tegel dat zelf; die voorstellen tellen mee voor de
+     beursomzet.
+   - Een klant uit het buitenland krijgt mails en pagina's in zijn eigen taal. */
+const VS_FILIAAL = 1;                 // Hoofdfiliaal (Uddel)
+const VS_MAGAZIJN = 1, VS_MAGAZIJN_SERVICE = 2;
+// Alleen spa-onderdelen en waterverzorging (artikelnummers 15…, 16…, 88…) = Spa Service Magazijn.
+// Zo staan ze op 85% van de orders van sep-nov 2026.
+const VS_SERVICE_CODES = /^(15|16|88)\d/;
+const VS_TRANSPORT_STANDAARD = [1, 42, 44, 23, 5, 8, 22];   // de meest gebruikte van sep-nov 2026
+const VS_BEURS_STANDAARD = [{ naam: "Piscine Global Lyon 2026", van: "2026-11-17", tot: "2026-11-20" }];
+// Betaalmethode in Logic4 per taal: 30% aanbetaling (ook bij aangepast), en alles vooraf.
+const VS_BETAAL_30 = { nl: 25, en: 40, de: 40, fr: 62, es: 60, it: 59 };
+const VS_BETAAL_ALLES = 45;           // Betaling volledig vooraf aan bestelling
+const VS_BTW_ICL = 28;                // 0% leveringen binnen EU (ICL)
+const VS_BTW_EXPORT = 29;             // 0% leveringen buiten EU (export)
+// Particulier (of zakelijk zonder geldig btw-nummer) in de EU: het tarief van dat land.
+const VS_BTW_LAND = { BE: 116, DE: 129, FR: 133, AT: 125, ES: 128, IT: 137, LU: 126, MT: 127, CY: 113, RO: 122, BG: 117,
+  EE: 131, SK: 120, LV: 138, LT: 139, CZ: 119, SI: 121, IE: 136, PL: 124, PT: 123, FI: 132, GR: 134, EL: 134, DK: 130, HR: 115, SE: 118, HU: 135 };
+const VS_EU = new Set(["NL", ...Object.keys(VS_BTW_LAND)]);
+const VS_TALEN = { nl: "Nederlands", en: "English", de: "Deutsch", fr: "Français", es: "Español", it: "Italiano" };
+function vsTaalLand(land) {
+  const l = String(land || "NL").toUpperCase();
+  if (["NL", "BE", "SR"].includes(l)) return "nl";
+  if (["DE", "AT", "CH", "LI"].includes(l)) return "de";
+  if (["FR", "LU", "MC"].includes(l)) return "fr";
+  if (l === "ES") return "es";
+  if (["IT", "SM"].includes(l)) return "it";
+  return "en";
+}
+function vsTaal(v) { return VS_TALEN[v && v.taal] ? v.taal : vsTaalLand(v && v.klant && v.klant.land); }
+
+/* Alle teksten die de klant ziet. Nederlands met je (Gerrit, 31 okt 2026);
+   Duits en Frans met Sie en vous, zoals daar gewoon is. */
+const VS_T = {
+  nl: {
+    beste: n => "Beste " + (n || "klant"), groet: "Met vriendelijke groet,",
+    ond_bevestig: "Bevestig je gegevens", mail_bevestig: "Fijn dat je bij ons langs bent geweest. Voordat we je voorstel maken, vragen we je even je gegevens na te kijken. Zo weten we zeker dat alles klopt.",
+    knop_bevestig: "Bevestig je gegevens", link_kopie: "Lukt het klikken op de knop niet? Kopieer dan deze link naar je browser:",
+    kloppen: "Kloppen je gegevens?", kloppen_p: "Kijk ze even na. Zo weten we zeker dat je gegevens kloppen en veilig bij jouw voorstel horen.",
+    klopt: "Klopt", klopt_niet: "Klopt niet, ik pas het aan", aanpassen: "Pas je gegevens aan", aanpassen_p: "Verander wat er anders moet en klik daarna op opslaan.",
+    opslaan: "Opslaan, zo klopt het", bijna: "Bijna klaar", vul_in: "Vul nog in:",
+    verlopen: "Deze link is verlopen", verlopen_p: "Vraag je adviseur gerust om een nieuwe link.", vs_verlopen: "Dit voorstel is verlopen",
+    lukte_niet: "Dat lukte nog niet", lukte_niet_p: "Probeer het nog eens via de link in de mail.",
+    bedankt: "Bedankt, je gegevens zijn bevestigd", bedankt_p: "Je gegevens zijn veilig bij ons en horen bij jouw voorstel. Zo klopt alles, van je voorstel tot de levering.",
+    tot_ziens: "Tot ziens bij Fonteyn Outdoor Living Mall in Uddel.",
+    aanhef: "Aanhef", heer: "De heer", mevrouw: "Mevrouw", naam: "Naam", voornaam: "Voornaam", tussenvoegsel: "Tussenvoegsel", achternaam: "Achternaam",
+    bedrijf: "Bedrijfsnaam", btw: "Btw-nummer", adres: "Adres", straat: "Straat", huisnummer: "Huisnummer", toevoeging: "Toevoeging", postcode: "Postcode",
+    plaats: "Plaats", pc_plaats: "Postcode en plaats", land: "Land", email: "E-mailadres", telefoon: "Telefoon", mobiel: "Mobiel",
+    afleveren_op: "Afleveren op", ander_adres: "Afleveren op een ander adres", tel_of_mobiel: "telefoon of mobiel", afleveradres: "Afleveradres",
+    voorstel: "Voorstel", voor: "Voor", gegevens: "Gegevens", datum: "Datum", geldig: "Geldig tot", referentie: "Je referentie", betaling: "Betaling",
+    levering: "Levering", leverdatum: "Gewenste leverdatum", adviseur: "Je adviseur", mail: "E-mail", omschrijving: "Omschrijving", aantal: "Aantal",
+    stukprijs: "Prijs per stuk", incl: "incl. btw", excl: "excl. btw", totaal: "Totaal", verzend: "Verzendkosten excl. btw", tot_ex: "Totaal excl. btw",
+    btw_kort: "Btw", tot_incl: "Totaal incl. btw", artikel: "Artikel", korting: "korting", tav: "t.a.v.",
+    vragen: n => "Vragen over dit voorstel? Mail of bel je adviseur" + (n ? ", " + n : "") + ". We helpen je graag verder.", printen: "Printen of opslaan als pdf",
+    b30: "30% aanbetaling, de rest 14 dagen voor de levering", balles: "Alles vooraf betalen", beigen: b => "Aanbetaling " + b + ", de rest 14 dagen voor de levering",
+    mail_vs: "Hierbij ontvang je ons voorstel. Je bekijkt het via de knop hieronder; daar kun je het ook printen of opslaan als pdf.",
+    knop_vs: "Bekijk je voorstel", ond_vs: n => "Je voorstel " + n + " van Fonteyn",
+    res_kop: "Met je aanbetaling worden je producten nu gereserveerd", res_kop_alles: "Met je betaling worden je producten nu gereserveerd",
+    res_p: (b, d) => "Je aanbetaling is <b>" + b + "</b>" + (d ? " (30% van het totaal)" : "") + ". Je betaalt veilig online, ook met je telefoon.",
+    res_p_alles: b => "Het totaalbedrag is <b>" + b + "</b>. Je betaalt veilig online, ook met je telefoon.",
+    knop_aanbetalen: "Aanbetalen", knop_betalen: "Betalen",
+    binnen: "Je aanbetaling is binnen", binnen_p: b => "Bedankt! We hebben " + b + " ontvangen. Je bestelling staat vast; je adviseur neemt contact met je op over de levering.",
+    geduld: "Even geduld", verwerkt: "Je betaling wordt verwerkt", verwerkt_p: "Dit duurt meestal een paar seconden. Deze pagina ververst vanzelf.",
+    terug: "Terug naar je voorstel", afgebroken: "De betaling is afgebroken", afgebroken_p: "Er is niets afgeschreven. Wil je het opnieuw proberen?", opnieuw: "Opnieuw aanbetalen",
+    storing_p: "Online betalen gaat zo weer. Je adviseur helpt je graag verder.", mollie: n => "Aanbetaling voorstel " + n + " - Fonteyn",
+  },
+  en: {
+    beste: n => n ? "Dear " + n : "Dear customer", groet: "Kind regards,",
+    ond_bevestig: "Please confirm your details", mail_bevestig: "Thank you for visiting us. Before we prepare your proposal, please take a moment to check your details. That way we know everything is correct.",
+    knop_bevestig: "Confirm your details", link_kopie: "Button not working? Copy this link into your browser:",
+    kloppen: "Are your details correct?", kloppen_p: "Please take a quick look. That way we know your details are correct and safely linked to your proposal.",
+    klopt: "Correct", klopt_niet: "Not correct, I'll change it", aanpassen: "Change your details", aanpassen_p: "Change what needs changing and then click save.",
+    opslaan: "Save, this is correct", bijna: "Almost done", vul_in: "Please fill in:",
+    verlopen: "This link has expired", verlopen_p: "Feel free to ask your adviser for a new link.", vs_verlopen: "This proposal has expired",
+    lukte_niet: "That did not work yet", lukte_niet_p: "Please try again with the link in the email.",
+    bedankt: "Thank you, your details are confirmed", bedankt_p: "Your details are safe with us and linked to your proposal. That way everything is right, from your proposal to delivery.",
+    tot_ziens: "See you at Fonteyn Outdoor Living Mall in Uddel.",
+    aanhef: "Title", heer: "Mr", mevrouw: "Mrs", naam: "Name", voornaam: "First name", tussenvoegsel: "Prefix", achternaam: "Last name",
+    bedrijf: "Company", btw: "VAT number", adres: "Address", straat: "Street", huisnummer: "House number", toevoeging: "Addition", postcode: "Postcode",
+    plaats: "City", pc_plaats: "Postcode and city", land: "Country", email: "Email address", telefoon: "Phone", mobiel: "Mobile",
+    afleveren_op: "Deliver to", ander_adres: "Deliver to a different address", tel_of_mobiel: "phone or mobile", afleveradres: "Delivery address",
+    voorstel: "Proposal", voor: "For", gegevens: "Details", datum: "Date", geldig: "Valid until", referentie: "Your reference", betaling: "Payment",
+    levering: "Delivery", leverdatum: "Requested delivery date", adviseur: "Your adviser", mail: "Email", omschrijving: "Description", aantal: "Qty",
+    stukprijs: "Price each", incl: "incl. VAT", excl: "excl. VAT", totaal: "Total", verzend: "Shipping excl. VAT", tot_ex: "Total excl. VAT",
+    btw_kort: "VAT", tot_incl: "Total incl. VAT", artikel: "Item", korting: "discount", tav: "attn.",
+    vragen: n => "Questions about this proposal? Email or call your adviser" + (n ? ", " + n : "") + ". We are happy to help.", printen: "Print or save as PDF",
+    b30: "30% deposit, the rest 14 days before delivery", balles: "Full payment in advance", beigen: b => "Deposit of " + b + ", the rest 14 days before delivery",
+    mail_vs: "Here is our proposal. You can view it with the button below; there you can also print it or save it as a PDF.",
+    knop_vs: "View your proposal", ond_vs: n => "Your proposal " + n + " from Fonteyn",
+    res_kop: "With your deposit, your products are reserved right away", res_kop_alles: "With your payment, your products are reserved right away",
+    res_p: (b, d) => "Your deposit is <b>" + b + "</b>" + (d ? " (30% of the total)" : "") + ". You pay securely online, also with your phone.",
+    res_p_alles: b => "The total amount is <b>" + b + "</b>. You pay securely online, also with your phone.",
+    knop_aanbetalen: "Pay deposit", knop_betalen: "Pay",
+    binnen: "Your deposit has been received", binnen_p: b => "Thank you! We have received " + b + ". Your order is confirmed; your adviser will contact you about delivery.",
+    geduld: "One moment", verwerkt: "Your payment is being processed", verwerkt_p: "This usually takes a few seconds. This page refreshes by itself.",
+    terug: "Back to your proposal", afgebroken: "The payment was cancelled", afgebroken_p: "Nothing has been charged. Would you like to try again?", opnieuw: "Try again",
+    storing_p: "Online payment will be back shortly. Your adviser is happy to help.", mollie: n => "Deposit proposal " + n + " - Fonteyn",
+  },
+  de: {
+    beste: n => "Guten Tag" + (n ? " " + n : ""), groet: "Mit freundlichen Grüßen",
+    ond_bevestig: "Bitte bestätigen Sie Ihre Daten", mail_bevestig: "Schön, dass Sie bei uns waren. Bevor wir Ihr Angebot erstellen, bitten wir Sie, kurz Ihre Daten zu prüfen. So wissen wir sicher, dass alles stimmt.",
+    knop_bevestig: "Daten bestätigen", link_kopie: "Funktioniert die Schaltfläche nicht? Kopieren Sie diesen Link in Ihren Browser:",
+    kloppen: "Stimmen Ihre Daten?", kloppen_p: "Bitte prüfen Sie sie kurz. So wissen wir sicher, dass Ihre Daten stimmen und sicher zu Ihrem Angebot gehören.",
+    klopt: "Stimmt", klopt_niet: "Stimmt nicht, ich ändere es", aanpassen: "Daten ändern", aanpassen_p: "Ändern Sie, was anders sein muss, und klicken Sie dann auf Speichern.",
+    opslaan: "Speichern, so stimmt es", bijna: "Fast fertig", vul_in: "Bitte noch ausfüllen:",
+    verlopen: "Dieser Link ist abgelaufen", verlopen_p: "Bitten Sie Ihren Berater gern um einen neuen Link.", vs_verlopen: "Dieses Angebot ist abgelaufen",
+    lukte_niet: "Das hat noch nicht geklappt", lukte_niet_p: "Bitte versuchen Sie es noch einmal über den Link in der E-Mail.",
+    bedankt: "Vielen Dank, Ihre Daten sind bestätigt", bedankt_p: "Ihre Daten sind bei uns sicher und gehören zu Ihrem Angebot. So stimmt alles, vom Angebot bis zur Lieferung.",
+    tot_ziens: "Bis bald bei Fonteyn Outdoor Living Mall in Uddel.",
+    aanhef: "Anrede", heer: "Herr", mevrouw: "Frau", naam: "Name", voornaam: "Vorname", tussenvoegsel: "Namenszusatz", achternaam: "Nachname",
+    bedrijf: "Firma", btw: "USt-IdNr.", adres: "Adresse", straat: "Straße", huisnummer: "Hausnummer", toevoeging: "Zusatz", postcode: "Postleitzahl",
+    plaats: "Ort", pc_plaats: "PLZ und Ort", land: "Land", email: "E-Mail-Adresse", telefoon: "Telefon", mobiel: "Mobil",
+    afleveren_op: "Lieferung an", ander_adres: "An eine andere Adresse liefern", tel_of_mobiel: "Telefon oder Mobil", afleveradres: "Lieferadresse",
+    voorstel: "Angebot", voor: "Für", gegevens: "Angaben", datum: "Datum", geldig: "Gültig bis", referentie: "Ihre Referenz", betaling: "Zahlung",
+    levering: "Lieferung", leverdatum: "Gewünschter Liefertermin", adviseur: "Ihr Berater", mail: "E-Mail", omschrijving: "Beschreibung", aantal: "Menge",
+    stukprijs: "Preis pro Stück", incl: "inkl. MwSt.", excl: "exkl. MwSt.", totaal: "Gesamt", verzend: "Versandkosten exkl. MwSt.", tot_ex: "Gesamt exkl. MwSt.",
+    btw_kort: "MwSt.", tot_incl: "Gesamt inkl. MwSt.", artikel: "Artikel", korting: "Rabatt", tav: "z. Hd.",
+    vragen: n => "Fragen zu diesem Angebot? Schreiben Sie Ihrem Berater oder rufen Sie an" + (n ? " (" + n + ")" : "") + ". Wir helfen Ihnen gern.", printen: "Drucken oder als PDF speichern",
+    b30: "30 % Anzahlung, der Rest 14 Tage vor der Lieferung", balles: "Vollständige Zahlung im Voraus", beigen: b => "Anzahlung " + b + ", der Rest 14 Tage vor der Lieferung",
+    mail_vs: "Anbei erhalten Sie unser Angebot. Sie sehen es über die Schaltfläche unten; dort können Sie es auch drucken oder als PDF speichern.",
+    knop_vs: "Angebot ansehen", ond_vs: n => "Ihr Angebot " + n + " von Fonteyn",
+    res_kop: "Mit Ihrer Anzahlung werden Ihre Produkte jetzt reserviert", res_kop_alles: "Mit Ihrer Zahlung werden Ihre Produkte jetzt reserviert",
+    res_p: (b, d) => "Ihre Anzahlung beträgt <b>" + b + "</b>" + (d ? " (30 % des Gesamtbetrags)" : "") + ". Sie zahlen sicher online, auch mit dem Handy.",
+    res_p_alles: b => "Der Gesamtbetrag ist <b>" + b + "</b>. Sie zahlen sicher online, auch mit dem Handy.",
+    knop_aanbetalen: "Anzahlung leisten", knop_betalen: "Bezahlen",
+    binnen: "Ihre Anzahlung ist eingegangen", binnen_p: b => "Vielen Dank! Wir haben " + b + " erhalten. Ihre Bestellung steht fest; Ihr Berater meldet sich wegen der Lieferung bei Ihnen.",
+    geduld: "Einen Moment", verwerkt: "Ihre Zahlung wird verarbeitet", verwerkt_p: "Das dauert meist nur ein paar Sekunden. Diese Seite aktualisiert sich von selbst.",
+    terug: "Zurück zum Angebot", afgebroken: "Die Zahlung wurde abgebrochen", afgebroken_p: "Es wurde nichts abgebucht. Möchten Sie es erneut versuchen?", opnieuw: "Erneut versuchen",
+    storing_p: "Die Online-Zahlung ist gleich wieder möglich. Ihr Berater hilft Ihnen gern weiter.", mollie: n => "Anzahlung Angebot " + n + " - Fonteyn",
+  },
+  fr: {
+    beste: n => "Bonjour" + (n ? " " + n : ""), groet: "Cordialement,",
+    ond_bevestig: "Merci de confirmer vos coordonnées", mail_bevestig: "Merci pour votre visite. Avant de préparer votre proposition, nous vous demandons de vérifier vos coordonnées. Ainsi, nous sommes sûrs que tout est correct.",
+    knop_bevestig: "Confirmer mes coordonnées", link_kopie: "Le bouton ne fonctionne pas ? Copiez ce lien dans votre navigateur :",
+    kloppen: "Vos coordonnées sont-elles correctes ?", kloppen_p: "Merci de les vérifier. Ainsi, nous sommes sûrs que vos coordonnées sont exactes et bien liées à votre proposition.",
+    klopt: "C'est correct", klopt_niet: "Ce n'est pas correct, je modifie", aanpassen: "Modifier mes coordonnées", aanpassen_p: "Modifiez ce qui doit l'être, puis cliquez sur enregistrer.",
+    opslaan: "Enregistrer, c'est correct", bijna: "Presque terminé", vul_in: "Merci de compléter :",
+    verlopen: "Ce lien a expiré", verlopen_p: "N'hésitez pas à demander un nouveau lien à votre conseiller.", vs_verlopen: "Cette proposition a expiré",
+    lukte_niet: "Cela n'a pas encore fonctionné", lukte_niet_p: "Réessayez avec le lien dans l'e-mail.",
+    bedankt: "Merci, vos coordonnées sont confirmées", bedankt_p: "Vos coordonnées sont en sécurité chez nous et liées à votre proposition. Ainsi, tout est juste, de la proposition à la livraison.",
+    tot_ziens: "À bientôt chez Fonteyn Outdoor Living Mall à Uddel.",
+    aanhef: "Civilité", heer: "Monsieur", mevrouw: "Madame", naam: "Nom", voornaam: "Prénom", tussenvoegsel: "Particule", achternaam: "Nom de famille",
+    bedrijf: "Société", btw: "N° de TVA", adres: "Adresse", straat: "Rue", huisnummer: "Numéro", toevoeging: "Complément", postcode: "Code postal",
+    plaats: "Ville", pc_plaats: "Code postal et ville", land: "Pays", email: "Adresse e-mail", telefoon: "Téléphone", mobiel: "Mobile",
+    afleveren_op: "Livrer à", ander_adres: "Livrer à une autre adresse", tel_of_mobiel: "téléphone ou mobile", afleveradres: "Adresse de livraison",
+    voorstel: "Proposition", voor: "Pour", gegevens: "Informations", datum: "Date", geldig: "Valable jusqu'au", referentie: "Votre référence", betaling: "Paiement",
+    levering: "Livraison", leverdatum: "Date de livraison souhaitée", adviseur: "Votre conseiller", mail: "E-mail", omschrijving: "Description", aantal: "Qté",
+    stukprijs: "Prix unitaire", incl: "TTC", excl: "HT", totaal: "Total", verzend: "Frais de livraison HT", tot_ex: "Total HT",
+    btw_kort: "TVA", tot_incl: "Total TTC", artikel: "Article", korting: "remise", tav: "à l'att. de",
+    vragen: n => "Une question sur cette proposition ? Écrivez ou appelez votre conseiller" + (n ? ", " + n : "") + ". Nous sommes là pour vous aider.", printen: "Imprimer ou enregistrer en PDF",
+    b30: "Acompte de 30 %, le solde 14 jours avant la livraison", balles: "Paiement intégral à la commande", beigen: b => "Acompte de " + b + ", le solde 14 jours avant la livraison",
+    mail_vs: "Voici notre proposition. Vous pouvez la consulter avec le bouton ci-dessous ; vous pouvez aussi l'imprimer ou l'enregistrer en PDF.",
+    knop_vs: "Voir ma proposition", ond_vs: n => "Votre proposition " + n + " de Fonteyn",
+    res_kop: "Avec votre acompte, vos produits sont réservés dès maintenant", res_kop_alles: "Avec votre paiement, vos produits sont réservés dès maintenant",
+    res_p: (b, d) => "Votre acompte est de <b>" + b + "</b>" + (d ? " (30 % du total)" : "") + ". Vous payez en ligne en toute sécurité, aussi avec votre téléphone.",
+    res_p_alles: b => "Le montant total est de <b>" + b + "</b>. Vous payez en ligne en toute sécurité, aussi avec votre téléphone.",
+    knop_aanbetalen: "Payer l'acompte", knop_betalen: "Payer",
+    binnen: "Votre acompte a bien été reçu", binnen_p: b => "Merci ! Nous avons reçu " + b + ". Votre commande est confirmée ; votre conseiller vous contactera pour la livraison.",
+    geduld: "Un instant", verwerkt: "Votre paiement est en cours de traitement", verwerkt_p: "Cela prend généralement quelques secondes. Cette page se met à jour automatiquement.",
+    terug: "Retour à ma proposition", afgebroken: "Le paiement a été interrompu", afgebroken_p: "Rien n'a été débité. Voulez-vous réessayer ?", opnieuw: "Réessayer",
+    storing_p: "Le paiement en ligne sera bientôt de nouveau disponible. Votre conseiller vous aide volontiers.", mollie: n => "Acompte proposition " + n + " - Fonteyn",
+  },
+  es: {
+    beste: n => "Hola" + (n ? " " + n : ""), groet: "Un cordial saludo,",
+    ond_bevestig: "Confirma tus datos", mail_bevestig: "Gracias por visitarnos. Antes de preparar tu propuesta, te pedimos que revises tus datos. Así sabemos con seguridad que todo es correcto.",
+    knop_bevestig: "Confirmar mis datos", link_kopie: "¿No funciona el botón? Copia este enlace en tu navegador:",
+    kloppen: "¿Son correctos tus datos?", kloppen_p: "Revísalos un momento. Así sabemos con seguridad que tus datos son correctos y están vinculados a tu propuesta.",
+    klopt: "Correcto", klopt_niet: "No es correcto, lo cambio", aanpassen: "Cambiar mis datos", aanpassen_p: "Cambia lo que haga falta y luego haz clic en guardar.",
+    opslaan: "Guardar, así es correcto", bijna: "Casi listo", vul_in: "Rellena todavía:",
+    verlopen: "Este enlace ha caducado", verlopen_p: "Pide sin problema un nuevo enlace a tu asesor.", vs_verlopen: "Esta propuesta ha caducado",
+    lukte_niet: "Todavía no ha funcionado", lukte_niet_p: "Inténtalo de nuevo con el enlace del correo.",
+    bedankt: "Gracias, tus datos están confirmados", bedankt_p: "Tus datos están seguros con nosotros y vinculados a tu propuesta. Así todo es correcto, desde la propuesta hasta la entrega.",
+    tot_ziens: "Hasta pronto en Fonteyn Outdoor Living Mall, en Uddel.",
+    aanhef: "Tratamiento", heer: "Sr.", mevrouw: "Sra.", naam: "Nombre", voornaam: "Nombre", tussenvoegsel: "Partícula", achternaam: "Apellido",
+    bedrijf: "Empresa", btw: "NIF-IVA", adres: "Dirección", straat: "Calle", huisnummer: "Número", toevoeging: "Complemento", postcode: "Código postal",
+    plaats: "Ciudad", pc_plaats: "Código postal y ciudad", land: "País", email: "Correo electrónico", telefoon: "Teléfono", mobiel: "Móvil",
+    afleveren_op: "Entregar en", ander_adres: "Entregar en otra dirección", tel_of_mobiel: "teléfono o móvil", afleveradres: "Dirección de entrega",
+    voorstel: "Propuesta", voor: "Para", gegevens: "Datos", datum: "Fecha", geldig: "Válida hasta", referentie: "Tu referencia", betaling: "Pago",
+    levering: "Entrega", leverdatum: "Fecha de entrega deseada", adviseur: "Tu asesor", mail: "Correo", omschrijving: "Descripción", aantal: "Cant.",
+    stukprijs: "Precio por unidad", incl: "IVA incl.", excl: "sin IVA", totaal: "Total", verzend: "Gastos de envío sin IVA", tot_ex: "Total sin IVA",
+    btw_kort: "IVA", tot_incl: "Total IVA incl.", artikel: "Artículo", korting: "descuento", tav: "a la atención de",
+    vragen: n => "¿Preguntas sobre esta propuesta? Escribe o llama a tu asesor" + (n ? ", " + n : "") + ". Te ayudamos con gusto.", printen: "Imprimir o guardar como PDF",
+    b30: "Depósito del 30 %, el resto 14 días antes de la entrega", balles: "Pago completo por adelantado", beigen: b => "Depósito de " + b + ", el resto 14 días antes de la entrega",
+    mail_vs: "Aquí tienes nuestra propuesta. Puedes verla con el botón de abajo; allí también puedes imprimirla o guardarla como PDF.",
+    knop_vs: "Ver mi propuesta", ond_vs: n => "Tu propuesta " + n + " de Fonteyn",
+    res_kop: "Con tu depósito, tus productos quedan reservados ahora mismo", res_kop_alles: "Con tu pago, tus productos quedan reservados ahora mismo",
+    res_p: (b, d) => "Tu depósito es de <b>" + b + "</b>" + (d ? " (30 % del total)" : "") + ". Pagas de forma segura en línea, también con tu móvil.",
+    res_p_alles: b => "El importe total es de <b>" + b + "</b>. Pagas de forma segura en línea, también con tu móvil.",
+    knop_aanbetalen: "Pagar el depósito", knop_betalen: "Pagar",
+    binnen: "Hemos recibido tu depósito", binnen_p: b => "¡Gracias! Hemos recibido " + b + ". Tu pedido está confirmado; tu asesor se pondrá en contacto contigo para la entrega.",
+    geduld: "Un momento", verwerkt: "Tu pago se está procesando", verwerkt_p: "Suele tardar unos segundos. Esta página se actualiza sola.",
+    terug: "Volver a mi propuesta", afgebroken: "El pago se ha cancelado", afgebroken_p: "No se ha cobrado nada. ¿Quieres intentarlo de nuevo?", opnieuw: "Intentar de nuevo",
+    storing_p: "El pago en línea volverá enseguida. Tu asesor te ayuda con gusto.", mollie: n => "Depósito propuesta " + n + " - Fonteyn",
+  },
+  it: {
+    beste: n => n ? "Gentile " + n : "Gentile cliente", groet: "Cordiali saluti,",
+    ond_bevestig: "Conferma i tuoi dati", mail_bevestig: "Grazie per essere passato da noi. Prima di preparare la tua proposta, ti chiediamo di controllare i tuoi dati. Così siamo sicuri che sia tutto corretto.",
+    knop_bevestig: "Conferma i tuoi dati", link_kopie: "Il pulsante non funziona? Copia questo link nel browser:",
+    kloppen: "I tuoi dati sono corretti?", kloppen_p: "Controllali un attimo. Così siamo sicuri che i tuoi dati sono corretti e collegati alla tua proposta.",
+    klopt: "Sono corretti", klopt_niet: "Non sono corretti, li modifico", aanpassen: "Modifica i tuoi dati", aanpassen_p: "Modifica ciò che serve e poi clicca su salva.",
+    opslaan: "Salva, così è corretto", bijna: "Quasi fatto", vul_in: "Compila ancora:",
+    verlopen: "Questo link è scaduto", verlopen_p: "Chiedi pure un nuovo link al tuo consulente.", vs_verlopen: "Questa proposta è scaduta",
+    lukte_niet: "Non è ancora riuscito", lukte_niet_p: "Riprova con il link nell'e-mail.",
+    bedankt: "Grazie, i tuoi dati sono confermati", bedankt_p: "I tuoi dati sono al sicuro da noi e collegati alla tua proposta. Così tutto è corretto, dalla proposta alla consegna.",
+    tot_ziens: "A presto da Fonteyn Outdoor Living Mall a Uddel.",
+    aanhef: "Titolo", heer: "Sig.", mevrouw: "Sig.ra", naam: "Nome", voornaam: "Nome", tussenvoegsel: "Prefisso", achternaam: "Cognome",
+    bedrijf: "Azienda", btw: "Partita IVA", adres: "Indirizzo", straat: "Via", huisnummer: "Numero civico", toevoeging: "Interno", postcode: "CAP",
+    plaats: "Città", pc_plaats: "CAP e città", land: "Paese", email: "Indirizzo e-mail", telefoon: "Telefono", mobiel: "Cellulare",
+    afleveren_op: "Consegna a", ander_adres: "Consegna a un altro indirizzo", tel_of_mobiel: "telefono o cellulare", afleveradres: "Indirizzo di consegna",
+    voorstel: "Proposta", voor: "Per", gegevens: "Dati", datum: "Data", geldig: "Valida fino al", referentie: "Il tuo riferimento", betaling: "Pagamento",
+    levering: "Consegna", leverdatum: "Data di consegna desiderata", adviseur: "Il tuo consulente", mail: "E-mail", omschrijving: "Descrizione", aantal: "Q.tà",
+    stukprijs: "Prezzo unitario", incl: "IVA incl.", excl: "IVA escl.", totaal: "Totale", verzend: "Spese di spedizione IVA escl.", tot_ex: "Totale IVA escl.",
+    btw_kort: "IVA", tot_incl: "Totale IVA incl.", artikel: "Articolo", korting: "sconto", tav: "c.a.",
+    vragen: n => "Domande su questa proposta? Scrivi o chiama il tuo consulente" + (n ? ", " + n : "") + ". Siamo felici di aiutarti.", printen: "Stampa o salva come PDF",
+    b30: "Acconto del 30%, il saldo 14 giorni prima della consegna", balles: "Pagamento completo anticipato", beigen: b => "Acconto di " + b + ", il saldo 14 giorni prima della consegna",
+    mail_vs: "Ecco la nostra proposta. Puoi vederla con il pulsante qui sotto; lì puoi anche stamparla o salvarla in PDF.",
+    knop_vs: "Vedi la proposta", ond_vs: n => "La tua proposta " + n + " di Fonteyn",
+    res_kop: "Con il tuo acconto i tuoi prodotti vengono riservati subito", res_kop_alles: "Con il tuo pagamento i tuoi prodotti vengono riservati subito",
+    res_p: (b, d) => "Il tuo acconto è di <b>" + b + "</b>" + (d ? " (30% del totale)" : "") + ". Paghi online in modo sicuro, anche con il telefono.",
+    res_p_alles: b => "L'importo totale è di <b>" + b + "</b>. Paghi online in modo sicuro, anche con il telefono.",
+    knop_aanbetalen: "Paga l'acconto", knop_betalen: "Paga",
+    binnen: "Il tuo acconto è arrivato", binnen_p: b => "Grazie! Abbiamo ricevuto " + b + ". Il tuo ordine è confermato; il tuo consulente ti contatterà per la consegna.",
+    geduld: "Un momento", verwerkt: "Il tuo pagamento è in elaborazione", verwerkt_p: "Di solito ci vogliono pochi secondi. Questa pagina si aggiorna da sola.",
+    terug: "Torna alla proposta", afgebroken: "Il pagamento è stato interrotto", afgebroken_p: "Non è stato addebitato nulla. Vuoi riprovare?", opnieuw: "Riprova",
+    storing_p: "Il pagamento online tornerà a breve. Il tuo consulente ti aiuta volentieri.", mollie: n => "Acconto proposta " + n + " - Fonteyn",
+  },
+};
+function vsT(taal) { return VS_T[taal] || VS_T.nl; }
+const VS_LOCALE = { nl: "nl-NL", en: "en-GB", de: "de-DE", fr: "fr-FR", es: "es-ES", it: "it-IT" };
 
 let _vsTabel = false;
 async function vsDb(env) {
@@ -112,16 +354,20 @@ function vsKlantSchoon(k) {
   u.aflevering.land = (u.aflevering.land || u.land).toUpperCase().slice(0, 2);
   return u;
 }
-function vsKlantMist(k) {
+function vsKlantMist(k, taal) {
+  const T = vsT(taal), l = x => String(T[x]).toLowerCase();
   const mist = [];
-  if (!k.achternaam && !k.bedrijf) mist.push("achternaam");
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(k.email)) mist.push("e-mailadres");
-  if (!k.straat) mist.push("straat");
-  if (!k.huisnummer) mist.push("huisnummer");
-  if (!k.postcode) mist.push("postcode");
-  if (!k.plaats) mist.push("plaats");
-  if (!k.telefoon && !k.mobiel) mist.push("telefoon of mobiel");
-  if (k.afwijkend && (!k.aflevering.straat || !k.aflevering.huisnummer || !k.aflevering.plaats)) mist.push("afleveradres");
+  if (!k.achternaam && !k.bedrijf) mist.push(l("achternaam"));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(k.email)) mist.push(l("email"));
+  if (!k.straat) mist.push(l("straat"));
+  if (!k.huisnummer) mist.push(l("huisnummer"));
+  if (!k.postcode) mist.push(l("postcode"));
+  if (!k.plaats) mist.push(l("plaats"));
+  if (!k.telefoon && !k.mobiel) mist.push(T.tel_of_mobiel);
+  if (k.afwijkend && (!(k.aflevering || {}).straat || !(k.aflevering || {}).huisnummer || !(k.aflevering || {}).plaats)) mist.push(l("afleveradres"));
+  /* Dolf (6 nov 2026): een bedrijf in het buitenland moet een btw-nummer
+     hebben; daarmee valt de btw weg (0%, levering binnen de EU). */
+  if (k.bedrijf && k.land !== "NL" && VS_EU.has(k.land) && !k.btw) mist.push(taal && taal !== "nl" ? T.btw : "btw-nummer (bedrijf in het buitenland)");
   return mist;
 }
 function vsNaam(k) {
@@ -165,7 +411,10 @@ function vsLog(v, wie, wat) {
 function vsVoorTegel(v) {
   const { token, ...rest } = v;
   rest.mist = vsKlantMist(rest.klant || {});
-  rest.betaal = { aanbetaling: vsAanbetaling(v), betaald: vsBetaald(v), eigenBedrag: Number(v.aanbetaling) > 0,
+  rest.taalGekozen = VS_TALEN[v.taal] ? v.taal : "";
+  rest.taal = vsTaal(v);
+  rest.btwAuto = vsBtwAuto(v);
+  rest.betaal = { aanbetaling: vsAanbetaling(v), betaald: vsBetaald(v), eigenBedrag: v.betaalwijze === "aangepast", wijze: v.betaalwijze || "30",
     link: v.bekijkToken ? vsBasis(null) + "/voorstel/betaal?t=" + encodeURIComponent(v.bekijkToken) : "" };
   return rest;
 }
@@ -182,8 +431,10 @@ function vsVoorTegel(v) {
      zet het de status meteen om. Elk uur doet orderstatusRonde dat ook. */
 function vsBasis(env) { return (env && env.SVC_LINK_BASIS) || "https://fonteyn-data-store.g-mulder.workers.dev"; }
 function vsAanbetaling(v, incl) {
-  if (Number(v.aanbetaling) > 0) return Math.round(Number(v.aanbetaling) * 100) / 100;
   const tot = incl != null ? Number(incl) : Number((v.verstuurdeVersie && v.verstuurdeVersie.totaal && v.verstuurdeVersie.totaal.incl) || 0);
+  if (v.betaalwijze === "alles") return Math.round(tot * 100) / 100;
+  // Voorstellen van voor 7 nov 2026 hebben alleen een eigen bedrag, zonder betaalwijze.
+  if ((v.betaalwijze === "aangepast" || !v.betaalwijze) && Number(v.aanbetaling) > 0) return Math.round(Number(v.aanbetaling) * 100) / 100;
   return Math.round(tot * VS_AANBETAAL_DEEL * 100) / 100;
 }
 function vsBetaald(v) {
@@ -244,7 +495,8 @@ async function vsBetaalBericht(env, H, v, bedrag) {
 }
 /* Het blok onder het voorstel dat de klant ziet. */
 function vsBetaalBlok(v, t) {
-  const bedrag = vsAanbetaling(v), al = vsBetaald(v);
+  const bedrag = vsAanbetaling(v), al = vsBetaald(v), taal = vsTaal(v), T = vsT(taal), alles = v.betaalwijze === "alles";
+  const geld = x => vsGeld(x, taal);
   if (!(bedrag > 0)) return "";
   const binnen = al > 0 && al >= bedrag - 0.01;
   return "<style>.betaal{max-width:800px;margin:16px auto 30px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px 26px}" +
@@ -252,9 +504,11 @@ function vsBetaalBlok(v, t) {
     ".betaal a{display:inline-block;background:#15803d;color:#fff;text-decoration:none;border-radius:10px;padding:14px 22px;font-size:16px;font-weight:bold}" +
     "@media(max-width:600px){.betaal{margin:12px;padding:18px 16px}.betaal a{display:block;text-align:center}}@media print{.betaal{display:none}}</style>" +
     "<div class='betaal'>" + (binnen
-      ? "<h2>Je aanbetaling is binnen</h2><p>Bedankt! We hebben " + vsGeld(al) + " ontvangen. Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>"
-      : "<h2>Akkoord? Doe je aanbetaling</h2><p>Met een aanbetaling van <b>" + vsGeld(bedrag - al) + "</b>" + (Number(v.aanbetaling) > 0 ? "" : " (30% van het totaal)") +
-        " zet je je bestelling vast. Je betaalt veilig online, ook met je telefoon.</p><a href='/voorstel/betaal?t=" + encodeURIComponent(t) + "'>Aanbetalen</a>") +
+      ? "<h2>" + T.binnen + "</h2><p>" + T.binnen_p(geld(al)) + "</p>"
+      /* Dolf (video 6 nov 2026): niet "Akkoord? Doe je aanbetaling", maar
+         dat de producten met de aanbetaling gereserveerd worden. */
+      : "<h2>" + (alles ? T.res_kop_alles : T.res_kop) + "</h2><p>" + (alles ? T.res_p_alles(geld(bedrag - al)) : T.res_p(geld(bedrag - al), !al && v.betaalwijze !== "aangepast" && !(Number(v.aanbetaling) > 0 && !v.betaalwijze))) +
+        "</p><a href='/voorstel/betaal?t=" + encodeURIComponent(t) + "'>" + (alles ? T.knop_betalen : T.knop_aanbetalen) + "</a>") +
     "</div>";
 }
 async function vsLinkVoorstel(db, t) {
@@ -325,16 +579,67 @@ function vsKopNaarL4(kop) {
   if (Number(kop.transporteur)) u.ShippingMethod = { Id: Number(kop.transporteur) };
   if (Number(kop.betaalmethode)) u.PaymentMethod = { Id: Number(kop.betaalmethode) };
   if (kop.leverdatum) u.DeliveryDate = String(kop.leverdatum).slice(0, 10) + "T00:00:00";
-  if (kop.verzendkosten !== undefined && kop.verzendkosten !== "") u.Totals = { ShippingCost: Math.round(Number(kop.verzendkosten) * 100) / 100 || 0 };
+  if (kop.verzendkosten !== undefined && kop.verzendkosten !== "") u.Totals = { ShippingCost: Math.round(Number(String(kop.verzendkosten).replace(",", ".")) * 100) / 100 || 0 };
   for (const n of [1, 2, 3, 4]) if (Number(kop["type" + n])) u["OrderType" + n + "Id"] = Number(kop["type" + n]);
   return u;
 }
 
-function vsKopStandaard(kop, keuzes, adviseur) {
+function vsKopStandaard(kop, keuzes, adviseur, v) {
   kop = Object.assign({}, kop || {});
   if (!Number(kop.medewerker)) kop.medewerker = vsMedewerkerVan(keuzes || {}, adviseur) || "";
-  if (!Number(kop.type4)) kop.type4 = 1;          // Magazijn
+  if (!Number(kop.type4)) kop.type4 = VS_MAGAZIJN;
+  if (v) {
+    kop.filiaal = VS_FILIAAL;
+    kop.betaalmethode = v.betaalwijze === "alles" ? VS_BETAAL_ALLES : (VS_BETAAL_30[vsTaal(v)] || VS_BETAAL_30.nl);
+    kop.btwcode = vsBtwAuto(v).id || "";
+    // Op de beurs: de naam van de beurs als referentie, zodat het ook in Logic4 te zien is.
+    if (v.beurs) kop.referentie = v.beurs;
+    else if (kop.referentie && kop.referentie === v.beursWas) kop.referentie = "";
+  }
   return kop;
+}
+/* De btw-code volgt uit het land en het btw-nummer (Dolf, 6 nov 2026).
+   Leeg = zoals bij het artikel (Nederland, 21% of 9%). */
+function vsBtwAuto(v) {
+  const k = (v && v.klant) || {}, land = String(k.land || "NL").toUpperCase(), c = (v && v.btwCheck) || null;
+  if (land === "NL") return { id: "", tekst: "Zoals bij het artikel (Nederland)" };
+  if (!VS_EU.has(land)) return { id: VS_BTW_EXPORT, tekst: "0% buiten de EU (export)" };
+  const nummerGoed = c && c.geldig && c.nummer === vsBtwSchoon(k.btw);
+  if (k.bedrijf && nummerGoed) return { id: VS_BTW_ICL, tekst: "0% binnen de EU: btw-nummer klopt" };
+  return { id: VS_BTW_LAND[land] || "", tekst: "Btw van " + land + (k.bedrijf ? " (btw-nummer nog niet goed bevonden)" : " (particulier)") };
+}
+function vsBtwSchoon(x) { return String(x || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase(); }
+/* Kijk het btw-nummer na bij de EU en onthoud de uitkomst bij het voorstel. */
+async function vsBtwNakijken(H, v) {
+  const nr = vsBtwSchoon(v.klant && v.klant.btw);
+  if (!nr) { delete v.btwCheck; return null; }
+  if (v.btwCheck && v.btwCheck.nummer === nr && !v.btwCheck.storing) return v.btwCheck;
+  if (!H.btwControle) return null;
+  const r = await H.btwControle(nr).catch(e => ({ ok: false, storing: true, error: String(e.message || e) }));
+  v.btwCheck = { nummer: nr, ts: Date.now(), geldig: !!(r && r.ok && r.geldig), naam: (r && r.naam) || "", storing: !!(r && r.storing), uitleg: (r && (r.error || r.uitleg)) || "" };
+  return v.btwCheck;
+}
+
+/* ── Instellingen (beheer): vervoerders, codes voor aangepast, beurzen ──── */
+async function vsInstellingen(db) {
+  const r = await db.prepare("SELECT v FROM voorstel_cache WHERE k = 'instellingen'").first();
+  const i = r ? vsJson(r.v, {}) : {};
+  return { transporteurs: Array.isArray(i.transporteurs) && i.transporteurs.length ? i.transporteurs : VS_TRANSPORT_STANDAARD,
+    codes: Array.isArray(i.codes) ? i.codes : [], beurzen: Array.isArray(i.beurzen) ? i.beurzen : VS_BEURS_STANDAARD };
+}
+function vsVandaag() { return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" }); }
+function vsBeursNu(inst) { const d = vsVandaag(); return (inst.beurzen || []).find(b => b.van && b.tot && b.van <= d && d <= b.tot) || null; }
+
+/* De kop naar Logic4. De status die Logic4 nu heeft gaat ongewijzigd mee:
+   stond hier vast 4, dan zette elke kopwijziging een gesloten voorstel of een
+   order die intussen betaald is terug op Offerte (proef 31 okt). */
+async function vsKopPush(env, H, db, v) {
+  if (!v.orderid) return;
+  const nu = await vsOrderLees(env, H, v.orderid);
+  if (nu && Number(nu.statusId) !== VS_OFFERTE) throw Object.assign(new Error("Dit voorstel is in Logic4 al verder (status " + nu.status + "); de kop blijft zoals hij is."), { code: 409 });
+  v.kop = vsKopStandaard(v.kop, await vsKeuzes(env, H, db), v.adviseur, v);
+  await vsL4(env, H, "/v3/Orders/AddUpdateOrder", Object.assign({ Id: Number(v.orderid), DebtorId: Number(v.debiteur),
+    OrderStatus: { Id: VS_OFFERTE }, CreationDate: new Date(v.aangemaakt || Date.now()).toISOString().slice(0, 19) }, vsKopNaarL4(v.kop)));
 }
 
 /* Heeft deze klant precies deze gegevens al eens bevestigd? */
@@ -367,7 +672,8 @@ async function vsNaarLogic4(env, H, db, v, wie) {
   /* Marcel (MGS, 30 okt 2026): "bij het aanmaken van een offerte moet je
      altijd een Medewerker kiezen en je moet bij Type 4 'Magazijn'
      selecteren." Leeg = de adviseur zelf en Magazijn. */
-  const kop = vsKopStandaard(v.kop, await vsKeuzes(env, H, db), v.adviseur);
+  if (v.klant && v.klant.btw) await vsBtwNakijken(H, v).catch(() => null);
+  const kop = vsKopStandaard(v.kop, await vsKeuzes(env, H, db), v.adviseur, v);
   if (!Number(kop.medewerker)) return { ok: false, error: "Kies eerst een medewerker bij de gegevens van het voorstel." };
   v.kop = kop;
   const payload = Object.assign({
@@ -485,7 +791,7 @@ async function vsPrijs(env, H, code, debiteur, aantal) {
 
 /* ── Keuzelijsten voor de kop (een keer per dag vers) ────────────────────── */
 async function vsKeuzes(env, H, db) {
-  const c = await db.prepare("SELECT v, ts FROM voorstel_cache WHERE k = 'keuzes'").first();
+  const c = await db.prepare("SELECT v, ts FROM voorstel_cache WHERE k = 'keuzes2'").first();
   if (c && Date.now() - c.ts < 86400000) return vsJson(c.v, {});
   const naam = (x) => x.Description || x.Name || x.Naam || x.FullName || [x.FirstName, x.LastName].filter(Boolean).join(" ") || String(x.Id);
   const lijst = async (pad, body) => { try { const r = await vsL4(env, H, pad, body); return (Array.isArray(r) ? r : []).map(x => ({ id: x.Id, naam: naam(x) })).filter(x => x.id); } catch (e) { return []; } };
@@ -503,7 +809,15 @@ async function vsKeuzes(env, H, db) {
   const k = {
     filialen: netjes(await lijst("/v3/Company/GetBranches")),
     medewerkers,
-    transporteurs: netjes(await lijst("/v3/Shippers/GetShippingMethods")),
+    /* Met het standaardbedrag (ex btw) uit Logic4, zodat de verzendkosten er
+       meteen bij staan als de adviseur een vervoerder kiest (Dolf, 6 nov 2026). */
+    transporteurs: await (async () => {
+      try {
+        const r = await vsL4(env, H, "/v3/Shippers/GetShippingMethods");
+        return (Array.isArray(r) ? r : []).map(x => ({ id: x.Id, naam: String(String(x.Description || "").trim() || x.Name || "").split(/\r?\n/)[0].trim(), intern: String(x.Name || "").trim(),
+          bedrag: Math.round((Number(x.BasicAmount) || 0) * 100) / 100 })).filter(x => x.id && !oud(x.naam) && !/^zz/i.test(x.intern)).sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+      } catch (e) { return []; }
+    })(),
     betaalmethoden: netjes(await lijst("/v3/Financial/GetPaymentMethods")),
     btwcodes: netjes(await lijst("/v3/Financial/GetVatCodes")).filter(x => !/inkopen/i.test(x.naam)),
     types: {},
@@ -524,7 +838,7 @@ async function vsKeuzes(env, H, db) {
         .map(([id, aantal]) => ({ id: Number(id), naam: VS_TYPES[n].bekend[id] || ("Keuze " + id), aantal })) };
     }
   } catch (e) {}
-  await db.prepare("INSERT OR REPLACE INTO voorstel_cache (k, v, ts) VALUES ('keuzes', ?1, ?2)").bind(JSON.stringify(k), Date.now()).run();
+  await db.prepare("INSERT OR REPLACE INTO voorstel_cache (k, v, ts) VALUES ('keuzes2', ?1, ?2)").bind(JSON.stringify(k), Date.now()).run();
   return k;
 }
 
@@ -591,8 +905,9 @@ async function vsArtikel(env, H, q) {
    Logic4, Mollie of een klant. Hier alleen de pagina's die de klant op zijn
    telefoon ziet, precies zoals het echte voorstel ze maakt. */
 async function vsDemo(env, H, db, b, wie) {
-  const v = { klant: vsKlantSchoon(b.klant), aanbetaling: Number(b.aanbetaling) || 0 };
-  const pagina = async (titel, inhoud) => (await vsPagina(titel, inhoud).text());
+  const v = { klant: vsKlantSchoon(b.klant), aanbetaling: Number(b.aanbetaling) || 0, betaalwijze: ["30", "alles", "aangepast"].includes(b.betaalwijze) ? b.betaalwijze : "30", taal: VS_TALEN[b.taal] ? b.taal : "" };
+  const taal = vsTaal(v), T = vsT(taal);
+  const pagina = async (titel, inhoud) => (await vsPagina(titel, inhoud, taal).text());
   const regels = (Array.isArray(b.regels) ? b.regels : []).filter(r => !r.vervallen && Number(r.aantal)).slice(0, 60).map(r => {
     const netto = Number(r.netto) || 0, btw = Number(r.btw) || 0, bruto = Number(r.bruto) || 0;
     return { code: vsS(r.code, 40), oms: vsS(r.oms, 250), aantal: Number(r.aantal), stukEx: netto, stukIncl: Math.round(netto * (1 + btw / 100) * 100) / 100, btw,
@@ -600,23 +915,20 @@ async function vsDemo(env, H, db, b, wie) {
   });
   const t = b.totaal || {};
   const kop = b.kop || {};
-  const d = { nummer: "DEMO", datum: Date.now(), geldigTot: kop.vervaldatum || "", klant: v.klant, zakelijk: !!(v.klant.bedrijf || v.klant.btw),
-    referentie: vsS(kop.referentie), omschrijving: vsS(kop.omschrijving, 200), betaalmethode: "", transporteur: "", leverdatum: "",
+  const d = { nummer: "DEMO", datum: Date.now(), geldigTot: kop.vervaldatum || "", taal, klant: v.klant, zakelijk: !!(v.klant.bedrijf || v.klant.btw),
+    referentie: "", omschrijving: vsS(kop.omschrijving, 200), betaalmethode: v.betaalwijze === "alles" ? T.balles : v.betaalwijze === "aangepast" ? T.beigen(vsGeld(v.aanbetaling, taal)) : T.b30, transporteur: "", leverdatum: "",
     adviseur: { naam: vsS(b.adviseur) || wie.replace(/@.*/, ""), mail: vsAdviseurMail(wie) },
     regels, totaal: { ex: Number(t.ex) || 0, incl: Number(t.incl) || 0, btw: Number(t.btw) || 0, verzend: Number(t.verzend) || 0 } };
   v.verstuurdeVersie = d;
   if (b.betaald) v.betalingen = [{ geboekt: 1, bedrag: Number(b.betaald) }];
   switch (b.stap) {
     case "mail": return vsMailHtml(v, vsBasis(env) + "/bevestig?t=voorbeeld");
-    case "bevestig": return pagina("Bevestig je gegevens",
-      "<h1>Kloppen je gegevens?</h1><p>Kijk ze even na. Zo weten we zeker dat je gegevens kloppen en veilig bij jouw voorstel horen.</p>" + vsGegevensTabel(v.klant) +
-      "<form method='post' action='#'><input type='hidden' name='soort' value='klopt'><button class='knop groen' type='submit'>Klopt</button></form>" +
-      "<a class='knop grijs' href='#aanpassen'>Klopt niet, ik pas het aan</a>");
-    case "aanpassen": return pagina("Gegevens aanpassen", "<h1>Pas je gegevens aan</h1><p>Verander wat er anders moet en klik daarna op opslaan.</p>" + vsFormulier("demo", v.klant));
-    case "bedankt": return pagina("Bedankt", VS_BEDANKT);
+    case "bevestig": return pagina(T.ond_bevestig, vsBevestigInhoud(v.klant, taal, "#", "", "<a class='knop grijs' href='#aanpassen'>" + vsEsc(T.klopt_niet) + "</a>"));
+    case "aanpassen": return pagina(T.aanpassen, "<h1>" + vsEsc(T.aanpassen) + "</h1><p>" + vsEsc(T.aanpassen_p) + "</p>" + vsFormulier("demo", v.klant, taal));
+    case "bedankt": return pagina(T.bedankt, vsBedankt(taal));
     case "voorstelmail": return vsVoorstelMailHtml(v, d, vsBasis(env) + "/voorstel/bekijk?t=voorbeeld", b.tekst);
     case "voorstel": return vsDocHtml(d, { voet: vsBetaalBlok(v, "demo") });
-    case "betaald": return pagina("Bedankt", "<h1>Bedankt, je aanbetaling is binnen</h1><p>We hebben " + vsGeld(b.betaald) + " ontvangen. Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>");
+    case "betaald": return pagina(T.binnen, "<h1>" + vsEsc(T.binnen) + "</h1><p>" + vsEsc(T.binnen_p(vsGeld(b.betaald, taal))) + "</p>");
   }
   return pagina("Demo", "<h1>Demo</h1>");
 }
@@ -632,21 +944,21 @@ function vsAdviseurMail(wie) {
 /* DE TEKST IS EEN VOORLOPIGE. Gerrit (30 okt 2026): de tekst van de mail
    komt van Marcel; tot die er is staat hier een korte versie. */
 function vsMailHtml(v, link) {
-  const k = v.klant || {};
+  const k = v.klant || {}, T = vsT(vsTaal(v));
   /* Klanten spreken we altijd aan met je (Gerrit, 31 okt 2026). */
-  const aanhef = "Beste " + (k.voornaam || vsNaam(k) || "klant");
+  const aanhef = T.beste(k.voornaam || vsNaam(k));
   return "<div style='font-family:Arial,Helvetica,sans-serif;background:#f5f4ef;padding:20px'><div style='max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden'>" +
     "<div style='background:#144734;padding:16px 20px'><img src='" + VS_LOGO + "' alt='Fonteyn' style='height:44px;display:block'></div>" +
     "<div style='padding:22px'><p style='font-size:15px;line-height:1.55'>" + vsEsc(aanhef) + ",</p>" +
-    "<p style='font-size:15px;line-height:1.55'>Fijn dat je bij ons langs bent geweest. Voordat we je voorstel maken, vragen we je even je gegevens na te kijken. Zo weten we zeker dat alles klopt.</p>" +
-    "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>Bevestig je gegevens</a></p>" +
-    "<p style='font-size:13px;color:#6b7280;line-height:1.5'>Lukt het klikken op de knop? Kopieer anders deze link naar je browser:<br>" + vsEsc(link) + "</p>" +
-    "<p style='font-size:15px;line-height:1.55'>Met vriendelijke groet,<br>Fonteyn</p></div></div></div>";
+    "<p style='font-size:15px;line-height:1.55'>" + vsEsc(T.mail_bevestig) + "</p>" +
+    "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>" + vsEsc(T.knop_bevestig) + "</a></p>" +
+    "<p style='font-size:13px;color:#6b7280;line-height:1.5'>" + vsEsc(T.link_kopie) + "<br>" + vsEsc(link) + "</p>" +
+    "<p style='font-size:15px;line-height:1.55'>" + vsEsc(T.groet) + "<br>Fonteyn</p></div></div></div>";
 }
 async function vsMailStuur(env, H, v, wie, onderwerp, html) {
   const naar = v.klant && v.klant.email;
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar || "")) return { ok: false, error: "Vul eerst een geldig e-mailadres van de klant in." };
-  onderwerp = onderwerp || "Bevestig je gegevens";
+  onderwerp = onderwerp || vsT(vsTaal(v)).ond_bevestig;
   html = html || vsMailHtml(v, vsLink(env, v.token));
   const adviseur = vsAdviseurMail(v.adviseur || wie);
   // Proef: alles naar één adres zolang de tegel in aanbouw is.
@@ -674,8 +986,8 @@ async function vsMailStuur(env, H, v, wie, onderwerp, html) {
    met een link ernaartoe. Wat de klant ziet is de stand op het moment van
    versturen; latere wijzigingen gaan pas mee bij opnieuw versturen. */
 function vsDocLink(env, v) { return (env.SVC_LINK_BASIS || "https://fonteyn-data-store.g-mulder.workers.dev") + "/voorstel/bekijk?t=" + encodeURIComponent(v.bekijkToken); }
-function vsGeld(x) { return "\u20ac " + (Math.round((Number(x) || 0) * 100) / 100).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function vsDatum(t) { const d = t ? new Date(t) : null; return d && !isNaN(d) ? d.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Amsterdam" }) : ""; }
+function vsGeld(x, taal) { return "\u20ac " + (Math.round((Number(x) || 0) * 100) / 100).toLocaleString(VS_LOCALE[taal] || "nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function vsDatum(t, taal) { const d = t ? new Date(t) : null; return d && !isNaN(d) ? d.toLocaleDateString(VS_LOCALE[taal] || "nl-NL", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Amsterdam" }) : ""; }
 /* Alles wat op het papier komt, in één keer bij elkaar. */
 async function vsDocGegevens(env, H, db, v) {
   const o = await vsOrderLees(env, H, v.orderid);
@@ -684,11 +996,13 @@ async function vsDocGegevens(env, H, db, v) {
   const naamVan = (lijst, id) => ((k[lijst] || []).find(x => String(x.id) === String(id)) || {}).naam || "";
   const mw = (k.medewerkers || []).find(x => String(x.id) === String(o.kop.medewerker)) || {};
   const adviseurMail = /@/.test(mw.login || "") ? mw.login : vsAdviseurMail(v.adviseur);
+  const taal = vsTaal(v), T = vsT(taal);
+  const wijze = v.betaalwijze === "alles" ? T.balles : (v.betaalwijze === "aangepast" || (!v.betaalwijze && Number(v.aanbetaling) > 0)) ? T.beigen(vsGeld(v.aanbetaling, taal)) : T.b30;
   return {
-    nummer: o.id, datum: Date.now(), geldigTot: v.vervaldatum || "",
+    nummer: o.id, datum: Date.now(), geldigTot: v.vervaldatum || "", taal,
     klant: v.klant, zakelijk: !!(v.klant && (v.klant.bedrijf || v.klant.btw)),
-    referentie: o.kop.referentie, omschrijving: o.kop.omschrijving,
-    betaalmethode: naamVan("betaalmethoden", o.kop.betaalmethode), transporteur: naamVan("transporteurs", o.kop.transporteur),
+    referentie: "", omschrijving: o.kop.omschrijving,
+    betaalmethode: wijze, transporteur: naamVan("transporteurs", o.kop.transporteur),
     leverdatum: o.kop.leverdatum && o.kop.leverdatum < "2099" ? o.kop.leverdatum : "",
     adviseur: { naam: mw.naam || String(v.adviseur || "").replace(/@.*/, ""), mail: adviseurMail },
     regels: o.regels.filter(r => !r.vervallen && r.aantal).map(r => ({ code: r.code, oms: r.oms, oms2: r.oms2, aantal: r.aantal,
@@ -699,15 +1013,16 @@ async function vsDocGegevens(env, H, db, v) {
 }
 function vsDocHtml(d, opties) {
   opties = opties || {};
-  const k = d.klant || {}, a = k.aflevering || {};
+  const k = d.klant || {}, a = k.aflevering || {}, taal = d.taal || "nl", T = vsT(taal);
+  const geld = x => vsGeld(x, taal), datum = x => vsDatum(x, taal);
   const regel = (l, w) => w ? "<tr><td>" + vsEsc(l) + "</td><td>" + vsEsc(w) + "</td></tr>" : "";
   const adres = [[k.straat, [k.huisnummer, k.toevoeging].filter(Boolean).join(" ")].filter(Boolean).join(" "), [k.postcode, k.plaats].filter(Boolean).join(" "), k.land && k.land !== "NL" ? k.land : ""].filter(Boolean);
   const incl = !d.zakelijk;   // particulier: prijzen met btw; zakelijk: zonder
-  const rij = r => "<tr><td>" + vsEsc(r.oms) + (r.oms2 && r.oms2.trim() !== String(r.oms).trim() ? "<div class='klein'>" + vsEsc(r.oms2) + "</div>" : "") + "<div class='klein'>Artikel " + vsEsc(r.code) + (r.korting ? " &middot; " + vsEsc(String(r.korting).replace(".", ",")) + "% korting" : "") + "</div></td>" +
-    "<td class='g'>" + vsEsc(String(r.aantal).replace(".", ",")) + "</td><td class='g stuk'>" + vsGeld(incl ? r.stukIncl : r.stukEx) + "</td><td class='g'>" + vsGeld((incl ? r.stukIncl : r.stukEx) * r.aantal) + "</td></tr>";
+  const rij = r => "<tr><td>" + vsEsc(r.oms) + (r.oms2 && r.oms2.trim() !== String(r.oms).trim() ? "<div class='klein'>" + vsEsc(r.oms2) + "</div>" : "") + "<div class='klein'>" + T.artikel + " " + vsEsc(r.code) + (r.korting ? " &middot; " + vsEsc(String(r.korting).replace(".", ",")) + "% " + T.korting : "") + "</div></td>" +
+    "<td class='g'>" + vsEsc(String(r.aantal).replace(".", ",")) + "</td><td class='g stuk'>" + geld(incl ? r.stukIncl : r.stukEx) + "</td><td class='g'>" + geld((incl ? r.stukIncl : r.stukEx) * r.aantal) + "</td></tr>";
   const t = d.totaal || {};
-  return "<!doctype html><html lang='nl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
-    "<title>Voorstel " + vsEsc(d.nummer) + " - Fonteyn</title><meta name='robots' content='noindex'><style>" +
+  return "<!doctype html><html lang='" + taal + "'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
+    "<title>" + T.voorstel + " " + vsEsc(d.nummer) + " - Fonteyn</title><meta name='robots' content='noindex'><style>" +
     "body{margin:0;background:#f5f4ef;font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:14px}" +
     ".vel{max-width:800px;margin:20px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}" +
     ".kop{background:#144734;padding:18px 26px;display:flex;align-items:center;gap:16px}.kop img{height:52px;display:block}.kop .t{margin-left:auto;color:#fff;text-align:right}.kop .t b{display:block;font-size:20px}" +
@@ -721,39 +1036,39 @@ function vsDocHtml(d, opties) {
     ".balk{max-width:800px;margin:16px auto 0;text-align:right}" +
     "@media print{body{background:#fff}.balk{display:none}.vel{border:0;margin:0;max-width:none;border-radius:0}.kop{-webkit-print-color-adjust:exact;print-color-adjust:exact}}" +
     "</style></head><body>" +
-    "<div class='balk'><button class='knop' onclick='window.print()' title='Print dit voorstel of sla het op als pdf'>Printen of opslaan als pdf</button></div>" +
-    "<div class='vel'><div class='kop'><img src='" + VS_LOGO + "' alt='Fonteyn'><div class='t'><b>Voorstel " + vsEsc(d.nummer) + "</b>" + vsEsc(vsDatum(d.datum)) + "</div></div><div class='in'>" +
-    "<div class='twee'><div><h3>Voor</h3><p><b>" + vsEsc(k.bedrijf || vsNaam(k)) + "</b>" + (k.bedrijf ? "<br>t.a.v. " + vsEsc(vsNaam(k)) : "") + "<br>" + adres.map(vsEsc).join("<br>") + "</p>" +
-      (k.afwijkend ? "<h3 style='margin-top:12px'>Afleveradres</h3><p>" + [a.naam, [a.straat, [a.huisnummer, a.toevoeging].filter(Boolean).join(" ")].join(" "), [a.postcode, a.plaats].filter(Boolean).join(" ")].filter(x => String(x).trim()).map(vsEsc).join("<br>") + "</p>" : "") + "</div>" +
-    "<div><h3>Gegevens</h3><table class='geg'>" + regel("Voorstel", d.nummer) + regel("Datum", vsDatum(d.datum)) + regel("Geldig tot", d.geldigTot ? vsDatum(d.geldigTot) : "") +
-      regel("Je referentie", d.referentie) + regel("Betaling", d.betaalmethode) + regel("Levering", d.transporteur) + regel("Gewenste leverdatum", d.leverdatum ? vsDatum(d.leverdatum) : "") +
-      regel("Je adviseur", d.adviseur.naam) + regel("E-mail", d.adviseur.mail) + "</table></div></div>" +
+    "<div class='balk'><button class='knop' onclick='window.print()' title='" + vsEsc(T.printen) + "'>" + vsEsc(T.printen) + "</button></div>" +
+    "<div class='vel'><div class='kop'><img src='" + VS_LOGO + "' alt='Fonteyn'><div class='t'><b>" + T.voorstel + " " + vsEsc(d.nummer) + "</b>" + vsEsc(datum(d.datum)) + "</div></div><div class='in'>" +
+    "<div class='twee'><div><h3>" + T.voor + "</h3><p><b>" + vsEsc(k.bedrijf || vsNaam(k)) + "</b>" + (k.bedrijf ? "<br>" + T.tav + " " + vsEsc(vsNaam(k)) : "") + "<br>" + adres.map(vsEsc).join("<br>") + "</p>" +
+      (k.afwijkend ? "<h3 style='margin-top:12px'>" + T.afleveradres + "</h3><p>" + [a.naam, [a.straat, [a.huisnummer, a.toevoeging].filter(Boolean).join(" ")].join(" "), [a.postcode, a.plaats].filter(Boolean).join(" ")].filter(x => String(x).trim()).map(vsEsc).join("<br>") + "</p>" : "") + "</div>" +
+    "<div><h3>" + T.gegevens + "</h3><table class='geg'>" + regel(T.voorstel, d.nummer) + regel(T.datum, datum(d.datum)) + regel(T.geldig, d.geldigTot ? datum(d.geldigTot) : "") +
+      regel(T.referentie, d.referentie) + regel(T.betaling, d.betaalmethode) + regel(T.levering, d.transporteur) + regel(T.leverdatum, d.leverdatum ? datum(d.leverdatum) : "") +
+      regel(T.adviseur, d.adviseur.naam) + regel(T.mail, d.adviseur.mail) + "</table></div></div>" +
     (d.omschrijving ? "<p style='margin-bottom:12px'><b>" + vsEsc(d.omschrijving) + "</b></p>" : "") +
-    "<table class='r'><thead><tr><th>Omschrijving</th><th class='g'>Aantal</th><th class='g stuk'>Prijs per stuk" + (incl ? " incl. btw" : " excl. btw") + "</th><th class='g'>Totaal</th></tr></thead><tbody>" + d.regels.map(rij).join("") + "</tbody></table>" +
-    "<table class='tot'>" + (t.verzend ? "<tr><td>Verzendkosten excl. btw</td><td>" + vsGeld(t.verzend) + "</td></tr>" : "") +
-      "<tr><td>Totaal excl. btw</td><td>" + vsGeld(t.ex) + "</td></tr><tr><td>Btw</td><td>" + vsGeld(t.btw) + "</td></tr><tr class='groot'><td>Totaal incl. btw</td><td>" + vsGeld(t.incl) + "</td></tr></table>" +
-    "<p class='klein' style='margin-top:24px'>Vragen over dit voorstel? Mail of bel je adviseur" + (d.adviseur.naam ? ", " + vsEsc(d.adviseur.naam) : "") + ". We helpen je graag verder.</p>" +
+    "<table class='r'><thead><tr><th>" + T.omschrijving + "</th><th class='g'>" + T.aantal + "</th><th class='g stuk'>" + T.stukprijs + " " + (incl ? T.incl : T.excl) + "</th><th class='g'>" + T.totaal + "</th></tr></thead><tbody>" + d.regels.map(rij).join("") + "</tbody></table>" +
+    "<table class='tot'>" + (t.verzend ? "<tr><td>" + T.verzend + "</td><td>" + geld(t.verzend) + "</td></tr>" : "") +
+      "<tr><td>" + T.tot_ex + "</td><td>" + geld(t.ex) + "</td></tr><tr><td>" + T.btw_kort + "</td><td>" + geld(t.btw) + "</td></tr><tr class='groot'><td>" + T.tot_incl + "</td><td>" + geld(t.incl) + "</td></tr></table>" +
+    "<p class='klein' style='margin-top:24px'>" + vsEsc(T.vragen(d.adviseur.naam)) + "</p>" +
     "</div></div>" + (opties.voet || "") + "</body></html>";
 }
 function vsVoorstelMailHtml(v, d, link, tekst) {
-  const k = v.klant || {};
+  const k = v.klant || {}, taal = d.taal || vsTaal(v), T = vsT(taal);
   /* Klanten spreken we altijd aan met je (Gerrit, 31 okt 2026). */
-  const aanhef = "Beste " + (k.voornaam || vsNaam(k) || "klant");
-  const alinea = String(tekst || "Hierbij ontvang je ons voorstel. Je bekijkt het via de knop hieronder; daar kun je het ook printen of opslaan als pdf.")
+  const aanhef = T.beste(k.voornaam || vsNaam(k));
+  const alinea = String(tekst || T.mail_vs)
     .split(/\n{2,}/).map(x => "<p style='font-size:15px;line-height:1.55'>" + vsEsc(x).replace(/\n/g, "<br>") + "</p>").join("");
   return "<div style='font-family:Arial,Helvetica,sans-serif;background:#f5f4ef;padding:20px'><div style='max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden'>" +
     "<div style='background:#144734;padding:16px 20px'><img src='" + VS_LOGO + "' alt='Fonteyn' style='height:44px;display:block'></div>" +
     "<div style='padding:22px'><p style='font-size:15px;line-height:1.55'>" + vsEsc(aanhef) + ",</p>" + alinea +
-    "<table style='border-collapse:collapse;margin:16px 0;font-size:14px'><tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Voorstel</td><td><b>" + vsEsc(d.nummer) + "</b></td></tr>" +
-    "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Totaal incl. btw</td><td><b>" + vsGeld(d.totaal.incl) + "</b></td></tr>" +
-    (d.geldigTot ? "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>Geldig tot</td><td>" + vsEsc(vsDatum(d.geldigTot)) + "</td></tr>" : "") + "</table>" +
-    "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>Bekijk je voorstel</a></p>" +
-    "<p style='font-size:15px;line-height:1.55'>Met vriendelijke groet,<br>" + vsEsc(d.adviseur.naam || "Fonteyn") + "<br><span style='color:#6b7280'>Fonteyn" + (d.adviseur.mail ? " &middot; " + vsEsc(d.adviseur.mail) : "") + "</span></p></div></div></div>";
+    "<table style='border-collapse:collapse;margin:16px 0;font-size:14px'><tr><td style='color:#6b7280;padding:3px 14px 3px 0'>" + T.voorstel + "</td><td><b>" + vsEsc(d.nummer) + "</b></td></tr>" +
+    "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>" + T.tot_incl + "</td><td><b>" + vsGeld(d.totaal.incl, taal) + "</b></td></tr>" +
+    (d.geldigTot ? "<tr><td style='color:#6b7280;padding:3px 14px 3px 0'>" + T.geldig + "</td><td>" + vsEsc(vsDatum(d.geldigTot, taal)) + "</td></tr>" : "") + "</table>" +
+    "<p style='margin:22px 0'><a href='" + vsEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>" + vsEsc(T.knop_vs) + "</a></p>" +
+    "<p style='font-size:15px;line-height:1.55'>" + vsEsc(T.groet) + "<br>" + vsEsc(d.adviseur.naam || "Fonteyn") + "<br><span style='color:#6b7280'>Fonteyn" + (d.adviseur.mail ? " &middot; " + vsEsc(d.adviseur.mail) : "") + "</span></p></div></div></div>";
 }
 
 /* ── De pagina voor de klant ────────────────────────────────────────────── */
-function vsPagina(titel, inhoud) {
-  return new Response("<!doctype html><html lang='nl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
+function vsPagina(titel, inhoud, taal) {
+  return new Response("<!doctype html><html lang='" + (VS_TALEN[taal] ? taal : "nl") + "'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
     "<title>" + vsEsc(titel) + " - Fonteyn</title><meta name='robots' content='noindex'>" +
     "<style>body{margin:0;background:#f5f4ef;font-family:Arial,Helvetica,sans-serif;color:#1f2937}" +
     ".kop{background:#144734;padding:16px 20px}.kop img{height:48px;display:block}" +
@@ -770,62 +1085,70 @@ function vsPagina(titel, inhoud) {
     "<div class='kop'><img src='" + VS_LOGO + "' alt='Fonteyn'></div><div class='blok'>" + inhoud + "</div></body></html>",
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
 }
-function vsGegevensTabel(k) {
-  const aanhef = k.aanhef === "1" ? "De heer" : k.aanhef === "2" ? "Mevrouw" : "";
+function vsGegevensTabel(k, taal) {
+  const T = vsT(taal);
+  const aanhef = k.aanhef === "1" ? T.heer : k.aanhef === "2" ? T.mevrouw : "";
   const rij = (l, w) => w ? "<tr><td>" + vsEsc(l) + "</td><td>" + vsEsc(w) + "</td></tr>" : "";
   const adres = [k.straat, [k.huisnummer, k.toevoeging].filter(Boolean).join(" ")].filter(Boolean).join(" ");
   const a = k.aflevering || {};
-  return "<table class='geg'>" + rij("Naam", [aanhef, vsNaam(k)].filter(Boolean).join(" ")) + rij("Bedrijf", k.bedrijf) + rij("Btw-nummer", k.btw) +
-    rij("Adres", adres) + rij("Postcode en plaats", [k.postcode, k.plaats].filter(Boolean).join(" ")) + rij("Land", k.land) +
-    rij("E-mailadres", k.email) + rij("Telefoon", k.telefoon) + rij("Mobiel", k.mobiel) +
-    (k.afwijkend ? rij("Afleveren op", [a.naam, [a.straat, [a.huisnummer, a.toevoeging].filter(Boolean).join(" ")].join(" "), [a.postcode, a.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", ")) : "") +
+  return "<table class='geg'>" + rij(T.naam, [aanhef, vsNaam(k)].filter(Boolean).join(" ")) + rij(T.bedrijf, k.bedrijf) + rij(T.btw, k.btw) +
+    rij(T.adres, adres) + rij(T.pc_plaats, [k.postcode, k.plaats].filter(Boolean).join(" ")) + rij(T.land, k.land) +
+    rij(T.email, k.email) + rij(T.telefoon, k.telefoon) + rij(T.mobiel, k.mobiel) +
+    (k.afwijkend ? rij(T.afleveren_op, [a.naam, [a.straat, [a.huisnummer, a.toevoeging].filter(Boolean).join(" ")].join(" "), [a.postcode, a.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", ")) : "") +
     "</table>";
 }
 function vsVeld(naam, label, waarde, extra) {
   return "<div><label for='" + naam + "'>" + vsEsc(label) + "</label><input id='" + naam + "' name='" + naam + "' value='" + vsEsc(waarde) + "'" + (extra || "") + "></div>";
 }
-function vsFormulier(token, k) {
-  const a = k.aflevering || {};
+function vsFormulier(token, k, taal) {
+  const a = k.aflevering || {}, T = vsT(taal);
   return "<form method='post' action='/bevestig'><input type='hidden' name='t' value='" + vsEsc(token) + "'><input type='hidden' name='soort' value='aangepast'>" +
-    "<label for='aanhef'>Aanhef</label><select id='aanhef' name='aanhef'><option value=''></option><option value='1'" + (k.aanhef === "1" ? " selected" : "") + ">De heer</option><option value='2'" + (k.aanhef === "2" ? " selected" : "") + ">Mevrouw</option></select>" +
-    "<div class='rij3'>" + vsVeld("voornaam", "Voornaam", k.voornaam) + vsVeld("tussenvoegsel", "Tussenvoegsel", k.tussenvoegsel) + vsVeld("achternaam", "Achternaam", k.achternaam, " required") + "</div>" +
-    (k.bedrijf || k.btw ? "<div class='rij'>" + vsVeld("bedrijf", "Bedrijfsnaam", k.bedrijf) + vsVeld("btw", "Btw-nummer", k.btw) + "</div>" : "") +
-    "<div class='rij3'>" + vsVeld("straat", "Straat", k.straat, " required") + vsVeld("huisnummer", "Huisnummer", k.huisnummer, " required") + vsVeld("toevoeging", "Toevoeging", k.toevoeging) + "</div>" +
-    "<div class='rij3'>" + vsVeld("plaats", "Plaats", k.plaats, " required") + vsVeld("postcode", "Postcode", k.postcode, " required") + vsVeld("land", "Land", k.land, " maxlength='2'") + "</div>" +
-    vsVeld("email", "E-mailadres", k.email, " type='email' required") +
-    "<div class='rij'>" + vsVeld("telefoon", "Telefoon", k.telefoon, " type='tel'") + vsVeld("mobiel", "Mobiel", k.mobiel, " type='tel'") + "</div>" +
-    "<label class='vink'><input type='checkbox' name='afwijkend' value='1'" + (k.afwijkend ? " checked" : "") + " onchange=\"document.getElementById('afl').style.display=this.checked?'block':'none'\"> Afleveren op een ander adres</label>" +
-    "<div id='afl' style='display:" + (k.afwijkend ? "block" : "none") + "'>" + vsVeld("a_naam", "Naam", a.naam) +
-    "<div class='rij3'>" + vsVeld("a_straat", "Straat", a.straat) + vsVeld("a_huisnummer", "Huisnummer", a.huisnummer) + vsVeld("a_toevoeging", "Toevoeging", a.toevoeging) + "</div>" +
-    "<div class='rij3'>" + vsVeld("a_plaats", "Plaats", a.plaats) + vsVeld("a_postcode", "Postcode", a.postcode) + vsVeld("a_land", "Land", a.land, " maxlength='2'") + "</div></div>" +
-    "<button class='knop groen' type='submit'>Opslaan, zo klopt het</button></form>";
+    "<label for='aanhef'>" + T.aanhef + "</label><select id='aanhef' name='aanhef'><option value=''></option><option value='1'" + (k.aanhef === "1" ? " selected" : "") + ">" + T.heer + "</option><option value='2'" + (k.aanhef === "2" ? " selected" : "") + ">" + T.mevrouw + "</option></select>" +
+    "<div class='rij3'>" + vsVeld("voornaam", T.voornaam, k.voornaam) + vsVeld("tussenvoegsel", T.tussenvoegsel, k.tussenvoegsel) + vsVeld("achternaam", T.achternaam, k.achternaam, " required") + "</div>" +
+    (k.bedrijf || k.btw ? "<div class='rij'>" + vsVeld("bedrijf", T.bedrijf, k.bedrijf) + vsVeld("btw", T.btw, k.btw) + "</div>" : "") +
+    "<div class='rij3'>" + vsVeld("straat", T.straat, k.straat, " required") + vsVeld("huisnummer", T.huisnummer, k.huisnummer, " required") + vsVeld("toevoeging", T.toevoeging, k.toevoeging) + "</div>" +
+    "<div class='rij3'>" + vsVeld("plaats", T.plaats, k.plaats, " required") + vsVeld("postcode", T.postcode, k.postcode, " required") + vsVeld("land", T.land, k.land, " maxlength='2'") + "</div>" +
+    vsVeld("email", T.email, k.email, " type='email' required") +
+    "<div class='rij'>" + vsVeld("telefoon", T.telefoon, k.telefoon, " type='tel'") + vsVeld("mobiel", T.mobiel, k.mobiel, " type='tel'") + "</div>" +
+    "<label class='vink'><input type='checkbox' name='afwijkend' value='1'" + (k.afwijkend ? " checked" : "") + " onchange=\"document.getElementById('afl').style.display=this.checked?'block':'none'\"> " + T.ander_adres + "</label>" +
+    "<div id='afl' style='display:" + (k.afwijkend ? "block" : "none") + "'>" + vsVeld("a_naam", T.naam, a.naam) +
+    "<div class='rij3'>" + vsVeld("a_straat", T.straat, a.straat) + vsVeld("a_huisnummer", T.huisnummer, a.huisnummer) + vsVeld("a_toevoeging", T.toevoeging, a.toevoeging) + "</div>" +
+    "<div class='rij3'>" + vsVeld("a_plaats", T.plaats, a.plaats) + vsVeld("a_postcode", T.postcode, a.postcode) + vsVeld("a_land", T.land, a.land, " maxlength='2'") + "</div></div>" +
+    "<button class='knop groen' type='submit'>" + vsEsc(T.opslaan) + "</button></form>";
+}
+function vsBevestigInhoud(k, taal, actie, token, onder) {
+  const T = vsT(taal);
+  return "<h1>" + vsEsc(T.kloppen) + "</h1><p>" + vsEsc(T.kloppen_p) + "</p>" + vsGegevensTabel(k, taal) +
+    "<form method='post' action='" + actie + "'><input type='hidden' name='t' value='" + vsEsc(token) + "'><input type='hidden' name='soort' value='klopt'><button class='knop groen' type='submit'>" + vsEsc(T.klopt) + "</button></form>" + onder;
+}
+function vsVerlopen(taal, voorstel) {
+  const T = vsT(taal);
+  return vsPagina(T.voorstel, "<h1>" + vsEsc(voorstel ? T.vs_verlopen : T.verlopen) + "</h1><p>" + vsEsc(T.verlopen_p) + "</p>", taal);
 }
 async function vsBevestigGet(env, url) {
   const db = await vsDb(env);
   const token = String(url.searchParams.get("t") || "");
   const r = token ? await db.prepare("SELECT * FROM voorstel WHERE token = ?1").bind(token).first() : null;
-  if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
-  const v = vsUit(r);
+  if (!r) return vsVerlopen(null);
+  const v = vsUit(r), taal = vsTaal(v), T = vsT(taal);
   if (v.status !== "wacht") {
-    return vsPagina("Bevestig je gegevens", VS_BEDANKT);
+    return vsPagina(T.ond_bevestig, vsBedankt(taal), taal);
   }
   if (url.searchParams.get("aanpassen") === "1") {
-    return vsPagina("Gegevens aanpassen", "<h1>Pas je gegevens aan</h1><p>Verander wat er anders moet en klik daarna op opslaan.</p>" + vsFormulier(token, v.klant || {}));
+    return vsPagina(T.aanpassen, "<h1>" + vsEsc(T.aanpassen) + "</h1><p>" + vsEsc(T.aanpassen_p) + "</p>" + vsFormulier(token, v.klant || {}, taal), taal);
   }
-  return vsPagina("Bevestig je gegevens",
-    "<h1>Kloppen je gegevens?</h1><p>Kijk ze even na. Zo weten we zeker dat je gegevens kloppen en veilig bij jouw voorstel horen.</p>" + vsGegevensTabel(v.klant || {}) +
-    "<form method='post' action='/bevestig'><input type='hidden' name='t' value='" + vsEsc(token) + "'><input type='hidden' name='soort' value='klopt'><button class='knop groen' type='submit'>Klopt</button></form>" +
-    "<a class='knop grijs' href='/bevestig?t=" + encodeURIComponent(token) + "&aanpassen=1'>Klopt niet, ik pas het aan</a>");
+  return vsPagina(T.ond_bevestig, vsBevestigInhoud(v.klant || {}, taal, "/bevestig", token,
+    "<a class='knop grijs' href='/bevestig?t=" + encodeURIComponent(token) + "&aanpassen=1'>" + vsEsc(T.klopt_niet) + "</a>"), taal);
 }
 async function vsBevestigPost(env, request, H) {
   const f = await request.formData().catch(() => null);
-  if (!f) return vsPagina("Bevestig je gegevens", "<h1>Dat lukte nog niet</h1><p>Probeer het nog eens via de link in de mail.</p>");
+  if (!f) return vsPagina("Fonteyn", "<h1>" + VS_T.nl.lukte_niet + "</h1><p>" + VS_T.nl.lukte_niet_p + "</p>");
   const db = await vsDb(env);
   const token = String(f.get("t") || "");
   const r = token ? await db.prepare("SELECT * FROM voorstel WHERE token = ?1").bind(token).first() : null;
-  if (!r) return vsPagina("Bevestig je gegevens", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
-  const v = vsUit(r);
-  if (v.status !== "wacht") return vsPagina("Bevestig je gegevens", VS_BEDANKT);
+  if (!r) return vsVerlopen(null);
+  const v = vsUit(r), taal = vsTaal(v), T = vsT(taal);
+  if (v.status !== "wacht") return vsPagina(T.ond_bevestig, vsBedankt(taal), taal);
   let verschil = [];
   if (String(f.get("soort")) === "aangepast") {
     const g = (n) => f.get(n);
@@ -836,8 +1159,8 @@ async function vsBevestigPost(env, request, H) {
       land: g("land"), email: g("email"), telefoon: g("telefoon"), mobiel: g("mobiel"), afwijkend: g("afwijkend") === "1",
       aflevering: { naam: g("a_naam"), straat: g("a_straat"), huisnummer: g("a_huisnummer"), toevoeging: g("a_toevoeging"), postcode: g("a_postcode"), plaats: g("a_plaats"), land: g("a_land") },
     });
-    const mist = vsKlantMist(nieuw);
-    if (mist.length) return vsPagina("Gegevens aanpassen", "<h1>Bijna klaar</h1><p>Vul nog in: " + vsEsc(mist.join(", ")) + ".</p>" + vsFormulier(token, nieuw));
+    const mist = vsKlantMist(nieuw, taal);
+    if (mist.length) return vsPagina(T.aanpassen, "<h1>" + vsEsc(T.bijna) + "</h1><p>" + vsEsc(T.vul_in) + " " + vsEsc(mist.join(", ")) + ".</p>" + vsFormulier(token, nieuw, taal), taal);
     verschil = vsVerschil(v.klant, nieuw);
     v.klantAdviseur = v.klant;
     v.klant = nieuw;
@@ -850,7 +1173,7 @@ async function vsBevestigPost(env, request, H) {
   try { await vsNaarLogic4(env, H, db, v, "het Dashboard"); }
   catch (e) { v.logic4Fout = String(e.message || e).slice(0, 300); vsLog(v, "het Dashboard", "Logic4 lukte nog niet: " + v.logic4Fout); await vsSchrijf(db, v); }
   await vsBericht(env, H, v, verschil).catch(() => {});
-  return vsPagina("Bedankt", VS_BEDANKT);
+  return vsPagina(T.bedankt, vsBedankt(taal), taal);
 }
 /* Bericht in het Dashboard van de adviseur. Bij "klopt niet" met wat er
    anders is; bij "klopt" kort dat hij verder kan. */
@@ -878,25 +1201,25 @@ export async function vsHandle(request, env, url, H) {
     const t = String(url.searchParams.get("t") || ""), pr = String(url.searchParams.get("p") || "");
     const l = (t || pr) ? await db.prepare("SELECT id FROM voorstel_link WHERE token = ?1 AND soort = ?2").bind(t || pr, t ? "t" : "p").first() : null;
     const v = l ? await vsLees(db, l.id) : null;
-    if (!v || (t && !v.verstuurdeVersie) || v.status === "gesloten")
-      return vsPagina("Voorstel", "<h1>Dit voorstel is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
+    if (!v || (t && !v.verstuurdeVersie) || v.status === "gesloten") return vsVerlopen(v && vsTaal(v), true);
     try {
       const d = t ? v.verstuurdeVersie : await vsDocGegevens(env, H, db, v);
       return new Response(vsDocHtml(d, t ? { voet: vsBetaalBlok(v, t) } : {}), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
-    } catch (e) { return vsPagina("Voorstel", "<h1>Even geduld</h1><p>" + vsEsc(e.message) + "</p>"); }
+    } catch (e) { return vsPagina("Fonteyn", "<h1>" + vsEsc(vsT(vsTaal(v)).geduld) + "</h1><p>" + vsEsc(e.message) + "</p>", vsTaal(v)); }
   }
   /* Aanbetalen: de klant komt hier via de knop onder zijn voorstel. */
   if (p === "/voorstel/betaal" && request.method === "GET") {
     const db = await vsDb(env);
     const t = String(url.searchParams.get("t") || "");
     const v = await vsLinkVoorstel(db, t);
-    if (!v) return vsPagina("Aanbetalen", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
+    if (!v) return vsVerlopen(null);
+    const taal = vsTaal(v), T = vsT(taal);
     const rest = Math.round((vsAanbetaling(v) - vsBetaald(v)) * 100) / 100;
-    if (rest < 0.01) return vsPagina("Aanbetalen", "<h1>Je aanbetaling is binnen</h1><p>Bedankt! Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>");
-    if (!H.dpCreateMolliePayment) return vsPagina("Aanbetalen", "<h1>Even geduld</h1><p>Online betalen gaat zo weer. Je adviseur helpt je graag verder.</p>");
-    const m = await H.dpCreateMolliePayment(env, rest, "Aanbetaling voorstel " + v.orderid + " - Fonteyn",
+    if (rest < 0.01) return vsPagina(T.binnen, "<h1>" + vsEsc(T.binnen) + "</h1><p>" + vsEsc(T.binnen_p(vsGeld(vsBetaald(v), taal))) + "</p>", taal);
+    if (!H.dpCreateMolliePayment) return vsPagina(T.geduld, "<h1>" + vsEsc(T.geduld) + "</h1><p>" + vsEsc(T.storing_p) + "</p>", taal);
+    const m = await H.dpCreateMolliePayment(env, rest, T.mollie(v.orderid),
       vsBasis(env) + "/voorstel/betaald?t=" + encodeURIComponent(t), vsBasis(env) + "/voorstel/mollie", { voorstel: v.id, orderid: v.orderid });
-    if (!m.ok || !m.checkoutUrl) return vsPagina("Aanbetalen", "<h1>Even geduld</h1><p>Online betalen gaat zo weer. Probeer het over een paar minuten nog eens, of vraag je adviseur.</p>");
+    if (!m.ok || !m.checkoutUrl) return vsPagina(T.geduld, "<h1>" + vsEsc(T.geduld) + "</h1><p>" + vsEsc(T.storing_p) + "</p>", taal);
     v.betalingen = (v.betalingen || []).concat([{ mollie: m.id, bedrag: rest, ts: Date.now(), status: "open" }]).slice(-20);
     vsLog(v, "de klant", "Begonnen met aanbetalen (" + vsGeld(rest) + ")");
     await vsSchrijf(db, v);
@@ -906,17 +1229,18 @@ export async function vsHandle(request, env, url, H) {
     const db = await vsDb(env);
     const t = String(url.searchParams.get("t") || "");
     const v = await vsLinkVoorstel(db, t);
-    if (!v) return vsPagina("Aanbetalen", "<h1>Deze link is verlopen</h1><p>Vraag je adviseur gerust om een nieuwe link.</p>");
+    if (!v) return vsVerlopen(null);
+    const taal = vsTaal(v), T = vsT(taal);
     const laatste = (v.betalingen || []).slice(-1)[0];
-    const terug = "<a class='knop grijs' href='/voorstel/bekijk?t=" + encodeURIComponent(t) + "'>Terug naar je voorstel</a>";
-    if (laatste && laatste.geboekt) return vsPagina("Bedankt", "<h1>Bedankt, je aanbetaling is binnen</h1><p>We hebben " + vsGeld(laatste.bedrag) + " ontvangen. Je bestelling staat vast; je adviseur neemt contact met je op over de levering.</p>" + terug);
+    const terug = "<a class='knop grijs' href='/voorstel/bekijk?t=" + encodeURIComponent(t) + "'>" + vsEsc(T.terug) + "</a>";
+    if (laatste && laatste.geboekt) return vsPagina(T.binnen, "<h1>" + vsEsc(T.binnen) + "</h1><p>" + vsEsc(T.binnen_p(vsGeld(laatste.bedrag, taal))) + "</p>" + terug, taal);
     const mp = laatste ? await vsMollieLees(env, laatste.mollie) : null;
     const st = mp ? mp.status : "";
     if (st === "paid" || st === "open" || st === "pending" || st === "authorized")
-      return new Response((await vsPagina("Even geduld", "<h1>Je betaling wordt verwerkt</h1><p>Dit duurt meestal een paar seconden. Deze pagina ververst vanzelf.</p>" + terug).text())
+      return new Response((await vsPagina(T.geduld, "<h1>" + vsEsc(T.verwerkt) + "</h1><p>" + vsEsc(T.verwerkt_p) + "</p>" + terug, taal).text())
         .replace("<head>", "<head><meta http-equiv='refresh' content='4'>"), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-    return vsPagina("Aanbetalen", "<h1>De betaling is afgebroken</h1><p>Er is niets afgeschreven. Wil je het opnieuw proberen?</p>" +
-      "<a class='knop groen' href='/voorstel/betaal?t=" + encodeURIComponent(t) + "'>Opnieuw aanbetalen</a>" + terug);
+    return vsPagina(T.afgebroken, "<h1>" + vsEsc(T.afgebroken) + "</h1><p>" + vsEsc(T.afgebroken_p) + "</p>" +
+      "<a class='knop groen' href='/voorstel/betaal?t=" + encodeURIComponent(t) + "'>" + vsEsc(T.opnieuw) + "</a>" + terug, taal);
   }
   /* De melding van Mollie. Altijd 200: anders blijft Mollie het proberen. */
   if (p === "/voorstel/mollie" && request.method === "POST") {
@@ -956,7 +1280,76 @@ export async function vsHandle(request, env, url, H) {
     }
     if (p === "/voorstel/keuzes" && request.method === "GET") {
       const k = await vsKeuzes(env, H, db);
-      return H.reply(200, { ok: true, keuzes: k, ikMedewerker: vsMedewerkerVan(k, wie) });
+      const inst = await vsInstellingen(db);
+      // De adviseur ziet alleen de korte lijst vervoerders (Dolf, 6 nov 2026).
+      const kort = inst.transporteurs.map(id => (k.transporteurs || []).find(x => Number(x.id) === Number(id))).filter(Boolean);
+      return H.reply(200, { ok: true, keuzes: Object.assign({}, k, { transporteursKort: kort, talen: VS_TALEN }), ikMedewerker: vsMedewerkerVan(k, wie),
+        beheer, beurzen: inst.beurzen, beursNu: vsBeursNu(inst) });
+    }
+    /* Het btw-nummer nakijken bij de EU, terwijl de adviseur typt. */
+    if (p === "/voorstel/btw" && request.method === "POST") {
+      const nr = vsBtwSchoon(body.nummer);
+      if (!nr) return H.reply(200, { ok: true, leeg: true });
+      if (!H.btwControle) return H.reply(200, { ok: true, storing: true, uitleg: "Nakijken kan nu even niet." });
+      const r = await H.btwControle(nr).catch(e => ({ ok: false, storing: true, error: String(e.message || e) }));
+      const kaal = x => String(x || "").toLowerCase().replace(/\b(b\.?v\.?|gmbh|s\.?a\.?r?\.?l?\.?|s\.?l\.?|s\.?r\.?l\.?|ltd|bv|nv|sas|sa|ag|kg|co)\b/g, "").replace(/[^a-z0-9]/g, "");
+      const naamKlopt = r && r.naam && body.bedrijf ? (kaal(r.naam).includes(kaal(body.bedrijf)) || kaal(body.bedrijf).includes(kaal(r.naam))) : null;
+      return H.reply(200, { ok: true, nummer: nr, geldig: !!(r && r.ok && r.geldig), naam: (r && r.naam) || "", naamKlopt, storing: !!(r && r.storing), uitleg: (r && (r.error || r.uitleg)) || "" });
+    }
+    /* Instellingen: alleen de beheerlaag (Dolf). Vervoerders voor de korte
+       lijst, codes voor een aangepaste aanbetaling, en de beurzen. */
+    if (p === "/voorstel/instellingen") {
+      if (!beheer) return H.reply(403, { ok: false, error: "Dit is voor de beheerders van de tegel." });
+      if (request.method === "GET") return H.reply(200, { ok: true, instellingen: await vsInstellingen(db), transporteurs: (await vsKeuzes(env, H, db)).transporteurs || [] });
+      const i = body.instellingen || {};
+      const codes = (Array.isArray(i.codes) ? i.codes : []).map(c => ({ naam: vsS(c.naam, 40), code: vsS(c.code, 20) })).filter(c => c.naam && c.code);
+      if (codes.some(c => c.code.length < 4)) return H.reply(400, { ok: false, error: "Een code heeft minstens 4 tekens." });
+      if (new Set(codes.map(c => c.code)).size !== codes.length) return H.reply(400, { ok: false, error: "Twee mensen hebben dezelfde code. Geef iedereen een eigen code." });
+      const beurzen = (Array.isArray(i.beurzen) ? i.beurzen : []).map(b => ({ naam: vsS(b.naam, 80), van: vsS(b.van, 10), tot: vsS(b.tot, 10) }))
+        .filter(b => b.naam && /^\d{4}-\d{2}-\d{2}$/.test(b.van) && /^\d{4}-\d{2}-\d{2}$/.test(b.tot));
+      const transporteurs = (Array.isArray(i.transporteurs) ? i.transporteurs : []).map(Number).filter(Boolean).slice(0, 20);
+      if (!transporteurs.length) return H.reply(400, { ok: false, error: "Kies minstens één vervoerder." });
+      const nieuw = { transporteurs, codes, beurzen };
+      await db.prepare("INSERT OR REPLACE INTO voorstel_cache (k, v, ts) VALUES ('instellingen', ?1, ?2)").bind(JSON.stringify(nieuw), Date.now()).run();
+      return H.reply(200, { ok: true, instellingen: nieuw });
+    }
+    /* Beursomzet (Dolf, 6 nov 2026): alles wat op de beurs gebeurt, bij
+       elkaar. Dan hoeft Chantal het niet meer op te tellen. */
+    if (p === "/voorstel/beursomzet" && request.method === "GET") {
+      const inst = await vsInstellingen(db);
+      const naam = String(url.searchParams.get("naam") || "");
+      const beurs = inst.beurzen.find(b => b.naam === naam) || vsBeursNu(inst) || inst.beurzen.slice().sort((a, b) => b.van.localeCompare(a.van))[0];
+      if (!beurs) return H.reply(200, { ok: true, beurs: null });
+      const rs = await db.prepare("SELECT id, adviseur, orderid, status, json FROM voorstel WHERE gewijzigd >= ?1").bind(Date.parse(beurs.van + "T00:00:00Z") - 86400000).all();
+      const lijst = (rs.results || []).map(r => Object.assign(vsJson(r.json, {}), { id: r.id, adviseur: r.adviseur, orderid: r.orderid, status: r.status }))
+        .filter(v => v.beurs === beurs.naam && v.status !== "gesloten");
+      // Eén vraag aan Logic4 voor de stand van al die voorstellen.
+      const stand = {};
+      const ids = lijst.map(v => Number(v.orderid)).filter(Boolean);
+      if (ids.length) {
+        try {
+          for (let skip = 0; skip < 2000; skip += 500) {
+            const r = await vsL4(env, H, "/v3/Orders/GetOrders", { CreationDateFrom: beurs.van + "T00:00:00", TakeRecords: 500, SkipRecords: skip });
+            for (const o of (Array.isArray(r) ? r : [])) if (ids.includes(Number(o.Id))) stand[o.Id] = o;
+            if (!Array.isArray(r) || r.length < 500) break;
+          }
+        } catch (e) {}
+      }
+      const rij = {};
+      const tel = { voorstellen: 0, voorstelTotaal: 0, orders: 0, orderTotaal: 0, betaald: 0 };
+      for (const v of lijst) {
+        const o = stand[v.orderid], t = (o && o.Totals) || {};
+        const incl = o ? Number(t.AmountIncl) || 0 : Number(v.totaalIncl) || 0;
+        const betaald = o ? Number(t.Calc_TotalPayed) || 0 : vsBetaald(v);
+        const isOrder = o ? (o.OrderStatus && [VS_AANBETAALD, VS_BETAALD].includes(Number(o.OrderStatus.Id))) || betaald > 0 : betaald > 0;
+        const w = rij[v.adviseur] = rij[v.adviseur] || { wie: v.adviseur, voorstellen: 0, voorstelTotaal: 0, orders: 0, orderTotaal: 0, betaald: 0 };
+        for (const x of [w, tel]) { x.voorstellen++; x.voorstelTotaal += incl; if (isOrder) { x.orders++; x.orderTotaal += incl; x.betaald += betaald; } }
+      }
+      let per = Object.values(rij).sort((a, b) => b.orderTotaal - a.orderTotaal || b.voorstelTotaal - a.voorstelTotaal);
+      if (!beheer) per = per.filter(x => x.wie === wie);
+      const rond = x => Math.round(x * 100) / 100;
+      for (const x of [tel, ...per]) for (const k of ["voorstelTotaal", "orderTotaal", "betaald"]) x[k] = rond(x[k]);
+      return H.reply(200, { ok: true, beurs, totaal: beheer ? tel : (per[0] || null), per, alles: beheer, beurzen: inst.beurzen });
     }
     if (p === "/voorstel/klant-zoek" && request.method === "GET") return H.reply(200, await vsKlantZoek(env, H, url.searchParams.get("q")));
     if (p === "/voorstel/artikel" && request.method === "GET") return H.reply(200, await vsArtikel(env, H, url.searchParams.get("q")));
@@ -984,7 +1377,10 @@ export async function vsHandle(request, env, url, H) {
       // "1.234,56" en "394,79" zoals mensen typen, "394.79" zoals de tegel het soms heeft.
       const b = Math.round((Number(/,/.test(ruw) ? ruw.replace(/\./g, "").replace(",", ".") : ruw) || 0) * 100) / 100;
       if (b < 0) return H.reply(400, { ok: false, error: "Vul een bedrag in." });
+      if (b && !(await vsInstellingen(db)).codes.some(x => x.code === String(body.code || "").trim()))
+        return H.reply(403, { ok: false, error: "Deze code klopt niet. Een aangepaste aanbetaling kan alleen met een code." });
       v.aanbetaling = b || undefined;
+      v.betaalwijze = b ? "aangepast" : "30";
       vsLog(v, wie, b ? "Aanbetaling op " + vsGeld(b) + " gezet" : "Aanbetaling terug op 30%");
       await vsSchrijf(db, v);
       return H.reply(200, { ok: true, voorstel: vsVoorTegel(v) });
@@ -1001,9 +1397,14 @@ export async function vsHandle(request, env, url, H) {
         if (v.status === "wacht" && JSON.stringify(v.klant) !== JSON.stringify(klant)) { v.status = "concept"; vsLog(v, wie, "Gegevens aangepast na het versturen; de mail moet opnieuw"); }
       } else {
         v = { id: vsCode(10), token: vsCode(32), status: "concept", adviseur: wie, aangemaakt: Date.now(), kop: {} };
-        vsLog(v, wie, "Voorstel begonnen");
+        // Op de beurs? Dan weet het voorstel dat meteen (Dolf, 6 nov 2026).
+        const bn = vsBeursNu(await vsInstellingen(db));
+        if (bn) v.beurs = bn.naam;
+        vsLog(v, wie, "Voorstel begonnen" + (bn ? " op " + bn.naam : ""));
       }
       v.klant = klant;
+      if (body.taal !== undefined) v.taal = VS_TALEN[body.taal] ? body.taal : "";
+      if (klant.btw) await vsBtwNakijken(H, v).catch(() => null); else delete v.btwCheck;
       if (body.debiteur !== undefined) v.debiteur = Number(body.debiteur) || null;
       await vsSchrijf(db, v);
       return H.reply(200, { ok: true, voorstel: vsVoorTegel(v), eerder: await vsEerder(db, v) });
@@ -1048,20 +1449,41 @@ export async function vsHandle(request, env, url, H) {
       const v = await eigen(body.id);
       // Gerrit (31 okt 2026): de gegevens van het voorstel pas invullen na de bevestiging.
       if (v.status !== "in-logic4") return H.reply(409, { ok: false, error: "Invullen kan zodra de klant zijn gegevens heeft bevestigd." });
-      const kop = Object.assign({}, v.kop || {}, body.kop || {});
+      // Wat het Dashboard zelf invult, laat het niet van het scherm overschrijven.
+      const binnen = Object.assign({}, body.kop || {});
+      for (const x of ["filiaal", "referentie", "betaalmethode", "btwcode", "type1", "type2", "type3", "type4"]) delete binnen[x];
+      const kop = Object.assign({}, v.kop || {}, binnen);
       v.kop = kop;
       if (body.kop && body.kop.vervaldatum !== undefined) v.vervaldatum = vsS(body.kop.vervaldatum, 10);
       if (v.status === "gesloten") return H.reply(409, { ok: false, error: "Dit voorstel is gesloten." });
-      if (v.orderid) {
-        /* De status die Logic4 nu heeft gaat ongewijzigd mee terug. Stond
-           hier vast 4, dan zette elke kopwijziging een gesloten voorstel of
-           een order die intussen betaald is terug op Offerte (proef 31 okt). */
-        const nu = await vsOrderLees(env, H, v.orderid);
-        if (nu && Number(nu.statusId) !== VS_OFFERTE) return H.reply(409, { ok: false, error: "Dit voorstel is in Logic4 al verder (status " + nu.status + "); de kop blijft zoals hij is." });
-        await vsL4(env, H, "/v3/Orders/AddUpdateOrder", Object.assign({ Id: Number(v.orderid), DebtorId: Number(v.debiteur),
-          OrderStatus: { Id: VS_OFFERTE }, CreationDate: new Date(v.aangemaakt || Date.now()).toISOString().slice(0, 19) }, vsKopNaarL4(kop)));
+      /* Betalen (Dolf, 6 nov 2026): 30% aanbetaling, alles, of aangepast.
+         Aangepast alleen met een persoonlijke code. */
+      const wat = [];
+      if (body.betaalwijze !== undefined) {
+        const w = ["30", "alles", "aangepast"].includes(body.betaalwijze) ? body.betaalwijze : "30";
+        if (w === "aangepast") {
+          const ruw = String(body.aanbetaling || "").trim();
+          const bedrag = Math.round((Number(/,/.test(ruw) ? ruw.replace(/\./g, "").replace(",", ".") : ruw) || 0) * 100) / 100;
+          const nieuwBedrag = v.betaalwijze !== "aangepast" || bedrag !== Number(v.aanbetaling || 0);
+          if (nieuwBedrag) {
+            if (!(bedrag > 0)) return H.reply(400, { ok: false, error: "Vul het bedrag van de aanbetaling in." });
+            const c = (await vsInstellingen(db)).codes.find(x => x.code === String(body.code || "").trim());
+            if (!c) return H.reply(403, { ok: false, error: "Deze code klopt niet. Een aangepaste aanbetaling kan alleen met een code." });
+            v.aanbetaling = bedrag; v.betaalwijze = "aangepast";
+            wat.push("aanbetaling aangepast naar " + vsGeld(bedrag) + " met de code van " + c.naam);
+          }
+        } else if (w !== (v.betaalwijze || "30")) {
+          v.betaalwijze = w; delete v.aanbetaling;
+          wat.push(w === "alles" ? "betalen: alles vooraf" : "betalen: 30% aanbetaling");
+        }
       }
-      vsLog(v, wie, "Kop aangepast: " + Object.keys(body.kop || {}).join(", "));
+      if (body.beurs !== undefined) {
+        const bn = vsBeursNu(await vsInstellingen(db));
+        const nieuw = body.beurs ? (v.beurs || (bn && bn.naam) || "") : "";
+        if (nieuw !== (v.beurs || "")) { v.beursWas = v.beurs || v.beursWas; v.beurs = nieuw; wat.push(nieuw ? "telt mee voor " + nieuw : "telt niet mee voor de beurs"); }
+      }
+      if (v.orderid) await vsKopPush(env, H, db, v);
+      vsLog(v, wie, "Kop aangepast: " + Object.keys(binnen).join(", ") + (wat.length ? "; " + wat.join("; ") : ""));
       await vsSchrijf(db, v);
       const order = v.orderid ? await vsOrderLees(env, H, v.orderid).catch(() => null) : null;
       return H.reply(200, { ok: true, voorstel: vsVoorTegel(v), order });
@@ -1084,7 +1506,7 @@ export async function vsHandle(request, env, url, H) {
       if (!v.orderid || v.status !== "in-logic4") return H.reply(409, { ok: false, error: "Versturen kan zodra het voorstel in Logic4 staat." });
       const d = await vsDocGegevens(env, H, db, v);
       if (!d.regels.length) return H.reply(400, { ok: false, error: "Zet eerst minstens één regel op het voorstel." });
-      const onderwerp = vsS(body.onderwerp, 150) || ("Je voorstel " + d.nummer + " van Fonteyn");
+      const onderwerp = vsS(body.onderwerp, 150) || vsT(d.taal).ond_vs(d.nummer);
       const tekst = String(body.tekst || "").slice(0, 3000);
       if (body.stuur !== true) {
         return H.reply(200, { ok: true, voorbeeld: true, naar: v.klant.email, onderwerp,
@@ -1134,8 +1556,18 @@ export async function vsHandle(request, env, url, H) {
         await vsRegel(env, H, v, r, oud);
         vsLog(v, wie, (oud ? "Regel aangepast: " : "Regel erbij: ") + (r.code || oud.code) + " x " + (r.aantal != null ? r.aantal : oud.aantal));
       }
+      let na = await vsOrderLees(env, H, v.orderid);
+      /* Het magazijn weet het Dashboard zelf (Dolf, 6 nov 2026): alleen
+         spa-onderdelen en waterverzorging = Spa Service Magazijn. */
+      const codes = (na.regels || []).filter(x => !x.vervallen && /^\d/.test(x.code)).map(x => x.code);
+      const mag = codes.length && codes.every(c => VS_SERVICE_CODES.test(c)) ? VS_MAGAZIJN_SERVICE : VS_MAGAZIJN;
+      if (Number(na.kop.type4) !== mag) {
+        v.kop = Object.assign({}, v.kop || {}, { type4: mag });
+        try { await vsKopPush(env, H, db, v); vsLog(v, "het Dashboard", "Magazijn: " + (mag === VS_MAGAZIJN_SERVICE ? "Spa Service Magazijn" : "Magazijn")); na = await vsOrderLees(env, H, v.orderid); } catch (e) {}
+      }
+      v.totaalIncl = na.totaal.incl;
       await vsSchrijf(db, v);
-      return H.reply(200, { ok: true, order: await vsOrderLees(env, H, v.orderid) });
+      return H.reply(200, { ok: true, order: na });
     }
     return H.reply(404, { ok: false, error: "onbekend" });
   } catch (e) {
