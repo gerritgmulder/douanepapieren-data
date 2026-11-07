@@ -64,8 +64,8 @@
     '.svc-venster.breed{max-width:760px}' +
     '.svc-venster h3{margin:0 0 8px;color:#144734;font-size:16px}' +
     '.svc-velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:6px 12px}' +
-    '.svc-velden label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:#6b7280}' +
-    '.svc-velden label.breed{grid-column:1/-1}' +
+    '.svc-velden label,.svc-velden .svc-groep{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:#6b7280}' +
+    '.svc-velden .breed{grid-column:1/-1}' +
     '.svc-venster input,.svc-venster select,.svc-venster textarea{font:inherit;font-size:13.5px;border:1px solid #e0e0d8;border-radius:8px;padding:6px 9px;background:#fff;color:#1f2937;min-width:0}' +
     '.svc-venster textarea{min-height:40px;resize:vertical}' +
     '.svc-dagen{display:flex;gap:6px;flex-wrap:wrap}' +
@@ -158,12 +158,13 @@
           '<label>Telefoon<input id="fTel" value="' + esc(k.tel) + '"></label>' +
           '<label class="breed">Adres<input id="fAdres" value="' + esc(k.adres) + '" placeholder="straat en huisnummer, postcode plaats"></label>' +
           '<label class="breed">Mailadres (voor het voorstel; meerdere mag, met een komma)<input id="fMail" value="' + esc(k.mail) + '"></label>' +
-          '<label class="breed">Verwachte duur van de afspraak (verplicht)<div class="svc-duren">' +
+          /* Geen label om de knoppen heen: een klik in de lege ruimte ging dan naar de eerste knop (Gerwin, 3 nov 2026: maandag werd vanzelf aangezet). */
+          '<div class="breed svc-groep">Verwachte duur van de afspraak (verplicht)<div class="svc-duren">' +
             duren.map(function (d) { return '<button type="button" class="svc-dag' + (Number(m.duur) === d ? " aan" : "") + '" data-duur="' + d + '">' + duurTekst(d) + "</button>"; }).join("") +
-            '<input id="fDuur" type="number" min="5" max="600" step="5" style="width:96px" placeholder="minuten" value="' + esc(m.duur || "") + '"> <span style="font-weight:500">minuten</span></div></label>' +
-          '<label class="breed">Voorkeursdagen van de klant<div class="svc-dagen">' +
+            '<input id="fDuur" type="number" min="5" max="600" step="5" style="width:96px" placeholder="minuten" value="' + esc(m.duur || "") + '"> <span style="font-weight:500">minuten</span></div></div>' +
+          '<div class="breed svc-groep">Voorkeursdagen van de klant<div class="svc-dagen">' +
             [1, 2, 3, 4, 5].map(function (d) { return '<button type="button" class="svc-dag' + (voork.indexOf(d) >= 0 ? " aan" : "") + '" data-dag="' + d + '">' + DAGLANG[d] + "</button>"; }).join("") +
-            '</div><span style="font-weight:500">Niets aangetikt = elke werkdag.</span></label>' +
+            '</div><span style="font-weight:500">Niets aangetikt = elke werkdag.</span></div>' +
           '<label>Inplannen vanaf<input id="fVanaf" type="date" value="' + esc(m.vanaf || "") + '"></label>' +
           '<label>Klant is weg: van<input id="fNietVan" type="date" value="' + esc(m.nietVan || "") + '"></label>' +
           '<label>tot en met<input id="fNietTot" type="date" value="' + esc(m.nietTot || "") + '"></label>' +

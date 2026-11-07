@@ -50,6 +50,12 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    { datum: "2026-11-07", bestand: "service-meldingen.html", soort: "hersteld",
+      titel: "Melding toevoegen: dagen blijven uit",
+      wat:   "Klik je naast de knoppen voor de duur of de voorkeursdagen, dan wordt er niet meer vanzelf maandag of 30 minuten aangezet." },
+    { datum: "2026-11-07", bestand: "opleverbonnen-service.html", soort: "hersteld",
+      titel: "Werkbon: materialen rustig aanpassen",
+      wat:   "Klik je op de naam van een materiaal, dan springt de cursor niet meer naar het eerste aantal." },
     { datum: "2026-11-06", bestand: "planning-service.html", soort: "beter",
       titel: "Planning Service: bovenkant blijft in beeld",
       wat:   "De weekknoppen, het zoekveld, de meldingen en de namen van de dagen blijven bovenaan staan als je naar beneden scrolt." },

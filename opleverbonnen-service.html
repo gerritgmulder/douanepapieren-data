@@ -157,7 +157,7 @@ function aanpassen(b){
       '<label class="breed">Wat is er gedaan<textarea id="aGedaan" rows="4">' + esc(b.gedaan||"") + '</textarea></label>' +
       '<label>Gewerkte uren<input id="aUren" type="number" step="0.25" min="0" value="' + (b.uren||"") + '"></label>' +
       '<label>Mailadres klant<input id="aMail" value="' + esc((b.klant||{}).mail||"") + '"></label>' +
-      '<label class="breed">Materialen (aantal aanpassen; 0 haalt de regel weg)<div id="aMats"></div></label>' +
+      '<div class="breed svc-groep">Materialen (aantal aanpassen; 0 haalt de regel weg)<div id="aMats"></div></div>' +
       '<label class="breed">Opmerking<textarea id="aOpm" rows="2">' + esc(b.opmerking||"") + '</textarea></label>' +
     '</div><div class="svc-melding" id="aMeld"></div>' +
     '<div class="svc-knoppen"><button type="button" class="svc-knop wit" id="aTerug">Terug</button><button type="button" class="svc-knop" id="aBewaar">Opslaan</button></div>', { breed: true });
