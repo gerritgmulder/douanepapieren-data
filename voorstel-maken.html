@@ -198,7 +198,7 @@ async function beursKaart(naam){
   var vak = $("beursVak"); if (!vak) return;
   var nu = new Date().toISOString().slice(0, 10);
   var dichtbij = (BEURZEN||[]).filter(function(b){ var van = new Date(b.van), tot = new Date(b.tot); return nu >= new Date(van - 7*864e5).toISOString().slice(0,10) && nu <= new Date(+tot + 31*864e5).toISOString().slice(0,10); });
-  if (!naam && !dichtbij.length && !BEHEER) return;
+  if (!naam && !dichtbij.length && !BEURS_ALLES) return;
   if (!naam && dichtbij.length) naam = dichtbij[0].naam;
   try {
     var j = await api("/voorstel/beursomzet" + (naam ? "?naam=" + encodeURIComponent(naam) : ""));
@@ -252,12 +252,12 @@ function instTeken(inst, alle){
 }
 
 /* ── Eén voorstel ─────────────────────────────────────────────────────── */
-var V = null, ORDER = null, KEUZES = null, IKMW = null, EERDER = null, BEHEER = false, BEURS_NU = null, BEURZEN = [];
+var V = null, ORDER = null, KEUZES = null, IKMW = null, EERDER = null, BEHEER = false, BEURS_ALLES = false, BEURS_NU = null, BEURZEN = [];
 var NIEUWS = "", OPLICHT = null;   // een melding en wat oplicht bij de volgende keer tekenen
 var DEMO = false;
 async function keuzesLaden(){
   if (KEUZES) return KEUZES;
-  try { var j = await api("/voorstel/keuzes"); KEUZES = j.keuzes || {}; IKMW = j.ikMedewerker; BEHEER = !!j.beheer; BEURS_NU = j.beursNu || null; BEURZEN = j.beurzen || []; } catch(e){ KEUZES = {}; }
+  try { var j = await api("/voorstel/keuzes"); KEUZES = j.keuzes || {}; IKMW = j.ikMedewerker; BEHEER = !!j.beheer; BEURS_ALLES = !!j.beursAlles; BEURS_NU = j.beursNu || null; BEURZEN = j.beurzen || []; } catch(e){ KEUZES = {}; }
   return KEUZES;
 }
 async function openen(id){

@@ -177,11 +177,17 @@
          bertjan, chantal, dali, danique, don, edwin, gretha, joppe, julia,
          julia.de.nijs, kevin, kim, luis, luuk, melissa, niels_vdl, patrick,
          rosalie, sidney, tim, yamen, yves. */
-      /* Gretha en Don testen eerst (Gerrit, 3 nov 2026). */
-      "dolf", "don", "fonteynbot", "gerrit", "gretha",
+      /* Gretha en Don testen eerst (Gerrit, 3 nov 2026). Chantal erbij voor
+         de beursomzet (Gerrit, 7 nov 2026). */
+      "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha",
     ],
     "voorstel-beheer": [
       "dolf", "fonteynbot", "gerrit",
+    ],
+    /* De beursomzet van iedereen zien, zonder de rest van het beheer. Dolf
+       wil dat Chantal de beursomzet niet meer zelf hoeft op te tellen. */
+    "voorstel-beursomzet": [
+      "chantal", "dolf", "fonteynbot", "gerrit",
     ],
     "herinneringen": [
       "christiaan", "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k", "rico", "rowan",

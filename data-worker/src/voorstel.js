@@ -1284,7 +1284,7 @@ export async function vsHandle(request, env, url, H) {
       // De adviseur ziet alleen de korte lijst vervoerders (Dolf, 6 nov 2026).
       const kort = inst.transporteurs.map(id => (k.transporteurs || []).find(x => Number(x.id) === Number(id))).filter(Boolean);
       return H.reply(200, { ok: true, keuzes: Object.assign({}, k, { transporteursKort: kort, talen: VS_TALEN }), ikMedewerker: vsMedewerkerVan(k, wie),
-        beheer, beurzen: inst.beurzen, beursNu: vsBeursNu(inst) });
+        beheer, beursAlles: beheer || await H.toegangMag(env, "voorstel-beursomzet", wie), beurzen: inst.beurzen, beursNu: vsBeursNu(inst) });
     }
     /* Het btw-nummer nakijken bij de EU, terwijl de adviseur typt. */
     if (p === "/voorstel/btw" && request.method === "POST") {
@@ -1317,6 +1317,7 @@ export async function vsHandle(request, env, url, H) {
        elkaar. Dan hoeft Chantal het niet meer op te tellen. */
     if (p === "/voorstel/beursomzet" && request.method === "GET") {
       const inst = await vsInstellingen(db);
+      const alles = beheer || await H.toegangMag(env, "voorstel-beursomzet", wie);
       const naam = String(url.searchParams.get("naam") || "");
       const beurs = inst.beurzen.find(b => b.naam === naam) || vsBeursNu(inst) || inst.beurzen.slice().sort((a, b) => b.van.localeCompare(a.van))[0];
       if (!beurs) return H.reply(200, { ok: true, beurs: null });
@@ -1346,10 +1347,10 @@ export async function vsHandle(request, env, url, H) {
         for (const x of [w, tel]) { x.voorstellen++; x.voorstelTotaal += incl; if (isOrder) { x.orders++; x.orderTotaal += incl; x.betaald += betaald; } }
       }
       let per = Object.values(rij).sort((a, b) => b.orderTotaal - a.orderTotaal || b.voorstelTotaal - a.voorstelTotaal);
-      if (!beheer) per = per.filter(x => x.wie === wie);
+      if (!alles) per = per.filter(x => x.wie === wie);
       const rond = x => Math.round(x * 100) / 100;
       for (const x of [tel, ...per]) for (const k of ["voorstelTotaal", "orderTotaal", "betaald"]) x[k] = rond(x[k]);
-      return H.reply(200, { ok: true, beurs, totaal: beheer ? tel : (per[0] || null), per, alles: beheer, beurzen: inst.beurzen });
+      return H.reply(200, { ok: true, beurs, totaal: alles ? tel : (per[0] || null), per, alles, beurzen: inst.beurzen });
     }
     if (p === "/voorstel/klant-zoek" && request.method === "GET") return H.reply(200, await vsKlantZoek(env, H, url.searchParams.get("q")));
     if (p === "/voorstel/artikel" && request.method === "GET") return H.reply(200, await vsArtikel(env, H, url.searchParams.get("q")));

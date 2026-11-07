@@ -51,6 +51,9 @@
 
   var NIEUWS = [
     { datum: "2026-11-07", bestand: "voorstel-maken.html", soort: "beter",
+      titel: "Voorstel maken: de beursomzet",
+      wat:   "In het overzicht staat de beursomzet van Lyon: hoeveel voorstellen en orders er op de beurs zijn gemaakt, wat ze waard zijn en wat er al betaald is, per adviseur." },
+    { datum: "2026-11-07", bestand: "voorstel-maken.html", soort: "beter",
       titel: "Voorstel maken: eenvoudiger en in de taal van de klant",
       wat:   "Alles vul je nu onder elkaar in. Filiaal, magazijn en btw vult het Dashboard zelf in, en het btw-nummer van een bedrijf wordt meteen nagekeken. Je kiest uit een korte lijst vervoerders en de verzendkosten staan er meteen bij. Betalen kan met 30% aanbetaling, alles, of aangepast met je eigen code. Een klant uit het buitenland krijgt de mails en het voorstel in zijn eigen taal, en wat je op de beurs maakt telt vanzelf mee voor de beursomzet." },
     { datum: "2026-11-07", bestand: "service-meldingen.html", soort: "hersteld",
