@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-11", bestand: "inkoopstraat.html", soort: "beter",
+      titel: "Website op tijd klaar",
+      wat:   "Zodra je bij een inkooporder invult dat de proforma betaald is, krijgt Gretha een bericht om de artikelen alvast klaar te zetten voor de website. Zo staan ze online voordat de container binnen is."
+    },
+    {
       datum: "2026-11-11", bestand: "inkoopstraat.html", soort: "nieuw",
       titel: "Inkoop",
       wat:   "Alles van inkoop in één tegel: per leverancier de afspraken, artikelen, voorraad en het inkoopadvies; een inkooporder maken; de leverancier zet proforma, Bill of Lading en packing list zelf neer en het Dashboard meldt elk verschil; bij binnenkomst afstrepen en de inkooplevering maken; en waar alles ligt in Uddel."

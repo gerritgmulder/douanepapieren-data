@@ -169,13 +169,17 @@
        en het magazijn (manon, nomi) voor het afstrepen. Inkooporders en
        inkoopleveringen maken mag alleen wie ook in voorraad-beheer zit. */
     "inkoopstraat": [
-      // Gretha erbij (Gerrit, 11 nov 2026).
-      "dolf", "fonteynbot", "gerrit", "gretha",
+      /* Alle inkopers (Gerrit, 11 nov 2026): Rosalie, Don, Lisette, Gretha,
+         Chantal, Joppe, Arno, Dolf. Iedereen hier mag ook inkooporders en
+         inkoopleveringen maken in de tegel. */
+      "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha",
+      "joppe", "lisette", "rosalie",
     ],
-    /* Marketing: krijgt een bericht zodra er nieuwe artikelen binnen zijn,
-       om ze op de website te zetten (Gerrit, 11 nov 2026). */
+    /* Marketing: krijgt een bericht zodra de proforma van een inkooporder
+       betaald is, om de artikelen klaar te zetten voor de website. */
     "marketing": [
-      "demi",
+      // Gretha krijgt het seintje, na het betalen van de proforma (Gerrit, 11 nov 2026).
+      "gretha",
     ],
     /* Voorstel maken (Gerrit, 30 okt 2026): een voorstel begint in het
        Dashboard en de klant bevestigt eerst zijn gegevens. Straks alle

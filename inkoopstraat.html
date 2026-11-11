@@ -217,7 +217,7 @@ async function order(id){
     h += '<div class="kaart"><h2>Betalingen en verzending</h2><div class="raster">' +
       '<div><label class="l">Aanbetaling bedrag</label><input class="veld" id="bAanB" inputmode="decimal" value="'+esc(a.bedrag||"")+'"></div>' +
       '<div><label class="l">Valuta</label><select id="bAanV"><option'+(a.valuta!=="EUR"?' selected':'')+'>USD</option><option'+(a.valuta==="EUR"?' selected':'')+'>EUR</option></select></div>' +
-      '<div class="s2"><label class="l">Aanbetaald op (dan start de productie)</label><input class="veld" id="bAanOp" type="date" value="'+esc(a.op||"")+'"></div>' +
+      '<div class="s2"><label class="l">Aanbetaald op (productie start, marketing krijgt een seintje)</label><input class="veld" id="bAanOp" type="date" value="'+esc(a.op||"")+'"></div>' +
       '<div><label class="l">Restbetaling bedrag</label><input class="veld" id="bRestB" inputmode="decimal" value="'+esc(rs.bedrag||"")+'"></div>' +
       '<div><label class="l">Rest betalen</label><select id="bRestM"><option value="">kies</option><option value="voor verzending"'+(rs.moment==="voor verzending"?' selected':'')+'>voor verzending</option><option value="op zee"'+(rs.moment==="op zee"?' selected':'')+'>als het schip op zee is</option><option value="bij aankomst"'+(rs.moment==="bij aankomst"?' selected':'')+'>bij aankomst</option></select></div>' +
       '<div class="s2"><label class="l">Rest betaald op</label><input class="veld" id="bRestOp" type="date" value="'+esc(rs.op||"")+'"></div>' +
@@ -228,7 +228,7 @@ async function order(id){
     h += '<div class="kaart"><h2>Binnen: afstrepen en inkooplevering</h2>' +
       ((o.leveringen||[]).length ? '<p class="lead">In Logic4: '+o.leveringen.map(function(l){ return 'levering '+esc(l.id)+' ('+esc(datum(l.datum))+', '+esc(l.status)+')'; }).join(', ')+'</p>' : '') +
       (r.some(function(x){ return x.teLeveren>0; }) ?
-        '<p class="lead">Vul per regel in wat er echt binnen is volgens de packing list. Een verschil gaat als bericht naar de inkoper; daarna krijgt marketing een seintje voor de website.</p>' +
+        '<p class="lead">Vul per regel in wat er echt binnen is volgens de packing list. Een verschil gaat als bericht naar de inkoper.</p>' +
         '<table class="t"><colgroup><col style="width:13%"><col><col style="width:12%"><col style="width:13%"><col class="smal" style="width:18%"></colgroup><thead><tr><th>Code</th><th>Omschrijving</th><th class="g">Verwacht</th><th class="g">Binnen</th><th class="smal">Locatie</th></tr></thead><tbody>' +
         r.filter(function(x){ return x.teLeveren>0; }).map(function(x){ return '<tr><td>'+esc(x.code)+'</td><td>'+esc(x.oms)+'</td><td class="g">'+getal(x.teLeveren)+'</td><td><input data-rij="'+esc(x.rij)+'" inputmode="decimal" value="'+esc(x.teLeveren)+'"></td><td class="smal">'+esc(x.locatie||"")+'</td></tr>'; }).join("") + '</tbody></table>' +
         '<div class="raster" style="margin-top:8px"><div class="s2"><label class="l">Omschrijving (vrachtbrief- of containernummer)</label><input class="veld" id="lOms" placeholder="bijvoorbeeld SO-004513"></div><div class="s2"><label class="l">Pakbonnummer</label><input class="veld" id="lPak"></div></div>' +

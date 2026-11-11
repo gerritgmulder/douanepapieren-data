@@ -490,7 +490,9 @@ export async function isHandle(request, env, url, H) {
     return H.reply(401, { ok: false, error: "Ga één keer terug naar het Dashboard en open de tegel opnieuw." });
   const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);
   if (!(await H.toegangMag(env, "inkoopstraat", wie))) return H.reply(403, { ok: false, error: "Deze tegel is voor inkoop en het magazijn." });
-  const magBestellen = await H.toegangMag(env, "voorraad-beheer", wie);
+  /* Gerrit (11 nov 2026): "Alle inkopers mogen de tegel Inkoop gebruiken."
+     Wie in de groep zit, mag dus ook inkooporders en leveringen maken. */
+  const magBestellen = true;
   const db = await isDb(env);
   const body = request.method === "POST" ? await request.json().catch(() => ({})) : {};
   const q = (k) => url.searchParams.get(k);
@@ -640,8 +642,22 @@ export async function isHandle(request, env, url, H) {
       const o = (await isOrderLees(db, iko)) || { id: iko, creditor: Number(body.creditor) || null };
       const b = body.zet || {};
       o.betaling = o.betaling || {};
+      const wasBetaald = !!(o.betaling.aanbetaling && o.betaling.aanbetaling.op);
       if (b.aanbetaling) { o.betaling.aanbetaling = { bedrag: isGetal(b.aanbetaling.bedrag), valuta: isS(b.aanbetaling.valuta, 3) || "USD", op: b.aanbetaling.op ? isS(b.aanbetaling.op, 10) : null }; isLog(o, wie, "Aanbetaling: " + (b.aanbetaling.op ? "betaald op " + b.aanbetaling.op : "bedrag gezet")); }
       if (b.rest) { o.betaling.rest = { bedrag: isGetal(b.rest.bedrag), valuta: isS(b.rest.valuta, 3) || "USD", moment: isS(b.rest.moment, 30), op: b.rest.op ? isS(b.rest.op, 10) : null }; isLog(o, wie, "Restbetaling: " + (b.rest.op ? "betaald op " + b.rest.op : "afgesproken " + (b.rest.moment || ""))); }
+      /* Gerrit (11 nov 2026): het seintje aan marketing (Gretha) komt na het
+         betalen van de proforma, zodat de artikelen op de website staan
+         voordat de container binnen is. Eén keer per inkooporder. */
+      if (!wasBetaald && o.betaling.aanbetaling && o.betaling.aanbetaling.op && !o.marketingGemeld) {
+        const kopM = isLijst(await isL4(env, H, "/v3/BuyOrders/GetBuyOrders", { BuyOrderId: iko, TakeRecords: 1 }).catch(() => []))[0] || {};
+        const regelsM = await isOrderRegels(env, H, db, iko).catch(() => []);
+        const mk = H.groepLeden ? await H.groepLeden(env, "marketing") : [];
+        await isBericht(env, H, "is-mk-" + iko, mk, "Zet klaar voor de website: inkooporder " + iko,
+          "De proforma van " + (kopM.CreditorCompanyName || "de leverancier") + " is betaald en de productie start. Zet deze " + regelsM.length + " artikel(en) alvast klaar voor de website: " +
+          regelsM.slice(0, 8).map(r => r.code + " " + r.oms).join("; ") + (regelsM.length > 8 ? " en meer." : "."), { iko, link: "inkoopstraat.html?iko=" + iko }, "inkoop-website").catch(() => {});
+        o.marketingGemeld = Date.now();
+        isLog(o, "het Dashboard", "Marketing gemeld: artikelen klaarzetten voor de website");
+      }
       if (b.opZee !== undefined) { o.opZee = b.opZee ? Date.parse(b.opZee) || Date.now() : null; isLog(o, wie, b.opZee ? "Op zee vanaf " + b.opZee : "Op zee weggehaald"); }
       if (b.website === true) { o.website = { op: Date.now(), door: wie }; isLog(o, wie, "Staat op de website"); }
       if (b.inkoper !== undefined) { o.inkoper = isS(b.inkoper, 80).toLowerCase(); isLog(o, wie, "Inkoper: " + o.inkoper); }
@@ -730,10 +746,6 @@ export async function isHandle(request, env, url, H) {
         await isBericht(env, H, "is-lev-" + iko + "-" + Date.now(), await isInkoperVan(db, o), "Verschil bij binnenkomst inkooporder " + iko,
           verschillen.slice(0, 8).map(v => v.code + ": verwacht " + v.verwacht + ", binnen " + v.binnen).join("; ") + (verschillen.length > 8 ? " en meer." : "."), { iko, link }).catch(() => {});
       }
-      // Gerrit: zodra de producten binnen zijn een prikkel naar marketing.
-      const mk = H.groepLeden ? await H.groepLeden(env, "marketing") : [];
-      await isBericht(env, H, "is-mk-" + iko + "-" + Date.now(), mk, "Binnen: zet ze op de website (inkooporder " + iko + ")",
-        rows.length + " artikel(en) van " + (kop.CreditorCompanyName || "de leverancier") + " zijn binnen. Zet ze op de website.", { iko, link }, "inkoop-website").catch(() => {});
       return H.reply(200, { ok: true, levering, verschillen });
     }
     return H.reply(404, { ok: false, error: "onbekend" });
