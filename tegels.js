@@ -114,6 +114,8 @@
       uit:"Wie moet een herinnering krijgen, welke stap, één knop", mobiel:"krap", tile:"tileDebiteuren" },
     { bestand:"logic4.html",         groep:"administratie-proef", ic:"📦", naam:"Logic4",
       uit:"Logic4 nagebouwd in het Dashboard: dezelfde modules, live gegevens, en wat er nog moet komen", mobiel:"pc", tile:"tileLogicVier" },
+    { bestand:"inkoopstraat.html",   groep:"inkoopstraat",      ic:"🛒", naam:"Inkoop",
+      uit:"Van leverancier tot website: artikelen, advies, inkooporder, documenten, binnenkomst, locaties", mobiel:"krap", tile:"tileInkoopstraat" },
     { bestand:"voorstel-maken.html", groep:"voorstel-maken",    ic:"📝", naam:"Voorstel maken",
       uit:"Klant bevestigt eerst zijn gegevens, daarna het voorstel in Logic4", mobiel:"krap", tile:"tileVoorstelMaken" },
     { bestand:"maandcontrole.html",  groep:"maandcontrole", ic:"🧮", naam:"Maandcontrole",

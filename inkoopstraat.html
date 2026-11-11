@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("inkoopstraat", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Inkoop</h2><p style="color:#6b7280">Deze tegel is voor inkoop en het magazijn.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inkoop - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ═════════════════════════════════════════════════════════════════
+     INKOOP - de straat van leverancier tot website (Gerrit, 11 nov 2026)
+
+     Leverancier -> artikelen en inkoopadvies -> inkooporder -> leverancier
+     uploadt proforma, Bill of Lading en packing list (vergeleken met de
+     order) -> betalingen -> binnen: afstrepen en inkooplevering -> marketing.
+     Plus de locaties van alles in Uddel.
+
+     De motor staat in data-worker/src/inkoopstraat.js (routes /straat/...),
+     de uploadpagina voor de leverancier op /levering-upload.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ═════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --rood:#b91c1c; --oranje:#b45309; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+header .stand{font-size:12px;opacity:.85}
+main{max-width:1180px;margin:16px auto;padding:0 14px 60px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{border:1px solid var(--rand);background:#fff;border-radius:999px;padding:7px 14px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.tabs button.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.kaart h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--groen);display:flex;align-items:center;gap:8px;white-space:nowrap;flex-wrap:wrap}
+.kaart h2 .rechts{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+table.t th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs);padding:6px;border-bottom:1px solid var(--rand);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.t td{padding:6px;border-bottom:1px solid #f0f0ea;vertical-align:middle;overflow-wrap:break-word}
+table.t tr.rij{cursor:pointer}table.t tr.rij:hover td{background:#f8faf5}
+table.t td.g,table.t th.g{text-align:right}
+table.t input{width:100%;font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--rand);border-radius:6px;text-align:right}
+@media(max-width:760px){.smal{display:none}}
+input.zoek,select,textarea,input.veld{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--rand);border-radius:8px;background:#fff;width:100%}
+textarea{min-height:70px}
+button{font:inherit;font-size:13px;border-radius:9px;padding:8px 14px;cursor:pointer;border:1px solid var(--rand);background:#fff;color:var(--ink);white-space:nowrap}
+button.doe{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+button.klein{padding:4px 9px;font-size:12px}
+button:disabled{opacity:.5;cursor:default}
+.knoppen{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.melding{font-size:12.5px}.melding.fout{color:var(--rood)}.melding.goed{color:#15803d}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;background:#f3f4f6;color:#4b5563}
+.chip.rood{background:#fee2e2;color:#b91c1c}.chip.groen{background:#dcfce7;color:#15803d}.chip.oranje{background:#fef3c7;color:#92400e}.chip.blauw{background:#dbeafe;color:#1d4ed8}
+.fases{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.fase{flex:1 1 110px;background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 9px;font-size:12px;color:var(--grijs)}
+.fase b{display:block;color:var(--ink);font-size:12.5px;white-space:nowrap}
+.fase.klaar{background:#f0f7e8;border-color:#cfe4b5}.fase.nu{border-color:var(--lime);box-shadow:0 0 0 2px #8bc53f33}
+.raster{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 12px}
+.raster > div{min-width:0}
+.s2{grid-column:span 2}.s4{grid-column:span 4}
+@media(max-width:760px){.raster{grid-template-columns:1fr 1fr}.s4{grid-column:span 2}}
+label.l{display:block;font-size:11px;color:var(--grijs);margin:0 0 3px;white-space:nowrap}
+.geg{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;font-size:13px}
+.geg span:nth-child(odd){color:var(--grijs)}
+@media(max-width:600px){.geg{grid-template-columns:1fr}}
+.slot{border:1px dashed #d1d5db;border-radius:10px;padding:14px;text-align:center;color:var(--grijs);background:#fafaf7}
+.verschil{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 12px;margin:8px 0;font-size:12.5px}
+.log{font-size:12px;color:var(--grijs);line-height:1.6;max-height:200px;overflow:auto}
+.verberg{display:none}
+.terug{margin-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🛒 Inkoop</h1>
+  <span class="stand" id="indexStand"></span>
+  <button type="button" class="fp-kop-knop" id="indexKnop" title="Het Dashboard haalt alle artikelen, leveranciers, voorraden en locaties opnieuw uit Logic4">Artikelen bijwerken</button>
+</header>
+<main>
+  <div class="tabs" id="tabs">
+    <button type="button" data-tab="orders" title="Het Dashboard laat alle open inkooporders zien en waar ze staan">Inkooporders</button>
+    <button type="button" data-tab="leveranciers" title="Het Dashboard laat de leveranciers met hun artikelen en het inkoopadvies zien">Leveranciers</button>
+    <button type="button" data-tab="locaties" title="Het Dashboard laat zien waar elk artikel in Uddel ligt">Locaties</button>
+  </div>
+  <div id="vak"></div>
+</main>
+
+<script>
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+var W = (location.hostname === "localhost" && new URLSearchParams(location.search).get("w")) || "https://fonteyn-data-store.g-mulder.workers.dev";
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function $(id){ return document.getElementById(id); }
+function esc(x){ return String(x==null?"":x).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function geld(v){ return (Number(v)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function getal(v){ return (Number(v)||0).toLocaleString("nl-NL",{maximumFractionDigits:2}); }
+function datum(t){ if(!t) return ""; var d=new Date(t); return isNaN(d)?String(t).slice(0,10):d.toLocaleDateString("nl-NL",{day:"numeric",month:"short",year:"2-digit"}); }
+function wanneer(ts){ if(!ts) return ""; var d=new Date(ts); return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
+function wParam(){ return location.search.indexOf("w=")>=0 ? "w="+encodeURIComponent(W) : ""; }
+function zetAdres(q){ var w=wParam(); history.replaceState(null,"",location.pathname+(q||w?"?":"")+[q,w].filter(Boolean).join("&")); }
+async function api(pad, body){
+  var r = await fetch(W+pad, { method: body ? "POST" : "GET", headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" }, body: body ? JSON.stringify(body) : undefined });
+  var j = await r.json().catch(function(){ return null; });
+  if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("Het Dashboard wacht nog op antwoord (" + r.status + "). Probeer het zo nog eens."));
+  return j;
+}
+function log(a,d){ try{ if(window.fpLog) window.fpLog(a,d||""); }catch(e){} }
+function melding(id,t,fout){ var m=$(id); if(!m) return; m.textContent=t||""; m.className="melding"+(t?(fout?" fout":" goed"):""); }
+function laden(){ $("vak").innerHTML = '<div class="kaart"><p class="lead">Even laden…</p></div>'; }
+function fout(e){ $("vak").innerHTML = '<div class="kaart"><p class="melding fout">'+esc(e.message||e)+'</p></div>'; }
+function tab(naam){ Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.classList.toggle("aan", b.dataset.tab===naam); }); }
+
+/* ── De artikellijst bijwerken (in stapjes, terwijl je verder werkt) ───── */
+var indexBezig = false;
+async function indexBijwerken(stil){
+  if (indexBezig) return; indexBezig = true; $("indexKnop").disabled = true;
+  try {
+    for (var i = 0; i < 40; i++) {
+      var j = await api("/straat/index/stap", {});
+      $("indexStand").textContent = "Artikelen bijwerken… " + getal(j.verwerkt) + " gelezen";
+      if (j.klaar) { $("indexStand").textContent = "Artikelen bijgewerkt " + wanneer(j.laatsteKeer); break; }
+    }
+    if (!stil) log("index", "");
+  } catch(e){ $("indexStand").textContent = "Bijwerken: " + e.message; }
+  indexBezig = false; $("indexKnop").disabled = false;
+}
+async function indexCheck(){
+  try {
+    var j = await api("/straat/index");
+    var s = j.stand || {};
+    if (s.klaar) $("indexStand").textContent = "Artikelen bijgewerkt " + wanneer(s.klaar);
+    if (!s.klaar || Date.now() - s.klaar > 20 * 3600000 || s.bezig) indexBijwerken(true);
+  } catch(e){}
+}
+
+/* ── Inkooporders ─────────────────────────────────────────────────────── */
+var FASEKLEUR = { eerder:"", link:"oranje", proforma:"oranje", aanbetaald:"blauw", opzee:"blauw", rest:"blauw", binnen:"groen", website:"groen", klaar:"groen", besteld:"" };
+var ALLE = false;
+async function orders(){
+  tab("orders"); zetAdres(""); laden();
+  try {
+    var j = await api("/straat/orders" + (ALLE ? "?alle=1" : ""));
+    var l = j.orders || [];
+    $("vak").innerHTML = '<div class="kaart"><h2>Open inkooporders<span class="rechts"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="oAlle"'+(ALLE?' checked':'')+'> Ook ouder dan 6 maanden</label><input class="zoek" id="oZoek" placeholder="Zoek op leverancier of nummer" style="width:240px"></span></h2>' +
+      '<p class="lead">Klik op een inkooporder om de straat te zien: documenten van de leverancier, betalingen, binnenkomst en website.</p>' +
+      '<table class="t"><colgroup><col style="width:11%"><col><col class="smal" style="width:10%"><col style="width:7%"><col style="width:16%"><col style="width:12%"><col class="smal" style="width:10%"></colgroup>' +
+      '<thead><tr><th>Nummer</th><th>Leverancier</th><th class="smal">Datum</th><th class="g">Regels</th><th>Volgende stap</th><th>Documenten</th><th class="smal">Inkoper</th></tr></thead><tbody id="oLijst"></tbody></table></div>';
+    function teken(){
+      var z = ($("oZoek").value||"").toLowerCase();
+      $("oLijst").innerHTML = l.filter(function(o){ return !z || (o.leverancier+" "+o.id+" "+o.opmerking).toLowerCase().indexOf(z)>=0; }).map(function(o){
+        return '<tr class="rij" data-id="'+o.id+'"><td><b>'+esc(o.id)+'</b></td><td>'+esc(o.leverancier)+(o.opmerking?'<br><small style="color:#6b7280">'+esc(o.opmerking.slice(0,80))+'</small>':'')+'</td><td class="smal">'+esc(datum(o.datum))+'</td><td class="g">'+esc(o.regels)+'</td>' +
+          '<td><span class="chip '+(FASEKLEUR[o.fase]||"")+'">'+esc(o.faseNaam)+'</span></td><td>'+(o.docs?esc(o.docs)+' stuk'+(o.docs>1?'s':''):'')+(o.afwijkingen?' <span class="chip rood" title="Een document wijkt af van de inkooporder">'+o.afwijkingen+' verschil</span>':'')+'</td><td class="smal">'+esc(o.inkoper)+'</td></tr>'; }).join("") ||
+        '<tr><td colspan="7"><div class="slot">Zoek op een ander woord of nummer.</div></td></tr>';
+      Array.prototype.forEach.call(document.querySelectorAll("#oLijst tr.rij"), function(tr){ tr.onclick = function(){ order(tr.dataset.id); }; });
+    }
+    $("oZoek").oninput = teken; $("oAlle").onchange = function(){ ALLE = this.checked; orders(); }; teken();
+  } catch(e){ fout(e); }
+}
+
+async function order(id){
+  tab("orders"); zetAdres("iko="+encodeURIComponent(id)); laden();
+  try {
+    var j = await api("/straat/order?id="+encodeURIComponent(id));
+    var o = j.order, r = j.regels || [], docs = j.docs || [], f = o.fase || { stappen: [] };
+    var h = '<div class="terug"><button type="button" id="terug" title="Het Dashboard gaat terug naar alle inkooporders">&larr; Alle inkooporders</button></div>';
+    h += '<div class="kaart"><h2>Inkooporder '+esc(o.id)+'<span class="rechts">'+esc(o.leverancier)+' &middot; '+esc(datum(o.datum))+'</span></h2>' +
+      '<div class="fases">' + f.stappen.map(function(s){ return '<div class="fase '+(s.klaar?'klaar':(s.k===f.nu?'nu':''))+'"><b>'+(s.klaar?'✓ ':'')+esc(s.naam)+'</b></div>'; }).join("") + '</div>' +
+      (o.opmerking ? '<p class="lead">'+esc(o.opmerking)+'</p>' : '') + '</div>';
+
+    /* Regels */
+    h += '<div class="kaart"><h2>Regels<span class="rechts">'+r.length+' regels</span></h2><table class="t"><colgroup><col style="width:12%"><col class="smal" style="width:12%"><col><col style="width:8%"><col style="width:9%"><col class="smal" style="width:10%"><col style="width:16%"></colgroup>' +
+      '<thead><tr><th>Code</th><th class="smal">Code leverancier</th><th>Omschrijving</th><th class="g">Besteld</th><th class="g">Nog te leveren</th><th class="g smal">Prijs</th><th>Locatie Uddel</th></tr></thead><tbody>' +
+      r.map(function(x){ return '<tr><td>'+esc(x.code)+'</td><td class="smal">'+esc(x.levcode)+'</td><td>'+esc(x.oms)+(x.klant?'<br><small style="color:#6b7280">Voor '+esc(x.klant)+'</small>':'')+'</td><td class="g">'+getal(x.besteld)+'</td><td class="g">'+getal(x.teLeveren)+'</td><td class="g smal">'+geld(x.prijs)+'</td><td>'+esc(x.locatie||"")+'</td></tr>'; }).join("") + '</tbody></table></div>';
+
+    /* Naar de leverancier */
+    h += '<div class="kaart"><h2>Naar de leverancier</h2>' +
+      '<p class="lead">De leverancier krijgt een eigen link. Daar zet hij de proforma, de Bill of Lading en de packing list neer. Het Dashboard vergelijkt elk document met deze inkooporder.</p>' +
+      (o.uploadLink ? '<p class="lead">Uploadlink: <a href="'+esc(o.uploadLink)+'" target="_blank">'+esc(o.uploadLink)+'</a></p>' : '') +
+      ((o.mails||[]).length ? '<p class="lead">📨 '+o.mails.map(function(m){ return 'Gemaild naar '+esc(m.aan)+' op '+esc(wanneer(m.ts)); }).join('<br>')+'</p>' : '') +
+      '<div class="raster"><div class="s2"><label class="l" for="mAan">Mailadres leverancier</label><input class="veld" id="mAan" value="'+esc(o.leverancierMail||"")+'"></div>' +
+      '<div class="s2"><label class="l" for="mOnd">Onderwerp</label><input class="veld" id="mOnd" placeholder="Purchase order '+esc(o.id)+' from Fonteyn"></div>' +
+      '<div class="s4"><label class="l" for="mTekst">Eigen tekst (Engels, mag leeg)</label><textarea id="mTekst" placeholder="Please find our purchase order below. Could you send us your proforma invoice for this order?"></textarea></div></div>' +
+      '<div class="knoppen"><button type="button" id="linkKnop" title="Het Dashboard maakt de uploadlink voor de leverancier en zet hem op het klembord">Uploadlink kopiëren</button>' +
+      '<button type="button" class="doe" id="mailKnop" title="Het Dashboard laat eerst de mail aan de leverancier zien">Voorbeeld en versturen</button><span class="melding" id="mMelding"></span></div><div id="mVak"></div></div>';
+
+    /* Documenten */
+    h += '<div class="kaart"><h2>Documenten van de leverancier</h2>' +
+      (docs.length ? docs.map(function(d){
+        var v = d.vergelijk;
+        return '<div style="border-top:1px solid #f0f0ea;padding:8px 0"><b>'+esc(d.soortNaam)+'</b> &middot; <a href="#" data-doc="'+esc(d.id)+'" title="Het Dashboard opent dit document">'+esc(d.naam)+'</a> <small style="color:#6b7280">'+esc(wanneer(d.ts))+' &middot; '+esc(d.door)+(d.documentnummer?' &middot; nr '+esc(d.documentnummer):'')+(d.containers&&d.containers.length?' &middot; container '+esc(d.containers.join(", ")):'')+'</small>' +
+          (v ? (v.afwijkingen ? '<div class="verschil"><b>'+v.afwijkingen+' verschil(len) met de inkooporder:</b><br>' +
+              v.regels.filter(function(x){ return x.verschil!==0 || x.prijsAnders; }).map(function(x){ return esc(x.code)+' '+esc(x.oms.slice(0,50))+': besteld '+getal(x.besteld)+', op het document '+(x.gevonden?getal(x.doc):'ontbreekt')+(x.prijsAnders?' (prijs '+geld(x.prijs)+' wordt '+geld(x.docPrijs)+')':''); }).join('<br>') +
+              (v.extra.length ? '<br>Extra op het document: '+v.extra.map(function(x){ return esc((x.code||"")+' '+(x.oms||"").slice(0,40))+' ('+getal(x.aantal)+')'; }).join(', ') : '') + '</div>'
+            : ' <span class="chip groen">klopt met de inkooporder</span>') : (d.leesFout ? ' <span class="chip oranje" title="'+esc(d.leesFout)+'">nog te lezen</span>' : '')) + '</div>';
+      }).join("") : '<div class="slot">De documenten van de leverancier komen hier. Stuur de leverancier de uploadlink, of zet zelf een document neer.</div>') +
+      '<div class="knoppen"><select id="dSoort" style="width:auto"><option value="proforma">Proforma invoice</option><option value="bl">Bill of Lading</option><option value="packinglist">Packing list</option><option value="overig">Ander document</option></select>' +
+      '<input type="file" id="dBestand" accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png" style="max-width:260px"><button type="button" id="dKnop" title="Het Dashboard bewaart dit document bij de inkooporder en vergelijkt het met de regels">Document toevoegen</button><span class="melding" id="dMelding"></span></div></div>';
+
+    /* Betalingen en op zee */
+    var b = o.betaling || {}, a = b.aanbetaling || {}, rs = b.rest || {};
+    h += '<div class="kaart"><h2>Betalingen en verzending</h2><div class="raster">' +
+      '<div><label class="l">Aanbetaling bedrag</label><input class="veld" id="bAanB" inputmode="decimal" value="'+esc(a.bedrag||"")+'"></div>' +
+      '<div><label class="l">Valuta</label><select id="bAanV"><option'+(a.valuta!=="EUR"?' selected':'')+'>USD</option><option'+(a.valuta==="EUR"?' selected':'')+'>EUR</option></select></div>' +
+      '<div class="s2"><label class="l">Aanbetaald op (dan start de productie)</label><input class="veld" id="bAanOp" type="date" value="'+esc(a.op||"")+'"></div>' +
+      '<div><label class="l">Restbetaling bedrag</label><input class="veld" id="bRestB" inputmode="decimal" value="'+esc(rs.bedrag||"")+'"></div>' +
+      '<div><label class="l">Rest betalen</label><select id="bRestM"><option value="">kies</option><option value="voor verzending"'+(rs.moment==="voor verzending"?' selected':'')+'>voor verzending</option><option value="op zee"'+(rs.moment==="op zee"?' selected':'')+'>als het schip op zee is</option><option value="bij aankomst"'+(rs.moment==="bij aankomst"?' selected':'')+'>bij aankomst</option></select></div>' +
+      '<div class="s2"><label class="l">Rest betaald op</label><input class="veld" id="bRestOp" type="date" value="'+esc(rs.op||"")+'"></div>' +
+      '<div class="s2"><label class="l">Op zee sinds (de Bill of Lading zet dit vanzelf)</label><input class="veld" id="bZee" type="date" value="'+esc(o.opZee?new Date(o.opZee).toISOString().slice(0,10):"")+'"></div>' +
+      '</div><div class="knoppen"><button type="button" id="bKnop" title="Het Dashboard bewaart de betalingen en de verzending bij deze inkooporder">Opslaan</button><span class="melding" id="bMelding"></span></div></div>';
+
+    /* Binnen: afstrepen */
+    h += '<div class="kaart"><h2>Binnen: afstrepen en inkooplevering</h2>' +
+      ((o.leveringen||[]).length ? '<p class="lead">In Logic4: '+o.leveringen.map(function(l){ return 'levering '+esc(l.id)+' ('+esc(datum(l.datum))+', '+esc(l.status)+')'; }).join(', ')+'</p>' : '') +
+      (r.some(function(x){ return x.teLeveren>0; }) ?
+        '<p class="lead">Vul per regel in wat er echt binnen is volgens de packing list. Een verschil gaat als bericht naar de inkoper; daarna krijgt marketing een seintje voor de website.</p>' +
+        '<table class="t"><colgroup><col style="width:13%"><col><col style="width:12%"><col style="width:13%"><col class="smal" style="width:18%"></colgroup><thead><tr><th>Code</th><th>Omschrijving</th><th class="g">Verwacht</th><th class="g">Binnen</th><th class="smal">Locatie</th></tr></thead><tbody>' +
+        r.filter(function(x){ return x.teLeveren>0; }).map(function(x){ return '<tr><td>'+esc(x.code)+'</td><td>'+esc(x.oms)+'</td><td class="g">'+getal(x.teLeveren)+'</td><td><input data-rij="'+esc(x.rij)+'" inputmode="decimal" value="'+esc(x.teLeveren)+'"></td><td class="smal">'+esc(x.locatie||"")+'</td></tr>'; }).join("") + '</tbody></table>' +
+        '<div class="raster" style="margin-top:8px"><div class="s2"><label class="l">Omschrijving (vrachtbrief- of containernummer)</label><input class="veld" id="lOms" placeholder="bijvoorbeeld SO-004513"></div><div class="s2"><label class="l">Pakbonnummer</label><input class="veld" id="lPak"></div></div>' +
+        '<div class="knoppen"><button type="button" id="lProef" title="Het Dashboard laat zien wat er in Logic4 komt en welke verschillen er zijn">Controleren</button><button type="button" class="doe verberg" id="lKnop" title="Het Dashboard maakt de inkooplevering in Logic4">Inkooplevering maken in Logic4</button><span class="melding" id="lMelding"></span></div><div id="lVak"></div>'
+        : '<div class="slot">Alles van deze inkooporder is binnen.</div>') +
+      ((f.stappen.find(function(s){ return s.k==="binnen"; })||{}).klaar && !(o.website && o.website.op) ? '<div class="knoppen"><button type="button" id="webKnop" title="Het Dashboard zet vast dat de artikelen op de website staan">Staat op de website</button></div>' : '') +
+      (o.website && o.website.op ? '<p class="lead">✅ Op de website sinds '+esc(wanneer(o.website.op))+'.</p>' : '') + '</div>';
+
+    if ((o.log||[]).length) h += '<div class="kaart"><h2>Wat er gebeurde</h2><div class="log">'+o.log.slice().reverse().map(function(x){ return esc(wanneer(x.ts))+' - '+esc(String(x.wie).replace(/@.*/,""))+': '+esc(x.wat); }).join("<br>")+'</div></div>';
+    $("vak").innerHTML = h;
+    orderKoppel(o, r);
+  } catch(e){ fout(e); }
+}
+function orderKoppel(o, r){
+  $("terug").onclick = orders;
+  Array.prototype.forEach.call(document.querySelectorAll("a[data-doc]"), function(a){ a.onclick = async function(e){
+    e.preventDefault();
+    try { var res = await fetch(W+"/straat/doc?id="+o.id+"&doc="+encodeURIComponent(a.dataset.doc), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
+      if (!res.ok) throw new Error("Dit document is al opgeruimd.");
+      var url = URL.createObjectURL(await res.blob()); window.open(url, "_blank"); }
+    catch(x){ melding("dMelding", x.message, true); }
+  }; });
+  $("linkKnop").onclick = async function(){
+    try { var j = await api("/straat/order/link", { id: o.id, creditor: o.creditor }); try { await navigator.clipboard.writeText(j.url); } catch(e){}
+      melding("mMelding", "De link staat op het klembord: " + j.url); log("uploadlink", o.id); }
+    catch(e){ melding("mMelding", e.message, true); }
+  };
+  $("mailKnop").onclick = async function(){
+    var body = { id: o.id, aan: $("mAan").value, onderwerp: $("mOnd").value, tekst: $("mTekst").value };
+    try {
+      var j = await api("/straat/order/mail", body);
+      $("mVak").innerHTML = '<p class="lead" style="margin-top:10px">Zo krijgt <b>'+esc(j.aan||"(vul eerst een adres in)")+'</b> het. Onderwerp: <b>'+esc(j.onderwerp)+'</b></p><iframe id="mFrame" style="width:100%;height:480px;border:1px solid #e5e7eb;border-radius:8px;background:#f5f4ef"></iframe>' +
+        '<div class="knoppen"><button type="button" class="doe" id="mEcht" title="Het Dashboard stuurt deze mail nu naar de leverancier">Versturen</button><button type="button" id="mWeg" title="Het Dashboard sluit het voorbeeld; er gaat niets weg">Nog aanpassen</button><span class="melding" id="mMelding2"></span></div>';
+      $("mFrame").srcdoc = j.html;
+      $("mWeg").onclick = function(){ $("mVak").innerHTML = ""; };
+      $("mEcht").onclick = async function(){ var b=this; b.disabled=true;
+        try { await api("/straat/order/mail", Object.assign({ stuur: true }, body)); log("mail-leverancier", o.id); order(o.id); }
+        catch(e){ melding("mMelding2", e.message, true); b.disabled=false; } };
+    } catch(e){ melding("mMelding", e.message, true); }
+  };
+  $("dKnop").onclick = async function(){
+    var f = $("dBestand").files[0], k = this;
+    if (!f) { melding("dMelding", "Kies eerst een bestand.", true); return; }
+    k.disabled = true; melding("dMelding", "Lezen en vergelijken…");
+    try {
+      var tekst = await tekstVan(f);
+      var b64 = await new Promise(function(res, rej){ var fr = new FileReader(); fr.onload = function(){ res(String(fr.result).split(",")[1]); }; fr.onerror = rej; fr.readAsDataURL(f); });
+      await api("/straat/doc", { id: o.id, soort: $("dSoort").value, naam: f.name, base64: b64, tekst: tekst.slice(0, 60000) });
+      log("document", o.id + " " + $("dSoort").value); order(o.id);
+    } catch(e){ melding("dMelding", e.message, true); k.disabled = false; }
+  };
+  $("bKnop").onclick = async function(){
+    try {
+      await api("/straat/order/zet", { id: o.id, creditor: o.creditor, zet: {
+        aanbetaling: { bedrag: $("bAanB").value, valuta: $("bAanV").value, op: $("bAanOp").value || null },
+        rest: { bedrag: $("bRestB").value, valuta: $("bAanV").value, moment: $("bRestM").value, op: $("bRestOp").value || null },
+        opZee: $("bZee").value || null } });
+      log("betaling", o.id); order(o.id);
+    } catch(e){ melding("bMelding", e.message, true); }
+  };
+  if ($("webKnop")) $("webKnop").onclick = async function(){ try { await api("/straat/order/zet", { id: o.id, creditor: o.creditor, zet: { website: true } }); log("website", o.id); order(o.id); } catch(e){ alertIn(e.message); } };
+  function binnenRegels(){ return Array.prototype.map.call(document.querySelectorAll("input[data-rij]"), function(x){ return { rij: x.dataset.rij, qty: String(x.value).replace(",", ".") }; }); }
+  if ($("lProef")) {
+    $("lProef").onclick = async function(){
+      try {
+        var j = await api("/straat/levering/maak", { id: o.id, regels: binnenRegels(), omschrijving: $("lOms").value, pakbon: $("lPak").value });
+        $("lVak").innerHTML = j.verschillen.length ? '<div class="verschil"><b>'+j.verschillen.length+' verschil(len) met de inkooporder:</b><br>'+j.verschillen.map(function(v){ return esc(v.code)+' '+esc(v.oms.slice(0,50))+': verwacht '+getal(v.verwacht)+', binnen '+getal(v.binnen); }).join('<br>')+'<br>De inkoper krijgt hier een bericht over.</div>' : '<p class="lead">Alles klopt met de inkooporder.</p>';
+        $("lKnop").classList.remove("verberg"); melding("lMelding", j.regels + " regel(s) gaan naar Logic4.");
+      } catch(e){ melding("lMelding", e.message, true); }
+    };
+    $("lKnop").onclick = async function(){
+      var k = this; k.disabled = true; melding("lMelding", "Inkooplevering maken…");
+      try { var j = await api("/straat/levering/maak", { id: o.id, regels: binnenRegels(), omschrijving: $("lOms").value, pakbon: $("lPak").value, bevestigd: true });
+        log("inkooplevering", o.id); order(o.id); }
+      catch(e){ melding("lMelding", e.message, true); k.disabled = false; }
+    };
+  }
+}
+function alertIn(t){ melding("lMelding", t, true); }
+
+/* Tekst uit een pdf of Excel halen, om de regels te kunnen lezen. */
+function laadScript(src){ return new Promise(function(res, rej){ var s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+async function tekstVan(f){
+  try {
+    var n = f.name.toLowerCase();
+    if (n.endsWith(".pdf")) {
+      if (!window.pdfjsLib) await laadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      var d = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise, u = "";
+      for (var i = 1; i <= Math.min(d.numPages, 15); i++) { var c = await (await d.getPage(i)).getTextContent(); u += c.items.map(function(x){ return x.str; }).join(" ") + "\n"; }
+      return u;
+    }
+    if (/\.(xlsx|xls|csv)$/.test(n)) {
+      if (!window.XLSX) await laadScript("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js");
+      var w = XLSX.read(await f.arrayBuffer());
+      return w.SheetNames.map(function(s){ return XLSX.utils.sheet_to_csv(w.Sheets[s]); }).join("\n");
+    }
+  } catch(e){}
+  return "";
+}
+
+/* ── Leveranciers ────────────────────────────────────────────────────── */
+var LEV = null;
+async function leveranciers(){
+  tab("leveranciers"); zetAdres("tab=leveranciers"); laden();
+  try {
+    if (!LEV) LEV = (await api("/straat/leveranciers")).leveranciers || [];
+    $("vak").innerHTML = '<div class="kaart"><h2>Leveranciers<span class="rechts"><input class="zoek" id="lZoek" placeholder="Zoek een leverancier" style="width:240px"></span></h2>' +
+      '<p class="lead">Leveranciers met artikelen of open inkooporders in Logic4. Klik voor de afspraken, de artikelen en het inkoopadvies.</p>' +
+      '<table class="t"><colgroup><col><col class="smal" style="width:18%"><col style="width:12%"><col style="width:12%"></colgroup><thead><tr><th>Leverancier</th><th class="smal">Plaats</th><th class="g">Artikelen</th><th class="g">Open orders</th></tr></thead><tbody id="levLijst"></tbody></table></div>';
+    function teken(){
+      var z = ($("lZoek").value||"").toLowerCase();
+      $("levLijst").innerHTML = LEV.filter(function(x){ return !z || (x.naam+" "+x.plaats+" "+x.id).toLowerCase().indexOf(z)>=0; }).sort(function(a,b){ return (b.open-a.open) || a.naam.localeCompare(b.naam); }).slice(0, 400).map(function(x){
+        return '<tr class="rij" data-id="'+x.id+'"><td><b>'+esc(x.naam)+'</b></td><td class="smal">'+esc(x.plaats)+'</td><td class="g">'+esc(x.artikelen)+'</td><td class="g">'+(x.open?'<span class="chip blauw">'+x.open+'</span>':'')+'</td></tr>'; }).join("") ||
+        '<tr><td colspan="4"><div class="slot">Klik bovenaan op Artikelen bijwerken; daarna staan hier de leveranciers.</div></td></tr>';
+      Array.prototype.forEach.call(document.querySelectorAll("#levLijst tr.rij"), function(tr){ tr.onclick = function(){ leverancier(tr.dataset.id); }; });
+    }
+    $("lZoek").oninput = teken; teken();
+  } catch(e){ fout(e); }
+}
+async function leverancier(id){
+  tab("leveranciers"); zetAdres("lev="+encodeURIComponent(id)); laden();
+  try {
+    var j = await api("/straat/leverancier?id="+encodeURIComponent(id));
+    var L = j.leverancier, a = j.afspraak || {}, art = j.artikelen || [], k = j.koppeling || {};
+    var h = '<div class="terug"><button type="button" id="terug" title="Het Dashboard gaat terug naar alle leveranciers">&larr; Alle leveranciers</button></div>';
+    h += '<div class="kaart"><h2>'+esc(L.naam)+'<span class="rechts">Crediteur '+esc(L.id)+'</span></h2><div class="geg">' +
+      [["Contact", L.contact],["E-mail", L.email],["Telefoon", L.telefoon],["Adres", L.adres],["Btw", L.btw],["KvK", L.kvk],["Betaling (Logic4)", L.betaling],["Bank", L.bank],["Soort", L.soort],["Notities", L.notities]]
+        .filter(function(x){ return x[1]; }).map(function(x){ return '<span>'+esc(x[0])+'</span><span>'+esc(x[1])+'</span>'; }).join("") + '</div></div>';
+    h += '<div class="kaart"><h2>Onze afspraken<span class="rechts"><a href="prijslijsten-fabrikanten.html" title="Het Dashboard opent de tegel Leveranciersinformatie">Bewerken in Leveranciersinformatie</a></span></h2>' +
+      '<div class="raster" style="margin-bottom:8px"><div class="s2"><label class="l">Map in Leveranciersinformatie'+(k.geraden?' (geraden op naam)':'')+'</label><select id="kMap"><option value="">kies de map</option>'+(j.mappen||[]).map(function(m){ return '<option'+(m===k.map?' selected':'')+'>'+esc(m)+'</option>'; }).join("")+'</select></div>' +
+      '<div class="s2"><label class="l">Inkoper (krijgt de berichten)</label><input class="veld" id="kInk" value="'+esc(k.inkoper||"")+'" placeholder="bijvoorbeeld chantal"></div></div>' +
+      (j.afspraak ? '<div class="geg">' + [["Contactpersoon", a.contact],["Fabriek (intern)", a.fabriekIntern],["Fabriek (extern)", a.fabriekExtern],["Betalingsvoorwaarden", a.betaling],["Magazijn in Nederland", a.magazijnNL],["Startmoment productietijd", a.startmoment],["Boeteclausule", a.boete],
+          ["Productietijd", Object.keys(a.inkoop||{}).map(function(x){ return (a.inkoop[x]||{}).lt ? ({magazijn:"magazijn",bezorgd:"bezorgd",ft40:"40ft",ft20:"20ft"}[x]||x)+": "+a.inkoop[x].lt : ""; }).filter(Boolean).join(", ")]]
+          .filter(function(x){ return x[1]; }).map(function(x){ return '<span>'+esc(x[0])+'</span><span>'+esc(x[1])+'</span>'; }).join("") + '</div>' : '') +
+      (j.ontbreekt.length ? '<div class="verschil">Nog in te vullen voor een inkooporder: <b>'+esc(j.ontbreekt.join(", "))+'</b></div>' : '<p class="lead" style="margin-top:8px">✅ De afspraken zijn compleet.</p>') +
+      '<div class="knoppen"><button type="button" id="kBewaar" title="Het Dashboard onthoudt welke map en welke inkoper bij deze leverancier horen">Opslaan</button><span class="melding" id="kMelding"></span></div></div>';
+    var adv = art.filter(function(x){ return x.advies>0; }).length;
+    h += '<div class="kaart"><h2>Artikelen en inkoopadvies<span class="rechts">'+art.length+' artikelen'+(adv?' &middot; <span class="chip oranje">'+adv+' met advies</span>':'')+'</span></h2>' +
+      '<p class="lead">Advies = minimumvoorraad min wat vrij is en wat al besteld is. Vul bij Bestellen het aantal in; het advies staat er al.</p>' +
+      '<div class="knoppen" style="margin:0 0 8px"><input class="zoek" id="aZoek" placeholder="Zoek een artikel" style="max-width:260px"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="aAdv"'+(adv?' checked':'')+'> Alleen met advies</label></div>' +
+      '<table class="t"><colgroup><col style="width:11%"><col class="smal" style="width:11%"><col><col class="smal" style="width:8%"><col style="width:7%"><col style="width:7%"><col style="width:7%"><col class="smal" style="width:7%"><col style="width:7%"><col class="smal" style="width:12%"><col style="width:9%"></colgroup>' +
+      '<thead><tr><th>Code</th><th class="smal">Code lev.</th><th>Omschrijving</th><th class="g smal">Prijs</th><th class="g">Minimum</th><th class="g">Vrij</th><th class="g">Besteld</th><th class="g smal">Voorraad</th><th class="g">Advies</th><th class="smal">Locatie</th><th class="g">Bestellen</th></tr></thead><tbody id="aLijst"></tbody></table>' +
+      '<div class="knoppen"><input class="veld" id="oOpm" placeholder="Opmerking op de inkooporder (mag leeg)" style="max-width:360px">' +
+      '<button type="button" class="doe" id="oMaak"'+(j.ontbreekt.length||!j.magBestellen?' disabled':'')+' title="'+(j.ontbreekt.length?'Eerst de afspraken met de leverancier aanvullen':'Het Dashboard maakt de inkooporder in Logic4 met de aantallen bij Bestellen')+'">Inkooporder maken</button><span class="melding" id="oMelding"></span></div></div>';
+    if ((j.orders||[]).length) h += '<div class="kaart"><h2>Open inkooporders</h2><table class="t"><thead><tr><th>Nummer</th><th>Datum</th><th class="g">Regels</th><th class="g">Nog te leveren</th><th>Opmerking</th></tr></thead><tbody>' +
+      j.orders.map(function(o){ return '<tr class="rij" data-iko="'+o.id+'"><td><b>'+esc(o.id)+'</b></td><td>'+esc(datum(o.datum))+'</td><td class="g">'+esc(o.regels)+'</td><td class="g">'+getal(o.open)+'</td><td>'+esc(o.opmerking)+'</td></tr>'; }).join("") + '</tbody></table></div>';
+    $("vak").innerHTML = h;
+    var bestel = {};
+    art.forEach(function(x){ if (x.advies>0) bestel[x.pid] = x.advies; });
+    function teken(){
+      var z = ($("aZoek").value||"").toLowerCase(), alleen = $("aAdv").checked;
+      $("aLijst").innerHTML = art.filter(function(x){ return (!alleen || x.advies>0) && (!z || (x.code+" "+x.naam+" "+x.levcode).toLowerCase().indexOf(z)>=0); }).slice(0, 500).map(function(x){
+        return '<tr><td>'+esc(x.code)+'</td><td class="smal">'+esc(x.levcode)+'</td><td>'+esc(x.naam)+'</td><td class="g smal">'+geld(x.prijs)+'</td><td class="g">'+getal(x.minimum)+'</td><td class="g">'+getal(x.vrij)+'</td><td class="g">'+getal(x.besteld)+'</td><td class="g smal">'+getal(x.voorraad)+'</td>' +
+          '<td class="g">'+(x.advies?'<span class="chip oranje">'+getal(x.advies)+'</span>':'')+'</td><td class="smal">'+esc(x.locatie)+'</td><td><input data-pid="'+x.pid+'" inputmode="decimal" value="'+esc(bestel[x.pid]||"")+'"></td></tr>'; }).join("") ||
+        '<tr><td colspan="11"><div class="slot">'+(art.length?'Zoek op een ander woord.':'Klik bovenaan op Artikelen bijwerken; daarna staan hier de artikelen van deze leverancier.')+'</div></td></tr>';
+      Array.prototype.forEach.call(document.querySelectorAll("#aLijst input[data-pid]"), function(inp){ inp.oninput = function(){ var v = Number(String(inp.value).replace(",", ".")); if (v>0) bestel[inp.dataset.pid] = v; else delete bestel[inp.dataset.pid]; }; });
+    }
+    $("aZoek").oninput = teken; $("aAdv").onchange = teken; teken();
+    $("terug").onclick = leveranciers;
+    Array.prototype.forEach.call(document.querySelectorAll("tr[data-iko]"), function(tr){ tr.onclick = function(){ order(tr.dataset.iko); }; });
+    $("kBewaar").onclick = async function(){ try { await api("/straat/leverancier/koppel", { creditor: L.id, map: $("kMap").value, inkoper: $("kInk").value }); log("lev-koppel", L.id); leverancier(L.id); } catch(e){ melding("kMelding", e.message, true); } };
+    var bevestig = false;
+    $("oMaak").onclick = async function(){
+      var regels = Object.keys(bestel).map(function(pid){ var x = art.find(function(a){ return String(a.pid)===String(pid); }) || {}; return { pid: pid, aantal: bestel[pid], prijs: x.prijs || 0 }; });
+      var k = this; k.disabled = true;
+      try {
+        if (!bevestig) {
+          var p = await api("/straat/order/maak", { creditor: L.id, regels: regels, opmerking: $("oOpm").value });
+          bevestig = true; k.textContent = "Ja, maak de inkooporder"; melding("oMelding", p.regels + " regels, samen " + geld(p.totaal) + ". Klik nog een keer om de inkooporder in Logic4 te maken.");
+        } else {
+          var r = await api("/straat/order/maak", { creditor: L.id, regels: regels, opmerking: $("oOpm").value, bevestigd: true });
+          log("inkooporder-gemaakt", r.iko); order(r.iko); return;
+        }
+      } catch(e){ melding("oMelding", e.message, true); }
+      k.disabled = false;
+    };
+  } catch(e){ fout(e); }
+}
+
+/* ── Locaties ────────────────────────────────────────────────────────── */
+async function locaties(){
+  tab("locaties"); zetAdres("tab=locaties");
+  $("vak").innerHTML = '<div class="kaart"><h2>Locaties in Uddel<span class="rechts" id="locTot"></span></h2><p class="lead">Zoek op artikelcode, naam of locatie. Zonder zoekwoord zie je de eerste 300 artikelen op volgorde van locatie.</p>' +
+    '<input class="zoek" id="locZoek" placeholder="Artikel of locatie, bijvoorbeeld HAL-J" style="max-width:340px;margin-bottom:8px">' +
+    '<table class="t"><colgroup><col style="width:14%"><col><col style="width:10%"><col style="width:10%"><col style="width:30%"></colgroup><thead><tr><th>Code</th><th>Omschrijving</th><th class="g">Voorraad</th><th class="g">Vrij</th><th>Locaties</th></tr></thead><tbody id="locLijst"><tr><td colspan="5"><p class="lead">Even laden…</p></td></tr></tbody></table></div>';
+  var tik = null;
+  async function zoek(){
+    try { var j = await api("/straat/locaties?q="+encodeURIComponent($("locZoek").value.trim()));
+      $("locTot").textContent = getal(j.totaal) + " artikelen met voorraad";
+      $("locLijst").innerHTML = (j.artikelen||[]).map(function(a){ return '<tr><td>'+esc(a.code)+'</td><td>'+esc(a.naam)+'</td><td class="g">'+getal(a.voorraad)+'</td><td class="g">'+getal(a.vrij)+'</td><td>'+a.locaties.map(function(l){ return esc(l.naam)+' <small style="color:#6b7280">('+getal(l.qty)+')</small>'; }).join(", ")+'</td></tr>'; }).join("") ||
+        '<tr><td colspan="5"><div class="slot">Zoek op een ander woord, of klik bovenaan op Artikelen bijwerken.</div></td></tr>'; }
+    catch(e){ $("locLijst").innerHTML = '<tr><td colspan="5" class="melding fout">'+esc(e.message)+'</td></tr>'; }
+  }
+  $("locZoek").oninput = function(){ clearTimeout(tik); tik = setTimeout(zoek, 350); };
+  zoek();
+}
+
+Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){ ({ orders: orders, leveranciers: leveranciers, locaties: locaties })[b.dataset.tab](); }; });
+$("indexKnop").onclick = function(){ indexBijwerken(false); };
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  var s = new URLSearchParams(location.search);
+  if (s.get("iko")) order(s.get("iko")); else if (s.get("lev")) leverancier(s.get("lev"));
+  else if (s.get("tab") === "leveranciers") leveranciers(); else if (s.get("tab") === "locaties") locaties(); else orders();
+  indexCheck();
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"inkoopstraat",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

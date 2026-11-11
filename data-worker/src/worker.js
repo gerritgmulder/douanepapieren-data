@@ -23,6 +23,7 @@ import { ppMailVertaal, PP_MAIL_TALEN } from "./pp-mailteksten.js";
 // Service planning (Kevin, 23 okt 2026): meldingen, routes en de klantmails.
 import { svcHandle, svcRonde } from "./service.js";
 import { vsHandle } from "./voorstel.js";
+import { isHandle } from "./inkoopstraat.js";
 import { plHandle } from "./plaatsing.js";
 const SVC_HULP = (env) => ({ reply, l4Token, RIJ_START, rijNorm, itsTekst, ewsVerstuur,
   // DEV_OPEN bestaat alleen bij een lokale proefdraai, nooit in de uitrol.
@@ -21599,6 +21600,11 @@ const FP_WORKER = {
     /* Voorstel maken: de tegel en de pagina "Bevestig je gegevens" voor de klant. */
     if (url.pathname === "/bevestig" || url.pathname === "/voorstel" || url.pathname.startsWith("/voorstel/"))
       return vsHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij, dpCreateMolliePayment, btwControle }));
+    /* Inkoop: de hele straat van leverancier tot website, en de uploadpagina
+       voor de leverancier (/levering-upload, het token in de link is de sleutel). */
+    if (url.pathname === "/levering-upload" || url.pathname.startsWith("/straat/"))
+      return isHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij, bestandZet, bestandLees, proformaLees,
+        groepLeden: async (e, g) => { await toegangMag(e, g, "-"); return ((toegangCache.groepen || {})[g] || []).slice(); } }));
     if (url.pathname.startsWith("/bakwagen/")) {
       if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);

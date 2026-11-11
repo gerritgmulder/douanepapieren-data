@@ -50,6 +50,11 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    {
+      datum: "2026-11-11", bestand: "inkoopstraat.html", soort: "nieuw",
+      titel: "Inkoop",
+      wat:   "Alles van inkoop in één tegel: per leverancier de afspraken, artikelen, voorraad en het inkoopadvies; een inkooporder maken; de leverancier zet proforma, Bill of Lading en packing list zelf neer en het Dashboard meldt elk verschil; bij binnenkomst afstrepen en de inkooplevering maken; en waar alles ligt in Uddel."
+    },
     { datum: "2026-11-11", bestand: "personeel.html", soort: "beter",
       titel: "Personeel: namen slepen in het schema",
       wat:   "Een naam in het schema pak je met de muis op en zet je in een andere kamer of week neer. Kamer 1 in de receptie is voor twee: Oana en Sergiu staan daar samen in één blok en verhuizen ook samen. De planning tot half januari staat er nu in." },

@@ -164,6 +164,18 @@
     "administratie-proef": [
       "dolf", "fonteynbot", "gerrit",
     ],
+    /* Inkoop: de straat van leverancier tot website (Gerrit, 11 nov 2026).
+       Eerst de beheerlaag; daarna de inkopers (arno, chantal, don, gretha)
+       en het magazijn (manon, nomi) voor het afstrepen. Inkooporders en
+       inkoopleveringen maken mag alleen wie ook in voorraad-beheer zit. */
+    "inkoopstraat": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
+    /* Marketing: krijgt een bericht zodra er nieuwe artikelen binnen zijn,
+       om ze op de website te zetten (Gerrit, 11 nov 2026). */
+    "marketing": [
+      "demi",
+    ],
     /* Voorstel maken (Gerrit, 30 okt 2026): een voorstel begint in het
        Dashboard en de klant bevestigt eerst zijn gegevens. Straks alle
        adviseurs: iedereen die tussen mei en oktober 2026 offertes maakte in
