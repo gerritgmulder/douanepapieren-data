@@ -169,7 +169,8 @@
        en het magazijn (manon, nomi) voor het afstrepen. Inkooporders en
        inkoopleveringen maken mag alleen wie ook in voorraad-beheer zit. */
     "inkoopstraat": [
-      "dolf", "fonteynbot", "gerrit",
+      // Gretha erbij (Gerrit, 11 nov 2026).
+      "dolf", "fonteynbot", "gerrit", "gretha",
     ],
     /* Marketing: krijgt een bericht zodra er nieuwe artikelen binnen zijn,
        om ze op de website te zetten (Gerrit, 11 nov 2026). */
