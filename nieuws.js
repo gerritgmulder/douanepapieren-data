@@ -50,6 +50,9 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    { datum: "2026-11-11", bestand: "personeel.html", soort: "beter",
+      titel: "Personeel: namen slepen in het schema",
+      wat:   "Een naam in het schema pak je met de muis op en zet je in een andere kamer of week neer. Kamer 1 in de receptie is voor twee: Oana en Sergiu staan daar samen in één blok en verhuizen ook samen. De planning tot half januari staat er nu in." },
     { datum: "2026-11-07", bestand: "voorstel-maken.html", soort: "beter",
       titel: "Voorstel maken: de beursomzet",
       wat:   "In het overzicht staat de beursomzet van Lyon: hoeveel voorstellen en orders er op de beurs zijn gemaakt, wat ze waard zijn en wat er al betaald is, per adviseur." },

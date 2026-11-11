@@ -77,6 +77,10 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--lime);outline-of
 .rooster td.shift .blok{border-radius:8px;padding:4px 8px;font-size:12.5px;font-weight:600;cursor:pointer;height:34px;display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border:1px solid rgba(0,0,0,.08)}
 .rooster td.shift .blok span{overflow:hidden;text-overflow:ellipsis}
 .rooster td.shift .blok.nakijk{outline:2px dashed var(--oranje);outline-offset:-2px}
+.rooster td.shift .blok.weg{opacity:.35}
+.rooster td.doel{background:#e3f1d4;box-shadow:inset 0 0 0 2px var(--lime)}
+.blok.spook{position:fixed;z-index:60;pointer-events:none;border-radius:8px;padding:4px 8px;font-size:12.5px;font-weight:600;height:34px;display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.2);opacity:.95}
+body.slepen,body.slepen *{cursor:grabbing!important;user-select:none}
 .rooster tr.huis th{background:var(--groen);color:#fff;text-align:left;padding:5px 10px;height:auto;font-size:12px}
 .uitleg{font-size:12.5px;color:var(--grijs);margin:4px 0 10px;line-height:1.5}
 /* Venster (shift, medewerker) */
@@ -243,7 +247,7 @@ function tekenSchema(){
   var h = '<div class="kaart"><div class="balk"><button class="knop wit" id="sVorige">&larr; 4 weken</button><button class="knop wit" id="sNu">Vandaag</button><button class="knop wit" id="sVolgende">4 weken &rarr;</button>' +
     '<span class="vul grijs" style="text-align:center">'+esc(kort(weken[0]))+' t/m '+esc(kort(eind))+' '+datum(eind).getFullYear()+'</span>' +
     '<button class="knop" id="sNieuw">+ Shift toevoegen</button></div>' +
-    '<div class="uitleg">Elke shift begint op een <b>woensdag</b> en duurt <b>twee weken</b>. Klik op een leeg vak voor een nieuwe shift in die kamer, of op een naam om hem te wijzigen.'+
+    '<div class="uitleg">Elke shift begint op een <b>woensdag</b> en duurt <b>twee weken</b>. Klik op een leeg vak voor een nieuwe shift in die kamer, of op een naam om hem te wijzigen. Een naam kun je ook <b>slepen</b> naar een andere kamer of week.'+
       (nakijk ? ' <span class="pil oranje">'+nakijk+' shift'+(nakijk===1?'':'s')+' nakijken</span> (gestippeld: bij het inlezen uit Excel niet zeker gekoppeld of zonder kamer)' : '')+'</div>' +
     '<table class="rooster"><thead><tr><th class="kamer"></th>' + weken.map(function(w){ var wk = isoWeek(w)[1], nu = w <= VANDAAG && VANDAAG <= plus(w,6);
       return '<th class="'+(nu?'nu':'')+'"><b>wo '+esc(kort(w))+'</b>week '+wk+'</th>'; }).join("") + '</tr></thead><tbody>';
@@ -253,17 +257,23 @@ function tekenSchema(){
     var shifts = st.assignments.filter(function(a){ return (a.roomId || "") === k.id && a.totDatum >= weken[0] && a.vanDatum <= eind; })
       .sort(function(a,b){ return a.vanDatum.localeCompare(b.vanDatum); });
     if (k.id === "" && !shifts.length) return;
-    h += '<tr><th class="kamer">'+esc(k.kamer)+(k.alleenDames?'<small>alleen dames</small>':'')+'</th>';
+    h += '<tr><th class="kamer">'+esc(k.kamer)+(k.alleenDames?'<small>alleen dames</small>':'')+(k.notitie?'<small>'+esc(k.notitie)+'</small>':'')+'</th>';
     var i = 0;
     while (i < n) {
       var w = weken[i], we = plus(w, 6);
       var a = shifts.find(function(x){ return x.vanDatum <= we && x.totDatum >= w; });
-      if (!a) { h += '<td class="leeg" data-leeg="'+esc(k.id)+'|'+w+'" title="Shift toevoegen">+</td>'; i++; continue; }
+      if (!a) { h += '<td class="leeg" data-leeg="'+esc(k.id)+'|'+w+'" data-kamer="'+esc(k.id)+'" data-w="'+w+'" data-span="1" title="Shift toevoegen">+</td>'; i++; continue; }
       var span = 1; while (i + span < n && a.totDatum >= weken[i+span]) span++;
       var tegelijk = shifts.filter(function(x){ return x !== a && x.vanDatum <= plus(weken[i+span-1],6) && x.totDatum >= w; });
-      var e = persoon(a.employeeId);
-      h += '<td class="shift" colspan="'+span+'"><div class="blok'+(a.nakijken?' nakijk':'')+'" data-shift="'+esc(a.id)+'" style="background:'+kleur(a.employeeId)+'" title="'+esc(naam(e)+' · '+kort(a.vanDatum)+' t/m '+kort(a.totDatum)+(a.naamExcel?' · in Excel: '+a.naamExcel:'')+(a.notities?' · '+a.notities:''))+'">'+
-        '<span>'+esc(e ? (e.voornaam + (e.achternaam ? " " + e.achternaam.charAt(0) + "." : "")) : (a.naamExcel || "?"))+'</span>'+(tegelijk.length?'<span class="pil grijs">+'+tegelijk.length+'</span>':'')+'</div></td>';
+      /* In een kamer voor twee (de receptie, waar Oana en Sergiu samen slapen)
+         staan mensen met precies dezelfde shift samen in één blok, en ze
+         verhuizen ook samen als je het blok sleept. */
+      var samen = (Number(k.capaciteit) || 1) > 1 ? tegelijk.filter(function(x){ return x.vanDatum === a.vanDatum && x.totDatum === a.totDatum; }) : [];
+      var rest = tegelijk.filter(function(x){ return samen.indexOf(x) < 0; });
+      var wie = [a].concat(samen);
+      var kortNaam = function(x){ var p = persoon(x.employeeId); return p ? (p.voornaam + (p.achternaam ? " " + p.achternaam.charAt(0) + "." : "")) : (x.naamExcel || "?"); };
+      h += '<td class="shift" colspan="'+span+'" data-kamer="'+esc(k.id)+'" data-w="'+w+'" data-span="'+span+'"><div class="blok'+(wie.some(function(x){ return x.nakijken; })?' nakijk':'')+'" data-shift="'+esc(a.id)+'" data-shifts="'+esc(wie.map(function(x){ return x.id; }).join(","))+'" style="background:'+kleur(a.employeeId)+'" title="'+esc(wie.map(function(x){ return naam(persoon(x.employeeId)); }).join(" & ")+' · '+kort(a.vanDatum)+' t/m '+kort(a.totDatum)+(a.naamExcel?' · in Excel: '+a.naamExcel:'')+(a.notities?' · '+a.notities:'')+' · klik om te wijzigen, sleep om te verplaatsen')+'">'+
+        '<span>'+esc(wie.map(kortNaam).join(" & "))+'</span>'+(rest.length?'<span class="pil grijs">+'+rest.length+'</span>':'')+'</div></td>';
       i += span;
     }
     h += '</tr>';
@@ -275,7 +285,76 @@ function tekenSchema(){
   $("sNu").onclick = function(){ schemaStart = plus(woensdagVan(VANDAAG), -14); tekenSchema(); };
   $("sNieuw").onclick = function(){ shiftVenster(null, { vanDatum: woensdagVan(plus(VANDAAG, 6)) }); };
   document.querySelectorAll("[data-leeg]").forEach(function(td){ td.onclick = function(){ var p = td.dataset.leeg.split("|"); shiftVenster(null, { roomId: p[0], vanDatum: p[1] }); }; });
-  document.querySelectorAll("[data-shift]").forEach(function(b){ b.onclick = function(){ shiftVenster(st.assignments.find(function(a){ return a.id === b.dataset.shift; })); }; });
+  document.querySelectorAll("[data-shift]").forEach(function(b){
+    b.onclick = function(){ if (netGesleept) { netGesleept = false; return; } shiftVenster(st.assignments.find(function(a){ return a.id === b.dataset.shift; })); };
+    b.addEventListener("pointerdown", sleepBegin);
+  });
+}
+
+/* ── Slepen in het schema ──
+   Een naam pak je op en zet je in een andere kamer of een andere week neer;
+   de shift houdt zijn lengte. Hoeveel weken hij opschuift, volgt uit de week
+   waar je hem oppakte en de week waar je hem loslaat, zodat een blok van
+   twee weken ook aan zijn tweede helft te verslepen is. Alleen met de muis:
+   op een telefoon zou slepen het heen en weer schuiven van het schema in de
+   weg zitten, daar blijft tikken en kiezen in het venster. */
+var sleep = null, netGesleept = false;
+function weekOnder(td, x){
+  var span = Number(td.dataset.span) || 1, r = td.getBoundingClientRect();
+  var i = Math.max(0, Math.min(span - 1, Math.floor((x - r.left) / (r.width / span))));
+  return plus(td.dataset.w, 7 * i);
+}
+function celOnder(x, y){
+  var el = document.elementFromPoint(x, y);
+  var td = el && el.closest ? el.closest("td[data-kamer]") : null;
+  return td && td.closest(".rooster") ? td : null;
+}
+function sleepBegin(ev){
+  if (ev.pointerType === "touch" || ev.button !== 0) return;
+  var b = ev.currentTarget, td = b.closest("td[data-kamer]");
+  if (!td) return;
+  sleep = { b: b, ids: (b.dataset.shifts || b.dataset.shift).split(","), x: ev.clientX, y: ev.clientY, week: weekOnder(td, ev.clientX), bezig: false, doel: null, spook: null };
+  document.addEventListener("pointermove", sleepBeweeg);
+  document.addEventListener("pointerup", sleepLos);
+}
+function sleepBeweeg(ev){
+  if (!sleep) return;
+  if (!sleep.bezig) {
+    if (Math.abs(ev.clientX - sleep.x) + Math.abs(ev.clientY - sleep.y) < 6) return;
+    sleep.bezig = true;
+    var g = sleep.b.cloneNode(true); g.className = "blok spook"; g.style.width = Math.min(sleep.b.offsetWidth, 220) + "px";
+    document.body.appendChild(g); sleep.spook = g; sleep.b.classList.add("weg"); document.body.classList.add("slepen");
+  }
+  ev.preventDefault();
+  sleep.spook.style.left = (ev.clientX + 8) + "px"; sleep.spook.style.top = (ev.clientY - 17) + "px";
+  var td = celOnder(ev.clientX, ev.clientY);
+  if (sleep.doel && sleep.doel !== td) sleep.doel.classList.remove("doel");
+  if (td) td.classList.add("doel");
+  sleep.doel = td;
+}
+function sleepLos(ev){
+  document.removeEventListener("pointermove", sleepBeweeg);
+  document.removeEventListener("pointerup", sleepLos);
+  var s = sleep; sleep = null;
+  if (!s || !s.bezig) return;
+  netGesleept = true; setTimeout(function(){ netGesleept = false; }, 300);
+  if (s.spook) s.spook.remove(); s.b.classList.remove("weg"); document.body.classList.remove("slepen");
+  if (s.doel) s.doel.classList.remove("doel");
+  var td = celOnder(ev.clientX, ev.clientY);
+  if (!td) return;
+  var kamerNaar = td.dataset.kamer, dagen = Math.round((datum(weekOnder(td, ev.clientX)) - datum(s.week)) / 864e5);
+  var mee = s.ids.map(function(id){ return st.assignments.find(function(a){ return a.id === id; }); }).filter(Boolean);
+  if (!mee.length || (!dagen && mee.every(function(a){ return (a.roomId || "") === kamerNaar; }))) return;
+  mee.forEach(function(a){
+    a.vanDatum = plus(a.vanDatum, dagen); a.totDatum = plus(a.totDatum, dagen); a.roomId = kamerNaar;
+    wijzig("assignments", a.id);
+  });
+  var a0 = mee[0], k = kamer(kamerNaar), wie = mee.map(function(a){ return naam(persoon(a.employeeId)); }).join(" & ");
+  log("shift-gesleept", wie + " naar " + (k ? k.kamer : "kamer nog kiezen") + " " + a0.vanDatum);
+  tekenSchema();
+  var anderen = kamerNaar ? st.assignments.filter(function(x){ return mee.indexOf(x) < 0 && x.roomId === kamerNaar && x.vanDatum <= a0.totDatum && x.totDatum >= a0.vanDatum; }).length : 0;
+  if (k && anderen + mee.length > (Number(k.capaciteit) || 1)) melding(anderen ? "Let op: in " + k.kamer + " staat in die periode al iemand." : "Let op: " + k.kamer + " is voor één persoon.", true);
+  else melding(wie + " staat nu in " + (k ? k.kamer : "kamer nog kiezen") + ", " + kort(a0.vanDatum) + " t/m " + kort(a0.totDatum));
 }
 window.addEventListener("resize", function(){ if (tab === "schema") tekenSchema(); });
 
@@ -321,7 +400,8 @@ function shiftVenster(a, voor){
     var reeks = [van];
     if (nieuw && $("vHerhaal") && $("vHerhaal").checked) { var tot = $("vTot").value || van; for (var d = plus(van, 28); d <= tot; d = plus(d, 28)) reeks.push(d); }
     // Botst het met een andere shift in dezelfde kamer?
-    var bots = basis.roomId ? reeks.filter(function(v){ var t = plus(v, 7*duur-1); return st.assignments.some(function(x){ return x.id !== a.id && x.roomId === basis.roomId && x.vanDatum <= t && x.totDatum >= v; }); }) : [];
+    var plekken = Number((kamer(basis.roomId) || {}).capaciteit) || 1;
+    var bots = basis.roomId ? reeks.filter(function(v){ var t = plus(v, 7*duur-1); return st.assignments.filter(function(x){ return x.id !== a.id && x.roomId === basis.roomId && x.vanDatum <= t && x.totDatum >= v; }).length >= plekken; }) : [];
     reeks.forEach(function(v, i){
       var x = i === 0 ? a : { id: nieuwId("a") };
       Object.assign(x, basis, { vanDatum: v, totDatum: plus(v, 7*duur-1), nakijken: false });
