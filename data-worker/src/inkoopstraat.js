@@ -327,10 +327,13 @@ async function isBericht(env, H, id, aanNamen, titel, tekst, ref, soort) {
   H.berichtErbij(d, { id, aan: await isAanVoor(env, H, aanNamen), soort: soort || "inkoop", titel, tekst, ref });
   await env.FONTEYN_DATA.put("berichten", JSON.stringify(d));
 }
-async function isInkoperVan(db, o) {
-  if (o && o.inkoper) return [o.inkoper];
-  const lev = o ? await isLevKoppeling(db, o.creditor) : {};
-  return lev.inkoper ? [lev.inkoper] : ["chantal"];
+/* Gerrit (11 nov 2026): "inkopers bij Fonteyn zijn Dolf en Don. 'Bestellers'
+   zijn Rosalie, Don, Lisette, Gretha, Chantal, Joppe, Arno." Een verschil
+   gaat naar de inkopers (groep inkopers) en naar wie de order maakte. */
+async function isInkopersVan(env, H, o) {
+  const namen = H.groepLeden ? await H.groepLeden(env, "inkopers") : [];
+  if (o && o.besteller) namen.push(o.besteller);
+  return [...new Set(namen.length ? namen : ["dolf", "don"])];
 }
 
 /* ── Documenten ─────────────────────────────────────────────────────────── */
@@ -362,7 +365,7 @@ async function isDocBewaar(env, H, db, iko, soort, naam, buf, tekst, door) {
   if (soort === "packinglist") o.packinglistOp = o.packinglistOp || Date.now();
   isLog(o, door, IS_DOC_SOORT[soort] + " ontvangen: " + naam + (vgl ? (vgl.afwijkingen ? " (" + vgl.afwijkingen + " verschil" + (vgl.afwijkingen > 1 ? "len" : "") + ")" : " (klopt met de inkooporder)") : ""));
   await isOrderSchrijf(db, o);
-  const inkoper = await isInkoperVan(db, o);
+  const inkoper = await isInkopersVan(env, H, o);
   const link = "inkoopstraat.html?iko=" + encodeURIComponent(iko);
   if (vgl && vgl.afwijkingen) {
     await isBericht(env, H, "is-vgl-" + id, inkoper, "Verschil op inkooporder " + iko + ": " + IS_DOC_SOORT[soort],
@@ -535,16 +538,16 @@ export async function isHandle(request, env, url, H) {
         leverancier: { id, naam: cred.CompanyName || "", contact: [cred.FirstName, cred.LastName].filter(Boolean).join(" "), email: cred.EmailAddress || "", telefoon: cred.TelephoneNumber || cred.MobileNumber || "",
           adres: [cred.Address1, cred.Address2, [cred.PostalCode, cred.City].filter(Boolean).join(" ")].filter(Boolean).join(", "), btw: cred.VatNumber || "", kvk: cred.KvkNumber || "",
           betaling: betaalNaam, bank: cred.BankAccount || "", notities: cred.Notes || "", soort: (cred.CreditorType && cred.CreditorType.Description) || "" },
-        koppeling: { map, geraden: !kop.map && !!map, inkoper: kop.inkoper || "" },
+        koppeling: { map, geraden: !kop.map && !!map }, magAfspraken: await H.toegangMag(env, "inkopers", wie),
         mappen: Object.keys(bucket.afspraken || {}).sort(),
         afspraak, ontbreekt: afspraak ? isOntbreekt(afspraak) : ["afspraken in Leveranciersinformatie"],
         artikelen, orders });
     }
     if (p === "/straat/leverancier/koppel" && request.method === "POST") {
+      if (!(await H.toegangMag(env, "inkopers", wie))) return H.reply(403, { ok: false, error: "De afspraken met leveranciers zijn voor de inkopers." });
       const id = Number(body.creditor);
       const kop = await isLevKoppeling(db, id);
       if (body.map !== undefined) kop.map = isS(body.map, 120);
-      if (body.inkoper !== undefined) kop.inkoper = isS(body.inkoper, 80).toLowerCase();
       await db.prepare("INSERT OR REPLACE INTO straat_lev (creditor, json, ts) VALUES (?1, ?2, ?3)").bind(id, JSON.stringify(kop), Date.now()).run();
       return H.reply(200, { ok: true, koppeling: kop });
     }
@@ -585,7 +588,7 @@ export async function isHandle(request, env, url, H) {
         try { await isL4(env, H, "/v3/BuyOrders/AddBuyOrderRow", { BuyOrderId: iko, ProductId: r.pid, QtyToOrder: r.aantal, Price: r.prijs, OrderedOnDateByDistributor: new Date().toISOString().slice(0, 19) }); }
         catch (e) { mislukt.push(r.pid); }
       }
-      const o = { id: iko, creditor: id, inkoper: wie.replace(/@.*$/, "").replace(/^fonteyn\./, ""), gemaakt: Date.now() };
+      const o = { id: iko, creditor: id, besteller: wie.replace(/@.*$/, "").replace(/^fonteyn\./, ""), gemaakt: Date.now() };
       isLog(o, wie, "Inkooporder gemaakt met " + (regels.length - mislukt.length) + " regels" + (mislukt.length ? " (" + mislukt.length + " volgen nog)" : ""));
       await isOrderSchrijf(db, o);
       return H.reply(200, { ok: true, iko, mislukt: mislukt.length, teVeel: Math.max(0, regels.length - 40) });
@@ -614,7 +617,7 @@ export async function isHandle(request, env, url, H) {
         const e = eigen[o.Id];
         const f = e ? isFase(e, [], !!e.binnenOp) : { nu: "eerder", stappen: [{ k: "eerder", naam: "Gemaakt in Logic4" }] };
         return { id: o.Id, eigen: !!e, leverancier: o.CreditorCompanyName || "", creditor: o.CreditorId, datum: o.CreatedAt, regels: o.AmountOfRows, opmerking: o.Remarks || "",
-          fase: f.nu, faseNaam: (f.stappen.find(x => x.k === f.nu) || { naam: "Klaar" }).naam, docs: (docs[o.Id] || {}).n || 0, afwijkingen: (docs[o.Id] || {}).afw || 0, inkoper: (e && e.inkoper) || "" };
+          fase: f.nu, faseNaam: (f.stappen.find(x => x.k === f.nu) || { naam: "Klaar" }).naam, docs: (docs[o.Id] || {}).n || 0, afwijkingen: (docs[o.Id] || {}).afw || 0, besteller: (e && (e.besteller || e.inkoper)) || "" };
       }) });
     }
     if (p === "/straat/order" && request.method === "GET") {
@@ -660,7 +663,6 @@ export async function isHandle(request, env, url, H) {
       }
       if (b.opZee !== undefined) { o.opZee = b.opZee ? Date.parse(b.opZee) || Date.now() : null; isLog(o, wie, b.opZee ? "Op zee vanaf " + b.opZee : "Op zee weggehaald"); }
       if (b.website === true) { o.website = { op: Date.now(), door: wie }; isLog(o, wie, "Staat op de website"); }
-      if (b.inkoper !== undefined) { o.inkoper = isS(b.inkoper, 80).toLowerCase(); isLog(o, wie, "Inkoper: " + o.inkoper); }
       await isOrderSchrijf(db, o);
       return H.reply(200, { ok: true });
     }
@@ -743,7 +745,7 @@ export async function isHandle(request, env, url, H) {
       await isOrderSchrijf(db, o);
       const link = "inkoopstraat.html?iko=" + iko;
       if (verschillen.length) {
-        await isBericht(env, H, "is-lev-" + iko + "-" + Date.now(), await isInkoperVan(db, o), "Verschil bij binnenkomst inkooporder " + iko,
+        await isBericht(env, H, "is-lev-" + iko + "-" + Date.now(), await isInkopersVan(env, H, o), "Verschil bij binnenkomst inkooporder " + iko,
           verschillen.slice(0, 8).map(v => v.code + ": verwacht " + v.verwacht + ", binnen " + v.binnen).join("; ") + (verschillen.length > 8 ? " en meer." : "."), { iko, link }).catch(() => {});
       }
       return H.reply(200, { ok: true, levering, verschillen });

@@ -160,12 +160,12 @@ async function orders(){
     $("vak").innerHTML = '<div class="kaart"><h2>Open inkooporders<span class="rechts"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="oAlle"'+(ALLE?' checked':'')+'> Ook ouder dan 6 maanden</label><input class="zoek" id="oZoek" placeholder="Zoek op leverancier of nummer" style="width:240px"></span></h2>' +
       '<p class="lead">Klik op een inkooporder om de straat te zien: documenten van de leverancier, betalingen, binnenkomst en website.</p>' +
       '<table class="t"><colgroup><col style="width:11%"><col><col class="smal" style="width:10%"><col style="width:7%"><col style="width:16%"><col style="width:12%"><col class="smal" style="width:10%"></colgroup>' +
-      '<thead><tr><th>Nummer</th><th>Leverancier</th><th class="smal">Datum</th><th class="g">Regels</th><th>Volgende stap</th><th>Documenten</th><th class="smal">Inkoper</th></tr></thead><tbody id="oLijst"></tbody></table></div>';
+      '<thead><tr><th>Nummer</th><th>Leverancier</th><th class="smal">Datum</th><th class="g">Regels</th><th>Volgende stap</th><th>Documenten</th><th class="smal">Besteller</th></tr></thead><tbody id="oLijst"></tbody></table></div>';
     function teken(){
       var z = ($("oZoek").value||"").toLowerCase();
       $("oLijst").innerHTML = l.filter(function(o){ return !z || (o.leverancier+" "+o.id+" "+o.opmerking).toLowerCase().indexOf(z)>=0; }).map(function(o){
         return '<tr class="rij" data-id="'+o.id+'"><td><b>'+esc(o.id)+'</b></td><td>'+esc(o.leverancier)+(o.opmerking?'<br><small style="color:#6b7280">'+esc(o.opmerking.slice(0,80))+'</small>':'')+'</td><td class="smal">'+esc(datum(o.datum))+'</td><td class="g">'+esc(o.regels)+'</td>' +
-          '<td><span class="chip '+(FASEKLEUR[o.fase]||"")+'">'+esc(o.faseNaam)+'</span></td><td>'+(o.docs?esc(o.docs)+' stuk'+(o.docs>1?'s':''):'')+(o.afwijkingen?' <span class="chip rood" title="Een document wijkt af van de inkooporder">'+o.afwijkingen+' verschil</span>':'')+'</td><td class="smal">'+esc(o.inkoper)+'</td></tr>'; }).join("") ||
+          '<td><span class="chip '+(FASEKLEUR[o.fase]||"")+'">'+esc(o.faseNaam)+'</span></td><td>'+(o.docs?esc(o.docs)+' stuk'+(o.docs>1?'s':''):'')+(o.afwijkingen?' <span class="chip rood" title="Een document wijkt af van de inkooporder">'+o.afwijkingen+' verschil</span>':'')+'</td><td class="smal">'+esc(o.besteller)+'</td></tr>'; }).join("") ||
         '<tr><td colspan="7"><div class="slot">Zoek op een ander woord of nummer.</div></td></tr>';
       Array.prototype.forEach.call(document.querySelectorAll("#oLijst tr.rij"), function(tr){ tr.onclick = function(){ order(tr.dataset.id); }; });
     }
@@ -359,13 +359,13 @@ async function leverancier(id){
       [["Contact", L.contact],["E-mail", L.email],["Telefoon", L.telefoon],["Adres", L.adres],["Btw", L.btw],["KvK", L.kvk],["Betaling (Logic4)", L.betaling],["Bank", L.bank],["Soort", L.soort],["Notities", L.notities]]
         .filter(function(x){ return x[1]; }).map(function(x){ return '<span>'+esc(x[0])+'</span><span>'+esc(x[1])+'</span>'; }).join("") + '</div></div>';
     h += '<div class="kaart"><h2>Onze afspraken<span class="rechts"><a href="prijslijsten-fabrikanten.html" title="Het Dashboard opent de tegel Leveranciersinformatie">Bewerken in Leveranciersinformatie</a></span></h2>' +
-      '<div class="raster" style="margin-bottom:8px"><div class="s2"><label class="l">Map in Leveranciersinformatie'+(k.geraden?' (geraden op naam)':'')+'</label><select id="kMap"><option value="">kies de map</option>'+(j.mappen||[]).map(function(m){ return '<option'+(m===k.map?' selected':'')+'>'+esc(m)+'</option>'; }).join("")+'</select></div>' +
-      '<div class="s2"><label class="l">Inkoper (krijgt de berichten)</label><input class="veld" id="kInk" value="'+esc(k.inkoper||"")+'" placeholder="bijvoorbeeld chantal"></div></div>' +
+      '<div class="raster" style="margin-bottom:8px"><div class="s2"><label class="l">Map in Leveranciersinformatie'+(k.geraden?' (geraden op naam)':'')+'</label><select id="kMap"'+(j.magAfspraken?'':' disabled')+'><option value="">kies de map</option>'+(j.mappen||[]).map(function(m){ return '<option'+(m===k.map?' selected':'')+'>'+esc(m)+'</option>'; }).join("")+'</select></div>' +
+      '<div class="s2"><label class="l">Seintjes over verschillen</label><p class="lead" style="margin:6px 0 0">Gaan naar de inkopers (Dolf en Don) en naar wie de inkooporder maakte.</p></div></div>' +
       (j.afspraak ? '<div class="geg">' + [["Contactpersoon", a.contact],["Fabriek (intern)", a.fabriekIntern],["Fabriek (extern)", a.fabriekExtern],["Betalingsvoorwaarden", a.betaling],["Magazijn in Nederland", a.magazijnNL],["Startmoment productietijd", a.startmoment],["Boeteclausule", a.boete],
           ["Productietijd", Object.keys(a.inkoop||{}).map(function(x){ return (a.inkoop[x]||{}).lt ? ({magazijn:"magazijn",bezorgd:"bezorgd",ft40:"40ft",ft20:"20ft"}[x]||x)+": "+a.inkoop[x].lt : ""; }).filter(Boolean).join(", ")]]
           .filter(function(x){ return x[1]; }).map(function(x){ return '<span>'+esc(x[0])+'</span><span>'+esc(x[1])+'</span>'; }).join("") + '</div>' : '') +
       (j.ontbreekt.length ? '<div class="verschil">Nog in te vullen voor een inkooporder: <b>'+esc(j.ontbreekt.join(", "))+'</b></div>' : '<p class="lead" style="margin-top:8px">✅ De afspraken zijn compleet.</p>') +
-      '<div class="knoppen"><button type="button" id="kBewaar" title="Het Dashboard onthoudt welke map en welke inkoper bij deze leverancier horen">Opslaan</button><span class="melding" id="kMelding"></span></div></div>';
+      (j.magAfspraken ? '<div class="knoppen"><button type="button" id="kBewaar" title="Het Dashboard onthoudt welke map in Leveranciersinformatie bij deze leverancier hoort">Opslaan</button><span class="melding" id="kMelding"></span></div>' : '') + '</div>';
     var adv = art.filter(function(x){ return x.advies>0; }).length;
     h += '<div class="kaart"><h2>Artikelen en inkoopadvies<span class="rechts">'+art.length+' artikelen'+(adv?' &middot; <span class="chip oranje">'+adv+' met advies</span>':'')+'</span></h2>' +
       '<p class="lead">Advies = minimumvoorraad min wat vrij is en wat al besteld is. Vul bij Bestellen het aantal in; het advies staat er al.</p>' +
@@ -390,7 +390,7 @@ async function leverancier(id){
     $("aZoek").oninput = teken; $("aAdv").onchange = teken; teken();
     $("terug").onclick = leveranciers;
     Array.prototype.forEach.call(document.querySelectorAll("tr[data-iko]"), function(tr){ tr.onclick = function(){ order(tr.dataset.iko); }; });
-    $("kBewaar").onclick = async function(){ try { await api("/straat/leverancier/koppel", { creditor: L.id, map: $("kMap").value, inkoper: $("kInk").value }); log("lev-koppel", L.id); leverancier(L.id); } catch(e){ melding("kMelding", e.message, true); } };
+    if ($("kBewaar")) $("kBewaar").onclick = async function(){ try { await api("/straat/leverancier/koppel", { creditor: L.id, map: $("kMap").value }); log("lev-koppel", L.id); leverancier(L.id); } catch(e){ melding("kMelding", e.message, true); } };
     var bevestig = false;
     $("oMaak").onclick = async function(){
       var regels = Object.keys(bestel).map(function(pid){ var x = art.find(function(a){ return String(a.pid)===String(pid); }) || {}; return { pid: pid, aantal: bestel[pid], prijs: x.prijs || 0 }; });

@@ -168,10 +168,16 @@
        Eerst de beheerlaag; daarna de inkopers (arno, chantal, don, gretha)
        en het magazijn (manon, nomi) voor het afstrepen. Inkooporders en
        inkoopleveringen maken mag alleen wie ook in voorraad-beheer zit. */
+    /* Inkopers (Gerrit, 11 nov 2026): "inkopers bij Fonteyn zijn Dolf en
+       Don." Zij krijgen de seintjes over verschillen en beheren de koppeling
+       met de afspraken van een leverancier. */
+    "inkopers": [
+      "dolf", "don",
+    ],
     "inkoopstraat": [
-      /* Alle inkopers (Gerrit, 11 nov 2026): Rosalie, Don, Lisette, Gretha,
-         Chantal, Joppe, Arno, Dolf. Iedereen hier mag ook inkooporders en
-         inkoopleveringen maken in de tegel. */
+      /* De tegel Inkoop: de inkopers plus de bestellers (Rosalie, Don,
+         Lisette, Gretha, Chantal, Joppe, Arno). Iedereen hier mag
+         inkooporders en inkoopleveringen maken. */
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha",
       "joppe", "lisette", "rosalie",
     ],
