@@ -98,6 +98,7 @@ label.l{display:block;font-size:11px;color:var(--grijs);margin:0 0 3px;white-spa
     <button type="button" data-tab="orders" title="Het Dashboard laat alle open inkooporders zien en waar ze staan">Inkooporders</button>
     <button type="button" data-tab="leveranciers" title="Het Dashboard laat de leveranciers met hun artikelen en het inkoopadvies zien">Leveranciers</button>
     <button type="button" data-tab="locaties" title="Het Dashboard laat zien waar elk artikel in Uddel ligt">Locaties</button>
+    <button type="button" class="doe" id="nieuweIko" style="margin-left:auto" title="Het Dashboard laat je eerst de leverancier kiezen; daarna vul je de aantallen in">+ Inkooporder maken</button>
   </div>
   <div id="vak"></div>
 </main>
@@ -332,29 +333,38 @@ async function tekstVan(f){
 
 /* ── Leveranciers ────────────────────────────────────────────────────── */
 var LEV = null;
-async function leveranciers(){
-  tab("leveranciers"); zetAdres("tab=leveranciers"); laden();
+async function leveranciers(kiezen){
+  tab("leveranciers"); zetAdres(kiezen ? "tab=nieuw" : "tab=leveranciers"); laden();
   try {
     if (!LEV) LEV = (await api("/straat/leveranciers")).leveranciers || [];
-    $("vak").innerHTML = '<div class="kaart"><h2>Leveranciers<span class="rechts"><input class="zoek" id="lZoek" placeholder="Zoek een leverancier" style="width:240px"></span></h2>' +
-      '<p class="lead">Leveranciers met artikelen of open inkooporders in Logic4. Klik voor de afspraken, de artikelen en het inkoopadvies.</p>' +
-      '<table class="t"><colgroup><col><col class="smal" style="width:18%"><col style="width:12%"><col style="width:12%"></colgroup><thead><tr><th>Leverancier</th><th class="smal">Plaats</th><th class="g">Artikelen</th><th class="g">Open orders</th></tr></thead><tbody id="levLijst"></tbody></table></div>';
+    $("vak").innerHTML = '<div class="kaart"><h2>'+(kiezen?'Nieuwe inkooporder: kies de leverancier':'Leveranciers')+'<span class="rechts"><input class="zoek" id="lZoek" placeholder="Zoek een leverancier" style="width:240px"></span></h2>' +
+      '<p class="lead">'+(kiezen?'Klik op de leverancier. Daarna zie je zijn artikelen met het inkoopadvies en vul je de aantallen in.':'Leveranciers met artikelen of open inkooporders in Logic4. Klik voor de afspraken, de artikelen en het inkoopadvies.')+'</p>' +
+      '<table class="t"><colgroup><col><col class="smal" style="width:16%"><col style="width:18%"><col style="width:11%"><col style="width:11%"></colgroup><thead><tr><th>Leverancier</th><th class="smal">Plaats</th><th>Afspraken</th><th class="g">Artikelen</th><th class="g">Open orders</th></tr></thead><tbody id="levLijst"></tbody></table></div>';
     function teken(){
       var z = ($("lZoek").value||"").toLowerCase();
       $("levLijst").innerHTML = LEV.filter(function(x){ return !z || (x.naam+" "+x.plaats+" "+x.id).toLowerCase().indexOf(z)>=0; }).sort(function(a,b){ return (b.open-a.open) || a.naam.localeCompare(b.naam); }).slice(0, 400).map(function(x){
-        return '<tr class="rij" data-id="'+x.id+'"><td><b>'+esc(x.naam)+'</b></td><td class="smal">'+esc(x.plaats)+'</td><td class="g">'+esc(x.artikelen)+'</td><td class="g">'+(x.open?'<span class="chip blauw">'+x.open+'</span>':'')+'</td></tr>'; }).join("") ||
-        '<tr><td colspan="4"><div class="slot">Klik bovenaan op Artikelen bijwerken; daarna staan hier de leveranciers.</div></td></tr>';
-      Array.prototype.forEach.call(document.querySelectorAll("#levLijst tr.rij"), function(tr){ tr.onclick = function(){ leverancier(tr.dataset.id); }; });
+        return '<tr class="rij" data-id="'+x.id+'"><td><b>'+esc(x.naam)+'</b></td><td class="smal">'+esc(x.plaats)+'</td><td>'+(x.klaar?'<span class="chip groen">compleet</span>':'<span class="chip oranje">aanvullen</span>')+'</td><td class="g">'+esc(x.artikelen)+'</td><td class="g">'+(x.open?'<span class="chip blauw">'+x.open+'</span>':'')+'</td></tr>'; }).join("") ||
+        '<tr><td colspan="5"><div class="slot">Klik bovenaan op Artikelen bijwerken; daarna staan hier de leveranciers.</div></td></tr>';
+      Array.prototype.forEach.call(document.querySelectorAll("#levLijst tr.rij"), function(tr){ tr.onclick = function(){ leverancier(tr.dataset.id, kiezen); }; });
     }
     $("lZoek").oninput = teken; teken();
   } catch(e){ fout(e); }
 }
-async function leverancier(id){
+async function leverancier(id, bestellen){
   tab("leveranciers"); zetAdres("lev="+encodeURIComponent(id)); laden();
   try {
     var j = await api("/straat/leverancier?id="+encodeURIComponent(id));
     var L = j.leverancier, a = j.afspraak || {}, art = j.artikelen || [], k = j.koppeling || {};
     var h = '<div class="terug"><button type="button" id="terug" title="Het Dashboard gaat terug naar alle leveranciers">&larr; Alle leveranciers</button></div>';
+    /* Inkooporder maken: bovenaan, met de reden als het nog niet kan. */
+    h += '<div class="kaart" style="border-color:#8bc53f"><h2>Inkooporder maken bij '+esc(L.naam)+'</h2>' +
+      (j.ontbreekt.length
+        ? '<div class="verschil">Eerst de afspraken met deze leverancier aanvullen in de tegel Leveranciersinformatie: <b>'+esc(j.ontbreekt.join(", "))+'</b>.</div>' +
+          '<div class="knoppen"><a href="prijslijsten-fabrikanten.html" style="text-decoration:none"><button type="button" class="doe" title="Het Dashboard opent de tegel Leveranciersinformatie om de afspraken aan te vullen">Afspraken aanvullen</button></a></div>'
+        : '<p class="lead">Vul hieronder in de kolom <b>Bestellen</b> de aantallen in; het inkoopadvies staat er al. Klik daarna op Inkooporder maken.</p>' +
+          '<div class="knoppen"><input class="veld" id="oOpm" placeholder="Opmerking op de inkooporder (mag leeg)" style="max-width:360px">' +
+          '<button type="button" class="doe" id="oMaak" title="Het Dashboard maakt de inkooporder in Logic4 met de aantallen bij Bestellen">Inkooporder maken</button><span class="melding" id="oMelding"></span></div>') +
+      '</div>';
     h += '<div class="kaart"><h2>'+esc(L.naam)+'<span class="rechts">Crediteur '+esc(L.id)+'</span></h2><div class="geg">' +
       [["Contact", L.contact],["E-mail", L.email],["Telefoon", L.telefoon],["Adres", L.adres],["Btw", L.btw],["KvK", L.kvk],["Betaling (Logic4)", L.betaling],["Bank", L.bank],["Soort", L.soort],["Notities", L.notities]]
         .filter(function(x){ return x[1]; }).map(function(x){ return '<span>'+esc(x[0])+'</span><span>'+esc(x[1])+'</span>'; }).join("") + '</div></div>';
@@ -371,9 +381,7 @@ async function leverancier(id){
       '<p class="lead">Advies = minimumvoorraad min wat vrij is en wat al besteld is. Vul bij Bestellen het aantal in; het advies staat er al.</p>' +
       '<div class="knoppen" style="margin:0 0 8px"><input class="zoek" id="aZoek" placeholder="Zoek een artikel" style="max-width:260px"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="aAdv"'+(adv?' checked':'')+'> Alleen met advies</label></div>' +
       '<table class="t"><colgroup><col style="width:11%"><col class="smal" style="width:11%"><col><col class="smal" style="width:8%"><col style="width:7%"><col style="width:7%"><col style="width:7%"><col class="smal" style="width:7%"><col style="width:7%"><col class="smal" style="width:12%"><col style="width:9%"></colgroup>' +
-      '<thead><tr><th>Code</th><th class="smal">Code lev.</th><th>Omschrijving</th><th class="g smal">Prijs</th><th class="g">Minimum</th><th class="g">Vrij</th><th class="g">Besteld</th><th class="g smal">Voorraad</th><th class="g">Advies</th><th class="smal">Locatie</th><th class="g">Bestellen</th></tr></thead><tbody id="aLijst"></tbody></table>' +
-      '<div class="knoppen"><input class="veld" id="oOpm" placeholder="Opmerking op de inkooporder (mag leeg)" style="max-width:360px">' +
-      '<button type="button" class="doe" id="oMaak"'+(j.ontbreekt.length||!j.magBestellen?' disabled':'')+' title="'+(j.ontbreekt.length?'Eerst de afspraken met de leverancier aanvullen':'Het Dashboard maakt de inkooporder in Logic4 met de aantallen bij Bestellen')+'">Inkooporder maken</button><span class="melding" id="oMelding"></span></div></div>';
+      '<thead><tr><th>Code</th><th class="smal">Code lev.</th><th>Omschrijving</th><th class="g smal">Prijs</th><th class="g">Minimum</th><th class="g">Vrij</th><th class="g">Besteld</th><th class="g smal">Voorraad</th><th class="g">Advies</th><th class="smal">Locatie</th><th class="g">Bestellen</th></tr></thead><tbody id="aLijst"></tbody></table></div>';
     if ((j.orders||[]).length) h += '<div class="kaart"><h2>Open inkooporders</h2><table class="t"><thead><tr><th>Nummer</th><th>Datum</th><th class="g">Regels</th><th class="g">Nog te leveren</th><th>Opmerking</th></tr></thead><tbody>' +
       j.orders.map(function(o){ return '<tr class="rij" data-iko="'+o.id+'"><td><b>'+esc(o.id)+'</b></td><td>'+esc(datum(o.datum))+'</td><td class="g">'+esc(o.regels)+'</td><td class="g">'+getal(o.open)+'</td><td>'+esc(o.opmerking)+'</td></tr>'; }).join("") + '</tbody></table></div>';
     $("vak").innerHTML = h;
@@ -388,11 +396,11 @@ async function leverancier(id){
       Array.prototype.forEach.call(document.querySelectorAll("#aLijst input[data-pid]"), function(inp){ inp.oninput = function(){ var v = Number(String(inp.value).replace(",", ".")); if (v>0) bestel[inp.dataset.pid] = v; else delete bestel[inp.dataset.pid]; }; });
     }
     $("aZoek").oninput = teken; $("aAdv").onchange = teken; teken();
-    $("terug").onclick = leveranciers;
+    $("terug").onclick = function(){ leveranciers(bestellen); };
     Array.prototype.forEach.call(document.querySelectorAll("tr[data-iko]"), function(tr){ tr.onclick = function(){ order(tr.dataset.iko); }; });
     if ($("kBewaar")) $("kBewaar").onclick = async function(){ try { await api("/straat/leverancier/koppel", { creditor: L.id, map: $("kMap").value }); log("lev-koppel", L.id); leverancier(L.id); } catch(e){ melding("kMelding", e.message, true); } };
     var bevestig = false;
-    $("oMaak").onclick = async function(){
+    if ($("oMaak")) $("oMaak").onclick = async function(){
       var regels = Object.keys(bestel).map(function(pid){ var x = art.find(function(a){ return String(a.pid)===String(pid); }) || {}; return { pid: pid, aantal: bestel[pid], prijs: x.prijs || 0 }; });
       var k = this; k.disabled = true;
       try {
@@ -429,11 +437,12 @@ async function locaties(){
 
 Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){ ({ orders: orders, leveranciers: leveranciers, locaties: locaties })[b.dataset.tab](); }; });
 $("indexKnop").onclick = function(){ indexBijwerken(false); };
+$("nieuweIko").onclick = function(){ leveranciers(true); };
 (async function(){
   for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
   var s = new URLSearchParams(location.search);
   if (s.get("iko")) order(s.get("iko")); else if (s.get("lev")) leverancier(s.get("lev"));
-  else if (s.get("tab") === "leveranciers") leveranciers(); else if (s.get("tab") === "locaties") locaties(); else orders();
+  else if (s.get("tab") === "leveranciers") leveranciers(); else if (s.get("tab") === "nieuw") leveranciers(true); else if (s.get("tab") === "locaties") locaties(); else orders();
   indexCheck();
 })();
 </script>

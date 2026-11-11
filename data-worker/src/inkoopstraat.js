@@ -508,8 +508,12 @@ export async function isHandle(request, env, url, H) {
       const open = {};
       try { for (const o of isLijst(await isL4(env, H, "/v3/BuyOrders/GetBuyOrders", { BuyOrderIsClosed: false, TakeRecords: 1000 }))) open[o.CreditorId] = (open[o.CreditorId] || 0) + 1; } catch (e) {}
       const stand = (await isCacheLees(db, "index-stand")) || {};
+      /* Per leverancier: zijn de afspraken compleet, dus kan er besteld worden? */
+      const bucket = await isAfsprakenBucket(env);
+      const kop = {}; for (const r of ((await db.prepare("SELECT creditor, json FROM straat_lev").all()).results || [])) kop[r.creditor] = isJson(r.json, {});
+      const klaar = (c) => { const m = (kop[c.id] || {}).map || isRaadMap(bucket, c.naam); return !!m && !isOntbreekt((bucket.afspraken || {})[m]).length; };
       return H.reply(200, { ok: true, index: { klaar: stand.klaar || null, bezig: !!stand.bezig },
-        leveranciers: cred.map(c => Object.assign(c, { artikelen: n[c.id] || 0, open: open[c.id] || 0 })).filter(c => c.artikelen || c.open || q("alle") === "1") });
+        leveranciers: cred.filter(c => n[c.id] || open[c.id] || q("alle") === "1").map(c => Object.assign(c, { artikelen: n[c.id] || 0, open: open[c.id] || 0, klaar: klaar(c) })) });
     }
     if (p === "/straat/leverancier" && request.method === "GET") {
       const id = Number(q("id"));
