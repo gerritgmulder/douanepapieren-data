@@ -167,15 +167,17 @@ if (!maandag) maandag = maandagVan(new Date().getDay() === 6 || new Date().getDa
 function km(a,b){ var r=Math.PI/180, dLa=(b[0]-a[0])*r, dLo=(b[1]-a[1])*r; var h=Math.pow(Math.sin(dLa/2),2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.pow(Math.sin(dLo/2),2); return 2*6371*Math.asin(Math.sqrt(h)); }
 function rij(a,b){ if(!a||!b) return 45; return Math.round(km(a,b)*1.3/75*60)+5; }
 var DAGDEEL_VAN = { 1: 0, 2: 600, 3: 780 };
-function terugOm(route, stops){
-  var t = route.start, vorige = THUIS;
+function terugOm(route, stops){ return routeTijd(route, stops).terug; }
+/* Terugkomst en de tijd dat de monteur wacht tot het dagdeel van een klant begint. */
+function routeTijd(route, stops){
+  var t = route.start, vorige = THUIS, wacht = 0;
   stops.forEach(function(s){ var m = melding(s.its)||{};
     t += rij(vorige, m.geo);
     // Gemaild of akkoord: de monteur wacht tot het dagdeel begint (zoals de motor).
-    if (((s.json||{}).mails||[]).length || s.status === "akkoord") t = Math.max(t, DAGDEEL_VAN[s.dagdeel] || 0);
+    if (((s.json||{}).mails||[]).length || s.status === "akkoord") { var w = Math.max(0, (DAGDEEL_VAN[s.dagdeel] || 0) - t); wacht += w; t += w; }
     t += Number(m.duur)||60; vorige = m.geo; });
   if (stops.length) t += rij(vorige, THUIS);
-  return t;
+  return { terug: t, wacht: wacht };
 }
 function melding(its){ return (data.meldingen||[]).find(function(m){ return String(m.its) === String(its); }); }
 
@@ -226,8 +228,9 @@ function teken(){
       var afwijkend = r.start !== data.tijden.start || r.eind !== data.tijden.eind;
       /* Kevin (27 okt 2026): hoe lang de route duurt, klussen en rijden bij elkaar. */
       var klus = actief.reduce(function(n, a){ return n + (Number((melding(a.its)||{}).duur) || 60); }, 0);
-      var totaal = actief.length ? terugOm(r, actief) - r.start : 0;
-      var duurRoute = actief.length ? '<span class="rduur" title="Klussen ' + esc(svc.duurTekst(klus)) + ' en rijden ' + esc(svc.duurTekst(totaal - klus)) + ' (heen, tussendoor en terug, geschat)">' + esc(svc.duurTekst(totaal)) + '</span>' : '';
+      /* Gerrit (11 nov 2026): wachten tot het dagdeel van een klant telt niet mee in de duur, wel in hoe vol de dag is. */
+      var rt = routeTijd(r, actief), totaal = actief.length ? rt.terug - r.start - rt.wacht : 0;
+      var duurRoute = actief.length ? '<span class="rduur" title="Klussen ' + esc(svc.duurTekst(klus)) + ' en rijden ' + esc(svc.duurTekst(totaal - klus)) + ' (heen, tussendoor en terug, geschat)' + (rt.wacht ? '. Daarnaast ' + esc(svc.duurTekst(rt.wacht)) + ' ruimte tot het dagdeel van een klant begint; terug rond ' + tijd(rt.terug) : '') + '">' + esc(svc.duurTekst(totaal)) + '</span>' : '';
       h += '<div class="route' + (r.ziek ? " ziek" : "") + '" data-nr="' + r.nr + '">' +
         '<div class="rkop" title="Klik om de route aan te passen"><span class="rnr">' + r.nr + '</span><span class="rwie">' + esc(r.monteur || "monteur kiezen") + '</span>' +
           /* Kevin (document 3 nov 2026): met één knop de route vullen uit In te plannen meldingen. */

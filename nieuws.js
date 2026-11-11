@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-11", bestand: "planning-service.html", soort: "beter",
+      titel: "Planning service: duur van de route klopt",
+      wat:   "De tijd bij een route telt nu alleen klussen en rijden. Wacht de monteur op een klant die pas 's middags kan, dan zie je die tijd los als je met de muis op de duur staat, met de tijd dat hij terug is."
+    },
+    {
       datum: "2026-11-11", bestand: "inkoopstraat.html", soort: "beter",
       titel: "Website op tijd klaar",
       wat:   "Zodra je bij een inkooporder invult dat de proforma betaald is, krijgt Gretha een bericht om de artikelen alvast klaar te zetten voor de website. Zo staan ze online voordat de container binnen is."
