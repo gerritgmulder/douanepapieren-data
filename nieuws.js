@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-12", bestand: "planning-service.html", soort: "beter",
+      titel: "Planning service: vrije tijd in een route zichtbaar",
+      wat:   "Kan een klant pas later op de dag, dan zie je onder de monteur hoeveel tijd er nog vrij is en hoe laat hij ongeveer terug is. Die tijd is nog te vullen met een andere klant."
+    },
+    {
       datum: "2026-11-11", bestand: "planning-service.html", soort: "beter",
       titel: "Planning service: duur van de route klopt",
       wat:   "De tijd bij een route telt nu alleen klussen en rijden. Wacht de monteur op een klant die pas 's middags kan, dan zie je die tijd los als je met de muis op de duur staat, met de tijd dat hij terug is."
