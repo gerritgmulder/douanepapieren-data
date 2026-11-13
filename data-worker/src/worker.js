@@ -21641,8 +21641,10 @@ const FP_WORKER = {
     if (url.pathname.startsWith("/service/")) return svcHandle(request, env, url, SVC_HULP(env));
     /* Logo's en foto's voor mails en klantpagina's (Gerrit, 4 nov 2026: nergens
        g.mulder in een adres). Via mijn.fonteyn.nl/beeld/ en
-       partner.passionspas.com/beeld/, uit de repo, alleen deze vier namen. */
-    { const b = /^\/(?:dealers\/)?beeld\/(fonteyn-logo\.png|fonteyn-showroom\.jpg|passion-logo\.png|passion-logo-mail\.png)$/.exec(url.pathname);
+       partner.passionspas.com/beeld/, uit de repo, alleen deze namen.
+       fonteyn-icoon.png is het tabblad-icoontje van de klant- en
+       leverancierspagina's (Gerrit, 13 nov 2026). */
+    { const b = /^\/(?:dealers\/)?beeld\/(fonteyn-logo\.png|fonteyn-icoon\.png|fonteyn-showroom\.jpg|passion-logo\.png|passion-logo-mail\.png)$/.exec(url.pathname);
       if (b && request.method === "GET") {
         const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/" + b[1], { cf: { cacheTtl: 86400, cacheEverything: true } });
         if (!r.ok) return new Response("Not found", { status: 404 });
@@ -21652,8 +21654,8 @@ const FP_WORKER = {
     if (url.pathname === "/bevestig" || url.pathname === "/voorstel" || url.pathname.startsWith("/voorstel/"))
       return vsHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij, dpCreateMolliePayment, btwControle }));
     /* Inkoop: de hele straat van leverancier tot website, en de uploadpagina
-       voor de leverancier (/levering-upload, het token in de link is de sleutel). */
-    if (url.pathname === "/levering-upload" || url.pathname.startsWith("/straat/"))
+       voor de leverancier (mijn.fonteyn.nl/upload/<code>; de code is de sleutel). */
+    if (url.pathname === "/levering-upload" || url.pathname.startsWith("/upload/") || url.pathname.startsWith("/straat/"))
       return isHandle(request, env, url, Object.assign(SVC_HULP(env), { berichtenLees, berichtErbij, bestandZet, bestandLees, proformaLees,
         groepLeden: async (e, g) => { await toegangMag(e, g, "-"); return ((toegangCache.groepen || {})[g] || []).slice(); } }));
     if (url.pathname.startsWith("/bakwagen/")) {

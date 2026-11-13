@@ -32,8 +32,12 @@
    ═════════════════════════════════════════════════════════════════ */
 
 const IS_WH_UDDEL = 21;                 // magazijn Fonteyn
-const IS_LOGO = "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png";
-const IS_LINK = "https://fonteyn-data-store.g-mulder.workers.dev";
+/* Alles wat een leverancier ziet loopt via mijn.fonteyn.nl, nooit via het
+   adres van de worker (Gerrit, 13 nov 2026: "er staat g-mulder in").
+   De uploadlink is mijn.fonteyn.nl/upload/<code>. */
+const IS_LOGO = "https://mijn.fonteyn.nl/beeld/fonteyn-logo.png";
+const IS_LINK = "https://mijn.fonteyn.nl";
+const isUploadLink = (token) => IS_LINK + "/upload/" + token;
 const IS_MAX_BESTAND = 24 * 1024 * 1024;
 /* De mail aan de leverancier gaat pas echt de deur uit na het akkoord van
    Gerrit op de tekst (memory mails-eerst-laten-zien). Voorbeeld werkt al. */
@@ -390,24 +394,39 @@ async function isDocBewaar(env, H, db, iko, soort, naam, buf, tekst, door) {
 function isUploadPagina(titel, inhoud) {
   return new Response("<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>" +
     "<title>" + isEsc(titel) + " - Fonteyn</title><meta name='robots' content='noindex'>" +
-    "<style>body{margin:0;background:#f5f4ef;font-family:Arial,Helvetica,sans-serif;color:#1f2937}.kop{background:#144734;padding:16px 20px}.kop img{height:48px;display:block}" +
+    "<link rel='icon' type='image/png' href='/beeld/fonteyn-icoon.png'><link rel='apple-touch-icon' href='/beeld/fonteyn-icoon.png'>" +
+    "<style>*{box-sizing:border-box}body{margin:0;background:#f5f4ef;font-family:Arial,Helvetica,sans-serif;color:#1f2937}" +
+    ".kop{background:#144734;padding:16px 20px}.kop img{height:48px;display:block}" +
     ".blok{max-width:640px;margin:22px auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px}@media(max-width:680px){.blok{margin:12px;padding:16px}}" +
     "h1{color:#144734;font-size:21px;margin:0 0 8px}p{font-size:15px;line-height:1.55;margin:0 0 12px}.klein{font-size:13px;color:#6b7280}" +
-    ".vak{border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin:12px 0}.vak h3{margin:0 0 6px;font-size:15px;color:#144734}" +
-    "input[type=file]{font:inherit;font-size:14px;max-width:100%}button{background:#15803d;color:#fff;border:0;border-radius:9px;padding:10px 16px;font-size:15px;font-weight:bold;cursor:pointer;margin-top:8px;font-family:inherit}" +
-    "button:disabled{opacity:.5}ul{margin:6px 0 0;padding-left:18px;font-size:14px}.ok{color:#15803d}.fout{color:#b91c1c}</style></head><body>" +
+    ".vak{border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin:12px 0}.vak h3{margin:0 0 4px;font-size:15px;color:#144734}.vak p{margin:0 0 10px}" +
+    ".rij{display:flex;gap:8px;align-items:center;flex-wrap:wrap}" +
+    ".rij input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}" +
+    ".knop{display:inline-flex;align-items:center;gap:6px;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:bold;font-family:inherit;cursor:pointer;white-space:nowrap;line-height:1.2}" +
+    ".kies{background:#fff;color:#144734;border:1px solid #cfd8d3}.kies:hover{border-color:#144734;background:#f6faf7}" +
+    ".stuur{background:#144734;color:#fff;border:1px solid #144734}.stuur:hover{background:#0f3828}" +
+    ".knop:disabled{opacity:.45;cursor:default}.naam{font-size:13px;color:#374151;max-width:100%;overflow-wrap:break-word}" +
+    "ul{margin:0 0 10px;padding:0;list-style:none;font-size:14px}li{margin:2px 0}.ok{color:#15803d}.fout{color:#b91c1c}.melding{font-size:13px;margin-top:6px;min-height:16px}</style></head><body>" +
     "<div class='kop'><img src='" + IS_LOGO + "' alt='Fonteyn'></div><div class='blok'>" + inhoud + "</div></body></html>",
     { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
 }
+/* De code staat in het pad (/upload/<code>) of, bij oude links, in ?t=. */
+function isTokenVan(url) {
+  const m = /^\/upload\/([a-z0-9]{8,40})$/.exec(url.pathname);
+  return m ? m[1] : String(url.searchParams.get("t") || "");
+}
 async function isUploadGet(env, url) {
   const db = await isDb(env);
-  const t = String(url.searchParams.get("t") || "");
+  const t = isTokenVan(url);
   const tk = t ? await db.prepare("SELECT iko FROM straat_token WHERE token = ?1").bind(t).first() : null;
   if (!tk) return isUploadPagina("Upload", "<h1>This link has expired</h1><p>Please ask your contact at Fonteyn for a new link.</p>");
   const docs = (await db.prepare("SELECT soort, naam, ts FROM straat_doc WHERE iko = ?1 ORDER BY ts").bind(tk.iko).all()).results || [];
   const vak = (soort, uitleg) => "<div class='vak'><h3>" + IS_DOC_SOORT[soort] + "</h3><p class='klein'>" + uitleg + "</p>" +
     "<ul>" + docs.filter(d => d.soort === soort).map(d => "<li class='ok'>&#10003; " + isEsc(d.naam) + "</li>").join("") + "</ul>" +
-    "<input type='file' id='f_" + soort + "' accept='.pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png'><br><button type='button' data-soort='" + soort + "'>Upload</button> <span id='m_" + soort + "' class='klein'></span></div>";
+    "<div class='rij'><input type='file' id='f_" + soort + "' accept='.pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png'>" +
+    "<label class='knop kies' for='f_" + soort + "'>Choose file</label>" +
+    "<button type='button' class='knop stuur' data-soort='" + soort + "' disabled>Upload</button>" +
+    "<span class='naam' id='n_" + soort + "'></span></div><div class='melding klein' id='m_" + soort + "'></div></div>";
   return isUploadPagina("Upload documents",
     "<h1>Purchase order " + isEsc(Math.abs(tk.iko)) + "</h1>" + (tk.iko < 0 ? "<p class='klein'>Example page: uploads here are only for testing.</p>" : "") +
     "<p>Please upload the documents for this purchase order here. You can come back to this page with the same link at any time.</p>" +
@@ -422,11 +441,13 @@ async function isUploadGet(env, url) {
     "async function tekstVan(f){try{var n=f.name.toLowerCase();if(n.endsWith('.pdf')&&window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';" +
     "var d=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise,u='';for(var i=1;i<=Math.min(d.numPages,15);i++){var p=await d.getPage(i),c=await p.getTextContent();u+=c.items.map(function(x){return x.str}).join(' ')+'\\n';}return u;}" +
     "if(/\\.(xlsx|xls|csv)$/.test(n)&&window.XLSX){var w=XLSX.read(await f.arrayBuffer());return w.SheetNames.map(function(s){return XLSX.utils.sheet_to_csv(w.Sheets[s])}).join('\\n');}}catch(e){}return '';}" +
+    "document.querySelectorAll('input[type=file]').forEach(function(inp){inp.onchange=function(){var s=inp.id.slice(2),f=inp.files[0];" +
+    "document.getElementById('n_'+s).textContent=f?f.name:'';document.querySelector('button[data-soort='+s+']').disabled=!f;document.getElementById('m_'+s).textContent='';};});" +
     "document.querySelectorAll('button[data-soort]').forEach(function(b){b.onclick=async function(){var s=b.dataset.soort,f=document.getElementById('f_'+s).files[0],m=document.getElementById('m_'+s);" +
-    "if(!f){m.textContent='Choose a file first.';return;}if(f.size>24*1024*1024){m.textContent='The file is larger than 24 MB.';return;}b.disabled=true;m.textContent='Uploading...';" +
+    "if(!f){m.textContent='Choose a file first.';return;}if(f.size>24*1024*1024){m.className='melding fout';m.textContent='The file is larger than 24 MB.';return;}b.disabled=true;m.className='melding klein';m.textContent='Uploading...';" +
     "var fd=new FormData();fd.append('t',T);fd.append('soort',s);fd.append('bestand',f);fd.append('tekst',(await tekstVan(f)).slice(0,60000));" +
-    "try{var r=await fetch('/levering-upload',{method:'POST',body:fd});var j=await r.json();if(!j.ok)throw new Error(j.error||'Upload failed');m.className='ok';m.textContent='Thank you, received.';setTimeout(function(){location.reload()},1200);}" +
-    "catch(e){m.className='fout';m.textContent=e.message;b.disabled=false;}};});</script>");
+    "try{var r=await fetch(location.pathname.indexOf('/upload/')===0?location.pathname:'/levering-upload',{method:'POST',body:fd});var j=await r.json();if(!j.ok)throw new Error(j.error||'Upload failed');m.className='melding ok';m.textContent='Thank you, received.';setTimeout(function(){location.reload()},1200);}" +
+    "catch(e){m.className='melding fout';m.textContent=e.message;b.disabled=false;}};});</script>");
 }
 async function isUploadPost(env, request, H) {
   const db = await isDb(env);
@@ -456,7 +477,10 @@ function isMailHtml(o, contact, regels, link, tekst, afzender) {
     "<p style='margin:22px 0'><a href='" + isEsc(link) + "' style='background:#15803d;color:#fff;text-decoration:none;padding:14px 22px;border-radius:10px;font-weight:bold;font-size:16px;display:inline-block'>Upload documents</a></p>" +
     "<p style='font-size:15px;line-height:1.55'>Kind regards,<br>" + isEsc(afzender || "Fonteyn") + "<br><span style='color:#6b7280'>Fonteyn, Uddel, the Netherlands</span></p></div></div></div>";
 }
-async function isMailStuur(env, H, van, aan, onderwerp, html) {
+async function isMailStuur(env, H, wie, aan, onderwerp, html) {
+  // Een echte besteller: eerst vanuit zijn eigen Fonteyn-mailbox.
+  const kort = String(wie || "").toLowerCase().replace(/@.*$/, "").replace(/^fonteyn\./, "");
+  const van = kort && !IS_GEEN_PERSOON.test(kort) ? isMailVan(wie) : "";
   if (H.ewsVerstuur && env.EWS_GEBRUIKER && env.EWS_WACHTWOORD && van) {
     const e = await H.ewsVerstuur(env, van, aan, onderwerp, html).catch(x => ({ ok: false, error: String(x && x.message || x) }));
     if (e && e.ok) return { ok: true, via: van };
@@ -465,8 +489,23 @@ async function isMailStuur(env, H, van, aan, onderwerp, html) {
   const bron = env.MAIL_FROM_FONTEYN || env.MAIL_FROM;
   const adres = (String(bron).match(/<([^>]+)>/) || [])[1] || String(bron);
   const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: "Fonteyn <" + adres + ">", to: aan, ...(van ? { reply_to: [van] } : {}), subject: onderwerp, html }) });
+    body: JSON.stringify({ from: "Fonteyn <" + adres + ">", to: aan, reply_to: isAntwoordAan(wie), subject: onderwerp, html }) });
   return r.ok ? { ok: true, via: "Fonteyn" } : { ok: false, error: "Versturen volgt zo, probeer het nog eens (" + r.status + ")." };
+}
+/* De naam onder de mail aan de leverancier. Een systeemaccount (Fonteynbot)
+   of iemand zonder Fonteyn-mailbox (Gerrit) is geen naam voor een
+   leverancier: dan "Purchasing department" (Gerrit, 13 nov 2026). */
+const IS_GEEN_PERSOON = /^(fonteynbot|fonteyn\.bot|gerrit|gerriette|api|dashboard)$/;
+function isAfzenderNaam(wie) {
+  const kort = String(wie || "").toLowerCase().replace(/@.*$/, "").replace(/^fonteyn\./, "");
+  if (!kort || IS_GEEN_PERSOON.test(kort)) return "Purchasing department";
+  return kort.split(/[._-]+/)[0].replace(/^./, c => c.toUpperCase());
+}
+/* Antwoorden van de leverancier: naar de besteller, of bij een
+   systeemaccount naar de inkopers (Dolf en Don). */
+function isAntwoordAan(wie) {
+  const kort = String(wie || "").toLowerCase().replace(/@.*$/, "").replace(/^fonteyn\./, "");
+  return !kort || IS_GEEN_PERSOON.test(kort) ? ["don@fonteyn.nl", "dolf@fonteyn.nl"] : [isMailVan(wie)];
 }
 function isMailVan(wie) { wie = String(wie || "").toLowerCase(); return wie.includes("@") ? wie : (wie.replace(/^fonteyn\./, "") + "@fonteyn.nl"); }
 
@@ -489,7 +528,7 @@ function isFase(o, leveringen, allesBinnen) {
 /* ── De ingang vanuit worker.js ─────────────────────────────────────────── */
 export async function isHandle(request, env, url, H) {
   const p = url.pathname;
-  if (p === "/levering-upload") {
+  if (p === "/levering-upload" || p.startsWith("/upload/")) {
     if (request.method === "GET") return isUploadGet(env, url);
     if (request.method === "POST") return isUploadPost(env, request, H);
     return H.reply(405, { ok: false });
@@ -649,7 +688,7 @@ export async function isHandle(request, env, url, H) {
       const tk = await db.prepare("SELECT token FROM straat_token WHERE iko = ?1").bind(iko).first();
       return H.reply(200, { ok: true, magBestellen, order: Object.assign({}, o, {
         leverancier: kop.CreditorCompanyName || "", datum: kop.CreatedAt, opmerking: kop.Remarks || "", gesloten: !!kop.BuyOrderClosed,
-        leverancierMail: (cred && cred.EmailAddress) || "", uploadLink: tk ? IS_LINK + "/levering-upload?t=" + tk.token : "",
+        leverancierMail: (cred && cred.EmailAddress) || "", uploadLink: tk ? isUploadLink(tk.token) : "",
         leveringen: lev.map(l => ({ id: l.BuyOrderDeliveryId || l.Id, datum: l.DateTimeCreated || "", status: levStatus[l.StatusId] || ("status " + l.StatusId), omschrijving: l.Description || "" })),
         fase: isFase(o, lev, regels.length > 0 && regels.every(r => r.teLeveren <= 0)) }), regels, docs });
     }
@@ -682,10 +721,10 @@ export async function isHandle(request, env, url, H) {
     if (p === "/straat/order/link" && request.method === "POST") {
       const iko = Number(body.id);
       let tk = await db.prepare("SELECT token FROM straat_token WHERE iko = ?1").bind(iko).first();
-      if (!tk) { tk = { token: isCode(32) }; await db.prepare("INSERT INTO straat_token (token, iko, ts) VALUES (?1, ?2, ?3)").bind(tk.token, iko, Date.now()).run(); }
+      if (!tk) { tk = { token: isCode(12) }; await db.prepare("INSERT INTO straat_token (token, iko, ts) VALUES (?1, ?2, ?3)").bind(tk.token, iko, Date.now()).run(); }
       const o = (await isOrderLees(db, iko)) || { id: iko, creditor: Number(body.creditor) || null };
       if (!o.linkOp) { o.linkOp = Date.now(); isLog(o, wie, "Uploadlink gemaakt"); await isOrderSchrijf(db, o); }
-      return H.reply(200, { ok: true, url: IS_LINK + "/levering-upload?t=" + tk.token });
+      return H.reply(200, { ok: true, url: isUploadLink(tk.token) });
     }
     if (p === "/straat/order/mail" && request.method === "POST") {
       const iko = Number(body.id);
@@ -699,8 +738,8 @@ export async function isHandle(request, env, url, H) {
       const proefAan = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(body.proefAan || "")) ? String(body.proefAan).toLowerCase() : "";
       const tkIko = proefAan ? -iko : iko;
       let tk = await db.prepare("SELECT token FROM straat_token WHERE iko = ?1").bind(tkIko).first();
-      if (!tk) { tk = { token: isCode(32) }; await db.prepare("INSERT INTO straat_token (token, iko, ts) VALUES (?1, ?2, ?3)").bind(tk.token, tkIko, Date.now()).run(); }
-      const link = IS_LINK + "/levering-upload?t=" + tk.token;
+      if (!tk) { tk = { token: isCode(12) }; await db.prepare("INSERT INTO straat_token (token, iko, ts) VALUES (?1, ?2, ?3)").bind(tk.token, tkIko, Date.now()).run(); }
+      const link = isUploadLink(tk.token);
       const aan = proefAan || isS(body.aan, 200) || (cred && cred.EmailAddress) || "";
       const onderwerp = (proefAan ? "[Voorbeeld] " : "") + (isS(body.onderwerp, 150) || ("Purchase order " + iko + " from Fonteyn"));
       /* Geen prijzen in de mail: Logic4 heeft ze in euro's, de fabriek rekent
@@ -710,11 +749,11 @@ export async function isHandle(request, env, url, H) {
       const bucket = await isAfsprakenBucket(env), kopL = await isLevKoppeling(db, kop.CreditorId);
       const mapL = kopL.map || isRaadMap(bucket, cred && cred.CompanyName);
       const contact = ((bucket.afspraken || {})[mapL] || {}).contact || (cred && [cred.FirstName, cred.LastName].filter(Boolean).join(" ")) || "";
-      const html = isMailHtml(o, contact, regels.filter(r => r.teLeveren > 0 || r.besteld > 0), link, body.tekst, (wie || "").replace(/@.*$/, "").replace(/^fonteyn\./, "").replace(/^./, c => c.toUpperCase()));
+      const html = isMailHtml(o, contact, regels.filter(r => r.teLeveren > 0 || r.besteld > 0), link, body.tekst, isAfzenderNaam(wie));
       if (body.stuur !== true) return H.reply(200, { ok: true, voorbeeld: true, aan, onderwerp, html });
       if (!IS_MAIL_AAN && !env.DEV_OPEN) return H.reply(409, { ok: false, error: "Versturen gaat aan zodra de tekst van de mail is goedgekeurd. Je kunt de uploadlink al kopiëren en zelf doorsturen." });
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(aan)) return H.reply(400, { ok: false, error: "Vul een geldig mailadres van de leverancier in." });
-      const m = await isMailStuur(env, H, isMailVan(wie), aan.split(/[;,\s]+/).filter(Boolean), onderwerp, html);
+      const m = await isMailStuur(env, H, wie, aan.split(/[;,\s]+/).filter(Boolean), onderwerp, html);
       if (!m.ok) return H.reply(502, m);
       if (proefAan) return H.reply(200, { ok: true, voorbeeld: true, via: m.via });
       o.mails = (o.mails || []).concat([{ ts: Date.now(), aan, door: wie }]).slice(-20);
