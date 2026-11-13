@@ -298,6 +298,15 @@ async function mailZet(aan){
   try { if (window.fpLog) fpLog(aan ? "beursmail-start" : "beursmail-pauze", ""); } catch(e) {}
   laadMailing();
 }
+/* Gerrit (13 nov 2026): het aantal per dag werd alleen bewaard bij Start of Pauze. Nu meteen. */
+async function mailPerDag(w){
+  var n = Number(String(w).replace(/\D/g, "")) || 0;
+  if (!n) { mailMelding = "Vul een aantal in."; tekenMailing(); return; }
+  var j = await mailPost("/dealers/beurs/instelling", { perDag: n });
+  mailMelding = !j.ok ? (j.error || "Lukte nog niet.") : j.inst.perDag < n ? "Bewaard: " + j.inst.perDag + " per dag. Meer staat Brevo gratis niet toe." : "Bewaard: " + j.inst.perDag + " per dag.";
+  try { if (window.fpLog) fpLog("beursmail-perdag", String(j.inst && j.inst.perDag)); } catch(e) {}
+  laadMailing();
+}
 async function mailProef(){
   proefAan = $("mProefAan").value.trim(); proefTaal = $("mProefTaal").value;
   mailMelding = "Bezig met versturen...";
@@ -321,7 +330,7 @@ function tekenMailing(){
     (aan ? '<button class="knop licht" type="button" onclick="mailZet(false)" title="Zet het versturen op pauze; wat nog wacht blijft in de wachtrij">Pauze</button>'
          : (mailBevestig ? '<button class="knop groen" type="button" onclick="mailZet(true)" title="Start het versturen naar de hele lijst">Ja, start het versturen</button> <button class="knop licht" type="button" onclick="mailBevestig=false;tekenMailing()" title="Toch nog niet starten">Nog even niet</button>'
                          : '<button class="knop" type="button" onclick="mailZet(true)" title="Start het versturen naar de hele lijst, in porties over de dag">Start versturen</button>')) +
-    ' <label style="font-size:13px">Per dag <input id="mPerDag" type="text" inputmode="numeric" value="' + perDag + '" style="width:60px" title="Hoeveel mails per dag; Brevo gratis staat er 300 toe"></label>' +
+    ' <label style="font-size:13px">Per dag <input id="mPerDag" type="text" inputmode="numeric" value="' + perDag + '" style="width:60px" onchange="mailPerDag(this.value)" title="Hoeveel mails per dag, tot 300: zoveel staat Brevo gratis toe. Het Dashboard bewaart het meteen."></label> <small style="color:var(--grijs)">tot 300</small>' +
     '</div><p class="melding">' + esc(mailMelding) + '</p>' +
     '<div class="tellers"><span class="teller">In de wachtrij: <b>' + tot.wacht + '</b></span><span class="teller">Verstuurd: <b>' + tot.verstuurd + '</b></span>' +
     '<span class="teller">Vandaag: <b>' + mail.vandaag + '</b> van ' + perDag + '</span><span class="teller">Teruggekomen: <b>' + tot.fout + '</b></span>' +

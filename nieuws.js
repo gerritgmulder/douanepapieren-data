@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-13", bestand: "beurs.html", soort: "beter",
+      titel: "Beurs: aantal per dag wordt meteen bewaard",
+      wat:   "Pas je bij Mailing het aantal per dag aan, dan bewaart het Dashboard dat meteen. Je hoeft dus geen Start of Pauze meer te klikken. Het hoogste aantal is 300 per dag."
+    },
+    {
       datum: "2026-11-13", bestand: "inkoopstraat.html", soort: "beter",
       titel: "Inkooporder naar de leverancier",
       wat:   "Bij een inkooporder stuur je de leverancier met één knop een mail met de bestelde artikelen en een eigen link. Daar zet hij zijn proforma, Bill of Lading en packing list neer, en het Dashboard vergelijkt ze met je inkooporder. Manon streept bij binnenkomst de packing list af in dezelfde tegel."
