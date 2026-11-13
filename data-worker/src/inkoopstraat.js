@@ -352,14 +352,19 @@ async function isDocBewaar(env, H, db, iko, soort, naam, buf, tekst, door) {
   await db.prepare("INSERT INTO straat_doc (id, iko, soort, naam, grootte, door, ts, json) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)")
     .bind(id, Number(iko), soort, isS(naam, 160), buf.byteLength, isS(door, 80), Date.now(), JSON.stringify(json)).run();
   // Vergelijken met de inkooporder en zo nodig de inkoper seinen.
-  const o = (await isOrderLees(db, iko)) || { id: Number(iko), creditor: null };
+  /* Een voorbeeldlink (Gerrit, 13 nov 2026) heeft een negatief nummer: lezen
+     en vergelijken met de echte inkooporder, maar geen bericht en niets bij
+     de order zelf. */
+  const voorbeeld = Number(iko) < 0, echtIko = Math.abs(Number(iko));
+  const o = voorbeeld ? { id: Number(iko) } : ((await isOrderLees(db, iko)) || { id: Number(iko), creditor: null });
   let vgl = null;
   if (gelezen && Array.isArray(gelezen.regels) && gelezen.regels.length) {
-    const regels = await isOrderRegels(env, H, db, iko);
+    const regels = await isOrderRegels(env, H, db, echtIko);
     vgl = isVergelijk(regels, gelezen);
     json.vergelijk = vgl;
     await db.prepare("UPDATE straat_doc SET json = ?2 WHERE id = ?1").bind(id, JSON.stringify(json)).run();
   }
+  if (voorbeeld) return { id, gelezen: !!gelezen, leesFout: fout, vergelijk: vgl };
   if (soort === "proforma" && !o.proformaOp) o.proformaOp = Date.now();
   if (soort === "bl") { o.blOp = o.blOp || Date.now(); if (!o.opZee) o.opZee = Date.now(); }
   if (soort === "packinglist") o.packinglistOp = o.packinglistOp || Date.now();
@@ -404,7 +409,8 @@ async function isUploadGet(env, url) {
     "<ul>" + docs.filter(d => d.soort === soort).map(d => "<li class='ok'>&#10003; " + isEsc(d.naam) + "</li>").join("") + "</ul>" +
     "<input type='file' id='f_" + soort + "' accept='.pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png'><br><button type='button' data-soort='" + soort + "'>Upload</button> <span id='m_" + soort + "' class='klein'></span></div>";
   return isUploadPagina("Upload documents",
-    "<h1>Purchase order " + isEsc(tk.iko) + "</h1><p>Please upload the documents for this purchase order here. You can come back to this page with the same link at any time.</p>" +
+    "<h1>Purchase order " + isEsc(Math.abs(tk.iko)) + "</h1>" + (tk.iko < 0 ? "<p class='klein'>Example page: uploads here are only for testing.</p>" : "") +
+    "<p>Please upload the documents for this purchase order here. You can come back to this page with the same link at any time.</p>" +
     vak("proforma", "Upload your proforma invoice as soon as you have received our purchase order.") +
     vak("bl", "Upload the Bill of Lading as soon as the container has been shipped.") +
     vak("packinglist", "Upload the packing list together with the Bill of Lading.") +
@@ -688,11 +694,15 @@ export async function isHandle(request, env, url, H) {
       const o = (await isOrderLees(db, iko)) || { id: iko, creditor: kop.CreditorId };
       const cred = await isCrediteur(env, H, kop.CreditorId);
       const regels = await isOrderRegels(env, H, db, iko);
-      let tk = await db.prepare("SELECT token FROM straat_token WHERE iko = ?1").bind(iko).first();
-      if (!tk) { tk = { token: isCode(32) }; await db.prepare("INSERT INTO straat_token (token, iko, ts) VALUES (?1, ?2, ?3)").bind(tk.token, iko, Date.now()).run(); }
+      /* Voorbeeld naar een eigen adres (Gerrit, 13 nov 2026): een eigen link
+         met een negatief nummer, en niets vastgelegd bij de order. */
+      const proefAan = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(body.proefAan || "")) ? String(body.proefAan).toLowerCase() : "";
+      const tkIko = proefAan ? -iko : iko;
+      let tk = await db.prepare("SELECT token FROM straat_token WHERE iko = ?1").bind(tkIko).first();
+      if (!tk) { tk = { token: isCode(32) }; await db.prepare("INSERT INTO straat_token (token, iko, ts) VALUES (?1, ?2, ?3)").bind(tk.token, tkIko, Date.now()).run(); }
       const link = IS_LINK + "/levering-upload?t=" + tk.token;
-      const aan = isS(body.aan, 200) || (cred && cred.EmailAddress) || "";
-      const onderwerp = isS(body.onderwerp, 150) || ("Purchase order " + iko + " from Fonteyn");
+      const aan = proefAan || isS(body.aan, 200) || (cred && cred.EmailAddress) || "";
+      const onderwerp = (proefAan ? "[Voorbeeld] " : "") + (isS(body.onderwerp, 150) || ("Purchase order " + iko + " from Fonteyn"));
       /* Geen prijzen in de mail: Logic4 heeft ze in euro's, de fabriek rekent
          vaak in dollars. De prijs komt van de leverancier op de proforma, en
          die vergelijkt het Dashboard met de inkooporder. Aanhef: de
@@ -706,6 +716,7 @@ export async function isHandle(request, env, url, H) {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(aan)) return H.reply(400, { ok: false, error: "Vul een geldig mailadres van de leverancier in." });
       const m = await isMailStuur(env, H, isMailVan(wie), aan.split(/[;,\s]+/).filter(Boolean), onderwerp, html);
       if (!m.ok) return H.reply(502, m);
+      if (proefAan) return H.reply(200, { ok: true, voorbeeld: true, via: m.via });
       o.mails = (o.mails || []).concat([{ ts: Date.now(), aan, door: wie }]).slice(-20);
       isLog(o, wie, "Inkooporder gemaild naar " + aan);
       await isOrderSchrijf(db, o);

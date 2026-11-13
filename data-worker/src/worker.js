@@ -20312,6 +20312,40 @@ function d1IsDicht(e) {
   return false;
 }
 function d1Dicht() { return Date.now() < _d1DichtTot; }
+/* ═══ Teller: hoeveel aanroepen doet het Dashboard aan Logic4 ════════════
+   Gerrit (13 nov 2026): "hoeveel API calls doen wij iedere maand aan
+   Logic4?" Dat werd nergens bijgehouden en Logic4 geeft het niet. Elke
+   fetch naar api.logic4server.nl telt nu mee, per dag en per bron (de
+   vaste rondes of een verzoek uit een tegel). Opgeteld in het geheugen en
+   per 25 of na een minuut naar D1 (tabel l4_teller), zodat het tellen zelf
+   bijna niets schrijft. Wat bij het stoppen van de worker nog in het
+   geheugen staat (hooguit 24) telt niet mee: het is een goede benadering.
+   Opvragen: GET /logic4/teller (teamsleutel). Aanroepen die een pc direct
+   via het hulpprogramma doet, gaan niet langs de worker en tellen hier niet. */
+const _l4fetch = globalThis.fetch;
+let _l4n = {}, _l4laatst = Date.now(), _l4ctx = null, _l4env = null, _l4bron = "verzoek", _l4tabel = false;
+function l4TelStart(env, ctx, bron) { _l4env = env; _l4ctx = ctx; _l4bron = bron; }
+function l4TelSchrijf(alles) {
+  const env = _l4env, db = env && env.ACTIVITEIT;
+  const tot = Object.values(_l4n).reduce((a, b) => a + b, 0);
+  if (!db || !tot || d1Dicht()) return;
+  if (!alles && tot < 25 && Date.now() - _l4laatst < 60000) return;
+  const dag = new Date().toISOString().slice(0, 10), weg = _l4n;
+  _l4n = {}; _l4laatst = Date.now();
+  const w = (async () => {
+    if (!_l4tabel) { await db.prepare("CREATE TABLE IF NOT EXISTS l4_teller (dag TEXT, bron TEXT, n INTEGER, PRIMARY KEY (dag, bron))").run(); _l4tabel = true; }
+    await db.batch(Object.entries(weg).map(([bron, n]) => db.prepare("INSERT INTO l4_teller (dag, bron, n) VALUES (?1, ?2, ?3) ON CONFLICT(dag, bron) DO UPDATE SET n = n + ?3").bind(dag, bron, n)));
+  })().catch(() => {});
+  if (_l4ctx && _l4ctx.waitUntil) _l4ctx.waitUntil(w);
+}
+globalThis.fetch = function (input, init) {
+  try {
+    const u = typeof input === "string" ? input : (input && input.url) || "";
+    if (u.indexOf("api.logic4server.nl") >= 0) { _l4n[_l4bron] = (_l4n[_l4bron] || 0) + 1; l4TelSchrijf(false); }
+  } catch (e) {}
+  return _l4fetch(input, init);
+};
+
 function kvMetTeller(env, ctx) {
   const kv = env && env.FONTEYN_DATA, db = env && env.ACTIVITEIT;
   if (!kv || !db || kv.__teller) return env;
@@ -20500,6 +20534,7 @@ async function kvNoodTerug(env, maxPerRonde, doen) {
 const FP_WORKER = {
   async scheduled(event, env, ctx) {
     env = kvMetTeller(env, ctx);
+    l4TelStart(env, ctx, "rondes");
     // Beursmailing Lyon: elke kwartierronde een portie (zie beursRonde).
     ctx.waitUntil(beursRonde(env).then(r => { if (r && (r.verstuurd || r.fout || r.gestopt)) console.log("[cron] beurs: " + JSON.stringify(r)); })
       .catch(e => console.log("[cron] beurs: " + (e.message || e))));
@@ -20651,6 +20686,13 @@ const FP_WORKER = {
 
   async fetch(request, env, ctx) {
     env = kvMetTeller(env, ctx);
+    l4TelStart(env, ctx, "tegels");
+    if (new URL(request.url).pathname === "/logic4/teller" && request.method === "GET") {
+      if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      l4TelSchrijf(true);
+      const r = await env.ACTIVITEIT.prepare("SELECT dag, bron, n FROM l4_teller ORDER BY dag DESC LIMIT 200").all().catch(() => ({ results: [] }));
+      return reply(200, { ok: true, dagen: r.results || [] });
+    }
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
