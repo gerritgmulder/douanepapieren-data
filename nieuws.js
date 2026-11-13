@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-13", bestand: "beurs.html", soort: "nieuw",
+      titel: "Beurs: mailing voor New Orleans",
+      wat:   "De mailing voor de Pool Spa Patio Expo in New Orleans staat erin: Dolfs mail in het Engels voor Amerika en in het Frans voor Canada. Die gaat voor Lyon en wordt tot 23 uur verstuurd, als het in Amerika overdag is."
+    },
+    {
       datum: "2026-11-13", bestand: "beurs.html", soort: "beter",
       titel: "Beurs: aantal per dag wordt meteen bewaard",
       wat:   "Pas je bij Mailing het aantal per dag aan, dan bewaart het Dashboard dat meteen. Je hoeft dus geen Start of Pauze meer te klikken. Het hoogste aantal is 300 per dag."

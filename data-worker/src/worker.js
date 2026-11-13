@@ -5089,7 +5089,11 @@ const BEURS_AFZENDER = { name: "Dolf Nieland - Passion Spas", email: "dolf@mail.
    hebben info@passionspas.com als antwoordadres; die antwoorden komen daar. */
 const BEURS_ANTWOORD = { email: "beurs@passionspas.com", name: "Passion Spas" };
 // De 17 talen van Dolfs mail (map Lyon_mail_HTML_alle_talen, 3 nov 2026).
-const BEURS_TALEN = ["bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "hu", "it", "nl", "no", "pl", "pt", "ro", "sv"];
+const BEURS_TALEN = ["bg", "cs", "da", "de", "el", "en", "es", "fi", "fr", "hu", "it", "nl", "no", "pl", "pt", "ro", "sv", "us-en", "ca-fr"];
+/* Gerrit (13 nov 2026): Pool Spa Patio Expo New Orleans (17-19 nov) gaat
+   voor Lyon. Dolfs Grokbot-mail in het Engels (Amerika) en Frans (Canada);
+   die adressen hebben taal us-en of ca-fr en gaan als eerste de deur uit. */
+const BEURS_NO_TALEN = ["us-en", "ca-fr"];
 async function beursHandtekening(env, adres) {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(env.SHARED_SECRET || "")),
     { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -5114,7 +5118,7 @@ async function beursMail(env, adres, taal, sjablonen) {
     method: "POST",
     headers: { "api-key": env.BREVO_API_KEY, "Content-Type": "application/json", "Accept": "application/json" },
     body: JSON.stringify({ sender: BEURS_AFZENDER, replyTo: BEURS_ANTWOORD, to: [{ email: adres }],
-      subject: onderwerp, htmlContent: html, tags: ["beurs-lyon-2026", "taal-" + t],
+      subject: onderwerp, htmlContent: html, tags: [BEURS_NO_TALEN.includes(t) ? "beurs-neworleans-2026" : "beurs-lyon-2026", "taal-" + t],
       headers: { "List-Unsubscribe": "<" + link + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }),
   });
   const j = await b.json().catch(() => ({}));
@@ -5164,7 +5168,9 @@ async function beursMailbox(request, env, url) {
    over de dag verspreid gaan en niet in één klap (dat ziet er voor
    spamfilters uit als een koude lijst, wat het ook is). Aan of uit en het
    aantal per dag staan in KV beurs-instelling; die zet de tegel Beurs. */
-const BEURS_PER_DAG_MAX = 300;
+/* Brevo gratis stuurt er 300 per dag; met een betaald account meer. Het
+   aantal per dag in de tegel is de rem, dit is alleen een vangnet. */
+const BEURS_PER_DAG_MAX = 5000;
 /* Na deze dag heeft de uitnodiging geen zin meer: de beurs loopt van 17 tot
    en met 20 november, en wie de mail op de laatste dag krijgt, komt niet meer
    (Gerrit, 3 nov 2026: stoppen zodra het niet meer nuttig is). */
@@ -5181,15 +5187,18 @@ async function beursRonde(env) {
   if (!inst.aan || !env.BREVO_API_KEY) return { uit: true };
   if (pcVandaag() > BEURS_LAATSTE_DAG) return { voorbij: true };
   const uur = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Amsterdam", hour: "2-digit", hour12: false }));
-  if (uur < 8 || uur >= 19) return { buitenTijd: true };
+  // Amerika en Canada tot 23 uur (dan is het daar 16 uur); Lyon tot 19 uur.
+  if (uur < 8 || uur >= 23) return { buitenTijd: true };
+  const alleenNO = uur >= 19;
   const perDag = Math.min(Number(inst.perDag) || 290, BEURS_PER_DAG_MAX);
   const al = await beursVandaag(env);
   const rest = perDag - al;
   if (rest <= 0) return { vol: true, al };
-  const minutenTot19 = (19 - uur) * 60 - new Date().getUTCMinutes();
-  const rondesOver = Math.max(1, Math.ceil(minutenTot19 / 15));
-  const nu = Math.min(rest, Math.max(1, Math.ceil(rest / rondesOver)), 20);
-  const { results } = await env.ACTIVITEIT.prepare("SELECT email, taal FROM beurs_mail WHERE status='wacht' ORDER BY volg LIMIT ?").bind(nu).all();
+  const minutenTot23 = (23 - uur) * 60 - new Date().getUTCMinutes();
+  const rondesOver = Math.max(1, Math.ceil(minutenTot23 / 15));
+  const nu = Math.min(rest, Math.max(1, Math.ceil(rest / rondesOver)), 150);
+  const { results } = await env.ACTIVITEIT.prepare("SELECT email, taal FROM beurs_mail WHERE status='wacht'" +
+    (alleenNO ? " AND taal IN ('us-en','ca-fr')" : "") + " ORDER BY CASE WHEN taal IN ('us-en','ca-fr') THEN 0 ELSE 1 END, volg LIMIT ?").bind(nu).all();
   const sjablonen = {}, dag = pcVandaag();
   let verstuurd = 0, fout = 0;
   for (const rij of results || []) {
@@ -5202,7 +5211,7 @@ async function beursRonde(env) {
     if (uit.ok) {
       verstuurd++;
       await env.ACTIVITEIT.prepare("UPDATE beurs_mail SET status='verstuurd', dag=?, ts=?, bericht=? WHERE email=?").bind(dag, ts, uit.messageId || "", rij.email).run();
-    } else if (uit.status === 429 || uit.status === 402 || uit.status === 401 || uit.status === 403 || !uit.status) {
+    } else if (uit.status === 429 || uit.status === 402 || uit.status === 401 || uit.status === 403 || !uit.status || /credit|quota|limit|exceed/i.test(String(uit.error || ""))) {
       // Brevo zit vol of weigert de sleutel: deze ronde stoppen, het adres blijft in de wachtrij.
       return { verstuurd, fout, gestopt: (uit.status || "") + " " + (uit.error || "") };
     } else {
@@ -5215,7 +5224,7 @@ async function beursRonde(env) {
 /* De lijst inlezen (eenmalig, met de beheersleutel): [{e, b, l, t, v}] =
    e-mail, bedrijf, land, taal, volgorde. Wat er al in staat blijft staan. */
 async function beursLijst(request, env) {
-  if (!env.BEURS_BEHEER || request.headers.get("X-Beurs-Sleutel") !== env.BEURS_BEHEER) return reply(401, { ok: false });
+  if (!(await beursMagTegel(request, env))) return reply(401, { ok: false });
   const rijen = await request.json().catch(() => null);
   if (!Array.isArray(rijen) || rijen.length > 1000) return reply(400, { ok: false, error: "1 tot 1000 rijen" });
   const st = env.ACTIVITEIT.prepare("INSERT OR IGNORE INTO beurs_mail (email, bedrijf, land, taal, volg, status) VALUES (?, ?, ?, ?, ?, 'wacht')");
@@ -5393,11 +5402,11 @@ async function bpPagina() {
 
 // Alleen de vaste namen uit de route; er kan dus nooit een ander bestand uit de repo mee.
 async function bpBestandDoorgeven(m) {
-  const flyer = m[2], foto = m[3];
-  const bron = flyer ? "flyer-" + flyer + ".pdf" : "img/" + foto + ".jpg";
+  const flyer = m[2], foto = m[3], png = m[4];
+  const bron = flyer ? "flyer-" + flyer + ".pdf" : png ? "img/" + png + ".png" : "img/" + foto + ".jpg";
   const r = await fetch(BP_RAW + bron, { cf: { cacheTtl: 3600, cacheEverything: true } });
   if (!r.ok) return new Response("Not found", { status: 404 });
-  const koppen = { "Content-Type": flyer ? "application/pdf" : "image/jpeg", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff" };
+  const koppen = { "Content-Type": flyer ? "application/pdf" : png ? "image/png" : "image/jpeg", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff" };
   if (flyer) koppen["Content-Disposition"] = 'inline; filename="Passion Spas - ' + BP_FLYER_NAAM[flyer] + '.pdf"';
   return new Response(r.body, { status: 200, headers: koppen });
 }
@@ -5502,7 +5511,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/beurs/lijst" && request.method === "POST") return beursLijst(request, env);
   if (p === "/dealers/beurs/status" || p === "/dealers/beurs/instelling" || p === "/dealers/beurs/proefmail" || p === "/dealers/beurs/inbox" || p === "/dealers/beurs/bericht" || p === "/dealers/beurs/antwoord") return beursTegel(request, env, url, p);
   if (p === "/dealers/beurs/afmelden" && (request.method === "GET" || request.method === "POST")) return beursAfmelden(request, env, url);
-  const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate|lyon)\.jpg)$/);
+  const bpBestand = p.match(/^\/dealers\/become-partner\/(flyer\/(en|nl|de|fr|it|es)\.pdf|img\/(held|excite|bliss|exhilarate|soulmate|lyon|no\/(?:build_quality|hero_couple_outdoor_spa|levitation_bed|status_design))\.jpg|img\/(no\/logo_passionspas_onwhite)\.png)$/);
   if (bpBestand && request.method === "GET") return bpBestandDoorgeven(bpBestand);
 
   if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env, url);

@@ -276,7 +276,8 @@ var mail = null, mailBevestig = false, mailMelding = "";
 // Wat in het proefvak staat blijft staan als de tegel opnieuw tekent (eerst ging het adres verloren).
 var proefAan = ik.indexOf("@") > 0 ? ik : "", proefTaal = "nl";
 var TAALNAAM = { nl:"Nederlands", fr:"Frans", en:"Engels", de:"Duits", it:"Italiaans", es:"Spaans", pt:"Portugees", sv:"Zweeds", fi:"Fins",
-  da:"Deens", no:"Noors", pl:"Pools", cs:"Tsjechisch", hu:"Hongaars", ro:"Roemeens", bg:"Bulgaars", el:"Grieks" };
+  da:"Deens", no:"Noors", pl:"Pools", cs:"Tsjechisch", hu:"Hongaars", ro:"Roemeens", bg:"Bulgaars", el:"Grieks",
+  "us-en":"New Orleans: Engels (VS)", "ca-fr":"New Orleans: Frans (Canada)" };
 async function laadMailing(){
   try {
     var r = await fetch(W + "/dealers/beurs/status", { headers: kop() });
@@ -303,7 +304,7 @@ async function mailPerDag(w){
   var n = Number(String(w).replace(/\D/g, "")) || 0;
   if (!n) { mailMelding = "Vul een aantal in."; tekenMailing(); return; }
   var j = await mailPost("/dealers/beurs/instelling", { perDag: n });
-  mailMelding = !j.ok ? (j.error || "Lukte nog niet.") : j.inst.perDag < n ? "Bewaard: " + j.inst.perDag + " per dag. Meer staat Brevo gratis niet toe." : "Bewaard: " + j.inst.perDag + " per dag.";
+  mailMelding = !j.ok ? (j.error || "Lukte nog niet.") : j.inst.perDag < n ? "Bewaard: " + j.inst.perDag + " per dag, het hoogste aantal." : "Bewaard: " + j.inst.perDag + " per dag.";
   try { if (window.fpLog) fpLog("beursmail-perdag", String(j.inst && j.inst.perDag)); } catch(e) {}
   laadMailing();
 }
@@ -323,14 +324,14 @@ function tekenMailing(){
   var aan = mail.inst && mail.inst.aan, perDag = (mail.inst && mail.inst.perDag) || 290;
   var dagen = Math.ceil(tot.wacht / perDag);
   var h = '<div class="kaart"><h3>Versturen</h3>' +
-    '<p class="lead">De server stuurt elk kwartier een portie, tussen 8 en 19 uur, tot het aantal per dag op is. Elk land krijgt de mail in zijn eigen taal. Afzender: Dolf Nieland - Passion Spas. Antwoorden komen binnen bij beurs@passionspas.com en staan in het tabblad Reacties. Na ' + new Date((mail.laatsteDag || "2026-11-19") + "T12:00").toLocaleDateString("nl-NL", { day: "numeric", month: "long" }) + ' stopt het versturen vanzelf: dan is de beurs bijna voorbij.</p>' +
+    '<p class="lead">De server stuurt elk kwartier een portie, tot het aantal per dag op is. New Orleans (Amerika en Canada) gaat eerst, tussen 8 en 23 uur; Lyon daarna, tussen 8 en 19 uur. Elk land krijgt de mail in zijn eigen taal. Afzender: Dolf Nieland - Passion Spas. Antwoorden komen binnen bij beurs@passionspas.com en staan in het tabblad Reacties. Na ' + new Date((mail.laatsteDag || "2026-11-19") + "T12:00").toLocaleDateString("nl-NL", { day: "numeric", month: "long" }) + ' stopt het versturen vanzelf: dan is de beurs bijna voorbij.</p>' +
     '<p>Stand: <span class="aanuit ' + (aan ? 'aan">Staat aan' : 'uit">Staat op pauze') + '</span>' +
     (mail.inst && mail.inst.door ? ' <small style="color:var(--grijs)">(' + esc(String(mail.inst.door).split("@")[0]) + ', ' + new Date(mail.inst.ts).toLocaleString("nl-NL", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) + ')</small>' : '') + '</p>' +
     '<div class="mrij">' +
     (aan ? '<button class="knop licht" type="button" onclick="mailZet(false)" title="Zet het versturen op pauze; wat nog wacht blijft in de wachtrij">Pauze</button>'
          : (mailBevestig ? '<button class="knop groen" type="button" onclick="mailZet(true)" title="Start het versturen naar de hele lijst">Ja, start het versturen</button> <button class="knop licht" type="button" onclick="mailBevestig=false;tekenMailing()" title="Toch nog niet starten">Nog even niet</button>'
                          : '<button class="knop" type="button" onclick="mailZet(true)" title="Start het versturen naar de hele lijst, in porties over de dag">Start versturen</button>')) +
-    ' <label style="font-size:13px">Per dag <input id="mPerDag" type="text" inputmode="numeric" value="' + perDag + '" style="width:60px" onchange="mailPerDag(this.value)" title="Hoeveel mails per dag, tot 300: zoveel staat Brevo gratis toe. Het Dashboard bewaart het meteen."></label> <small style="color:var(--grijs)">tot 300</small>' +
+    ' <label style="font-size:13px">Per dag <input id="mPerDag" type="text" inputmode="numeric" value="' + perDag + '" style="width:60px" onchange="mailPerDag(this.value)" title="Hoeveel mails per dag, voor New Orleans en Lyon samen. Brevo gratis stuurt er 300; met een betaald Brevo-account meer. Het Dashboard bewaart het meteen."></label>' +
     '</div><p class="melding">' + esc(mailMelding) + '</p>' +
     '<div class="tellers"><span class="teller">In de wachtrij: <b>' + tot.wacht + '</b></span><span class="teller">Verstuurd: <b>' + tot.verstuurd + '</b></span>' +
     '<span class="teller">Vandaag: <b>' + mail.vandaag + '</b> van ' + perDag + '</span><span class="teller">Teruggekomen: <b>' + tot.fout + '</b></span>' +
