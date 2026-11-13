@@ -357,7 +357,7 @@ async function leverancier(id, bestellen){
     var L = j.leverancier, a = j.afspraak || {}, art = j.artikelen || [], k = j.koppeling || {};
     var h = '<div class="terug"><button type="button" id="terug" title="Het Dashboard gaat terug naar alle leveranciers">&larr; Alle leveranciers</button></div>';
     /* Inkooporder maken: bovenaan, met de reden als het nog niet kan. */
-    h += '<div class="kaart" style="border-color:#8bc53f"><h2>Inkooporder maken bij '+esc(L.naam)+'</h2>' +
+    if (j.magBestellen) h += '<div class="kaart" style="border-color:#8bc53f"><h2>Inkooporder maken bij '+esc(L.naam)+'</h2>' +
       (j.ontbreekt.length
         ? '<div class="verschil">Eerst de afspraken met deze leverancier aanvullen in de tegel Leveranciersinformatie: <b>'+esc(j.ontbreekt.join(", "))+'</b>.</div>' +
           '<div class="knoppen"><a href="prijslijsten-fabrikanten.html" style="text-decoration:none"><button type="button" class="doe" title="Het Dashboard opent de tegel Leveranciersinformatie om de afspraken aan te vullen">Afspraken aanvullen</button></a></div>'
@@ -438,6 +438,8 @@ async function locaties(){
 Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){ b.onclick = function(){ ({ orders: orders, leveranciers: leveranciers, locaties: locaties })[b.dataset.tab](); }; });
 $("indexKnop").onclick = function(){ indexBijwerken(false); };
 $("nieuweIko").onclick = function(){ leveranciers(true); };
+// Alleen de bestellers en inkopers maken inkooporders; Manon streept af.
+if (window.fpToegang && !fpToegang.mag("inkoopstraat-bestellen", ik)) $("nieuweIko").style.display = "none";
 (async function(){
   for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
   var s = new URLSearchParams(location.search);

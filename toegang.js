@@ -176,8 +176,14 @@
     ],
     "inkoopstraat": [
       /* De tegel Inkoop: de inkopers plus de bestellers (Rosalie, Don,
-         Lisette, Gretha, Chantal, Joppe, Arno). Iedereen hier mag
-         inkooporders en inkoopleveringen maken. */
+         Lisette, Gretha, Chantal, Joppe, Arno), en Manon voor het afstrepen
+         bij binnenkomst (Gerrit, 13 nov 2026). Iedereen hier mag een
+         inkooplevering maken. */
+      "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha",
+      "joppe", "lisette", "manon", "rosalie",
+    ],
+    // Inkooporders maken in de tegel Inkoop: de bestellers en de inkopers.
+    "inkoopstraat-bestellen": [
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha",
       "joppe", "lisette", "rosalie",
     ],

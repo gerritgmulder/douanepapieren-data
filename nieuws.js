@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-13", bestand: "inkoopstraat.html", soort: "beter",
+      titel: "Inkooporder naar de leverancier",
+      wat:   "Bij een inkooporder stuur je de leverancier met één knop een mail met de bestelde artikelen en een eigen link. Daar zet hij zijn proforma, Bill of Lading en packing list neer, en het Dashboard vergelijkt ze met je inkooporder. Manon streept bij binnenkomst de packing list af in dezelfde tegel."
+    },
+    {
       datum: "2026-11-12", bestand: "planning-service.html", soort: "beter",
       titel: "Planning service: vrije tijd in een route zichtbaar",
       wat:   "Kan een klant pas later op de dag, dan zie je onder de monteur hoeveel tijd er nog vrij is en hoe laat hij ongeveer terug is. Die tijd is nog te vullen met een andere klant."

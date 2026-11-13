@@ -37,7 +37,7 @@ const IS_LINK = "https://fonteyn-data-store.g-mulder.workers.dev";
 const IS_MAX_BESTAND = 24 * 1024 * 1024;
 /* De mail aan de leverancier gaat pas echt de deur uit na het akkoord van
    Gerrit op de tekst (memory mails-eerst-laten-zien). Voorbeeld werkt al. */
-const IS_MAIL_AAN = false;
+const IS_MAIL_AAN = true;   // Gerrit akkoord op de tekst, 13 nov 2026
 const IS_DOC_SOORT = { proforma: "Proforma invoice", bl: "Bill of Lading", packinglist: "Packing list", overig: "Other document" };
 
 let _isTabel = false;
@@ -495,7 +495,10 @@ export async function isHandle(request, env, url, H) {
   if (!(await H.toegangMag(env, "inkoopstraat", wie))) return H.reply(403, { ok: false, error: "Deze tegel is voor inkoop en het magazijn." });
   /* Gerrit (11 nov 2026): "Alle inkopers mogen de tegel Inkoop gebruiken."
      Wie in de groep zit, mag dus ook inkooporders en leveringen maken. */
-  const magBestellen = true;
+  /* Manon zit in de tegel voor het afstrepen bij binnenkomst (Gerrit,
+     13 nov 2026). Inkooporders maken blijft voor de bestellers en inkopers
+     (groep inkoopstraat-bestellen); een inkooplevering mag iedereen hier. */
+  const magBestellen = await H.toegangMag(env, "inkoopstraat-bestellen", wie);
   const db = await isDb(env);
   const body = request.method === "POST" ? await request.json().catch(() => ({})) : {};
   const q = (k) => url.searchParams.get(k);
@@ -573,7 +576,7 @@ export async function isHandle(request, env, url, H) {
     }
     /* Inkooporder maken */
     if (p === "/straat/order/maak" && request.method === "POST") {
-      if (!magBestellen) return H.reply(403, { ok: false, error: "Inkooporders maken is voor de inkopers." });
+      if (!magBestellen) return H.reply(403, { ok: false, error: "Inkooporders maken is voor de bestellers en de inkopers." });
       const id = Number(body.creditor);
       const bucket = await isAfsprakenBucket(env);
       const kop = await isLevKoppeling(db, id);
@@ -724,7 +727,6 @@ export async function isHandle(request, env, url, H) {
     }
     /* Binnen: Manon streept de packing list af en maakt de inkooplevering */
     if (p === "/straat/levering/maak" && request.method === "POST") {
-      if (!magBestellen) return H.reply(403, { ok: false, error: "Een inkooplevering maken is voor het magazijn en de inkopers." });
       const iko = Number(body.id);
       const kop = isLijst(await isL4(env, H, "/v3/BuyOrders/GetBuyOrders", { BuyOrderId: iko, TakeRecords: 1 }))[0];
       if (!kop) return H.reply(404, { ok: false, error: "Deze inkooporder is onbekend in Logic4." });
