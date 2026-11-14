@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-14", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Voorraad en tekort kloppen weer",
+      wat:   "Op voorraad is nu wat er echt in Uddel staat. Een order die op Inplannen staat, krijgt alleen 'op voorraad' als er in die kleur ook een spa staat. Kleuren als 'Pure White with Grey' en 'Pure White with GREY/Oak trim' zijn nu dezelfde kleur. Een container die binnen is maar nog niet in Logic4 is geboekt, telt mee als voorraad."
+    },
+    {
       datum: "2026-11-13", bestand: "beurs.html", soort: "nieuw",
       titel: "Beurs: mailing voor New Orleans",
       wat:   "De mailing voor de Pool Spa Patio Expo in New Orleans staat erin: Dolfs mail in het Engels voor Amerika en in het Frans voor Canada. Die gaat voor Lyon en wordt tot 23 uur verstuurd, als het in Amerika overdag is."

@@ -78,12 +78,35 @@
      zeeTotaal:    stuks van dit model op schepen die onderweg zijn
      zeePf:        {proforma: stuks van dit model op zee}
      codeKleur:    artikelcode -> kleur (fpCodeKleur) */
-  function fpOverzichtModel(reserveringen, hal, prodRegels, zeeTotaal, zeePf, codeKleur) {
+  /* De kleur van een order op de kleur uit de catalogus van het model
+     (Chantal, video 12 nov 2026, Flame): "Pure White with Grey" en "Pure
+     White with Grey, 10% discount on dealer price" zijn "Pure White with
+     GREY/Oak trim". Tekst na de kleur eraf; past wat overblijft op het begin
+     van precies één catalogus-kleur, dan is het die. */
+  function fpOrderKleur(k, modelKleuren) {
+    var schoon = String(k == null ? "" : k).replace(/,.*$/, "")
+      .replace(/\b(\d+\s*%?\s*)?(discount|korting|dealer\s*price|ohne\s*cover|without\s*cover|zonder\s*cover|ohne|zonder)\b.*$/i, "");
+    var s = fpKleurSleutel(schoon);
+    if (!modelKleuren || !modelKleuren.length || s === "(geen kleur)" || modelKleuren.indexOf(s) >= 0) return s;
+    var pas = modelKleuren.filter(function (x) { return x.indexOf(s) === 0; });
+    return pas.length === 1 ? pas[0] : s;
+  }
+  function fpOverzichtModel(reserveringen, hal, prodRegels, zeeTotaal, zeePf, codeKleur, modelKleuren, binnenNb) {
     var fon = (reserveringen || []).filter(function (r) { return !r.container; });
     var con = (reserveringen || []).filter(function (r) { return r.container; });
     var res = fon.reduce(function (n, r) { return n + (Number(r.qty) || 0); }, 0);
     var conQty = con.reduce(function (n, r) { return n + (Number(r.qty) || 0); }, 0);
-    var voorraad = Number((hal || {}).available) || 0;
+    /* Op voorraad = wat er in Uddel STAAT, niet wat vrij is (Chantal, video
+       12 nov 2026). Vrij is de voorraad min de orders die er al aan hangen,
+       en die orders tellen hieronder al mee bij gereserveerd: met vrij ging
+       hun spa er twee keer af (Relax Mystic Mountain: 14 in de hal, vrij 0).
+       Oude data zonder fysiekPerCode valt terug op vrij. */
+    var fys = (hal && hal.fysiekPerCode && Object.keys(hal.fysiekPerCode).length) ? hal.fysiekPerCode : null;
+    var voorraad = Number(fys ? (hal || {}).physical : (hal || {}).available) || 0;
+    /* Binnengemeld, maar nog geen inkooplevering in Logic4: staat in Uddel,
+       zit nog niet in de hal-voorraad. Telt als voorraad, kleur onbekend. */
+    var binnen = Number(binnenNb) || 0;
+    voorraad += binnen;
     var prod = (prodRegels || []).filter(function (x) { return !AMERIKA.test(String(x.ref || "")); });
     // Productie per proforma, en wat daarvan al vaart.
     var perPf = {};
@@ -101,10 +124,10 @@
       if (!per[k]) per[k] = { kleur: k, gereserveerd: 0, voorraad: 0, komt: 0 };
       per[k][veld] += n;
     }
-    fon.forEach(function (r) { zet(fpKleurSleutel(r.kleur), "gereserveerd", Number(r.qty) || 0); });
-    var vs = (hal && hal.variants) || {};
+    fon.forEach(function (r) { zet(fpOrderKleur(r.kleur, modelKleuren), "gereserveerd", Number(r.qty) || 0); });
+    var vs = fys || (hal && hal.variants) || {};
     Object.keys(vs).forEach(function (code) { zet(fpKleurSleutel((codeKleur || {})[code]), "voorraad", Number(vs[code]) || 0); });
-    prod.forEach(function (x) { zet(fpKleurSleutel(x.kleur), "komt", Number(x.qty) || 0); });
+    prod.forEach(function (x) { zet(fpOrderKleur(x.kleur, modelKleuren), "komt", Number(x.qty) || 0); });
     var kleuren = Object.keys(per).map(function (k) { return per[k]; });
     var geen = per["(geen kleur)"] || { gereserveerd: 0 };
     var over = 0;
@@ -119,13 +142,14 @@
       g.open = Math.max(0, g.gereserveerd - g.voorraad - g.komt - over);
     }
     var openKleuren = kleuren.reduce(function (n, x) { return n + (x.open || 0); }, 0);
-    var vanZee = Math.min(openKleuren, zeeZonderKleur);
-    var tekort = openKleuren - vanZee;
+    var vanBinnen = Math.min(openKleuren, binnen);
+    var vanZee = Math.min(openKleuren - vanBinnen, zeeZonderKleur);
+    var tekort = openKleuren - vanBinnen - vanZee;
     kleuren.sort(function (a, b) { return (b.open - a.open) || (b.gereserveerd - a.gereserveerd) || a.kleur.localeCompare(b.kleur, "nl"); });
     return {
       gereserveerd: res, partnercontainers: conQty, voorraad: voorraad, zee: zee, productie: prodNet,
       kleuren: kleuren.filter(function (x) { return x.gereserveerd || x.voorraad || x.komt; }),
-      zeeZonderKleur: zeeZonderKleur, vanZee: vanZee, tekort: tekort,
+      zeeZonderKleur: zeeZonderKleur, vanZee: vanZee, binnenNogTeBoeken: binnen, vanBinnen: vanBinnen, tekort: tekort,
       gedekt: res > 0 ? tekort === 0 : null
     };
   }
@@ -149,7 +173,9 @@
     [byModel, halM, prodM, zeeM].forEach(function (o) { Object.keys(o).forEach(function (m) { namen[m] = 1; }); });
     var uit = {};
     Object.keys(namen).forEach(function (m) {
-      var r = fpOverzichtModel(byModel[m], halM[m], prodM[m], zeeM[m], zeePf[m], codeKleur);
+      var mk = {};
+      (((cat && cat.models) || {})[m] || []).forEach(function (v) { var k = (codeKleur || {})[String(v && v.code)]; if (k) mk[fpKleurSleutel(k)] = 1; });
+      var r = fpOverzichtModel(byModel[m], halM[m], prodM[m], zeeM[m], zeePf[m], codeKleur, Object.keys(mk), ((resv && resv.nogTeBoeken) || {})[m]);
       if (r.gereserveerd || r.partnercontainers || r.voorraad || r.zee || r.productie) uit[m] = r;
     });
     return uit;

@@ -2102,7 +2102,7 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
     // (dealer-direct)" boven een getal van 583 terwijl het om 46 orders ging -
     // een factor twaalf ernaast, en niemand die het kon narekenen.
     kpi(containers,"Spa's op partnercontainers ("+ovContainerOrders+" orders)","#c2410c")+
-    kpi(halTotal,"Vrij op voorraad (NL)","#2563eb")+
+    kpi(halTotal,"Op voorraad in Uddel","#2563eb")+
     kpi(shipTotal,"Op zee (onderweg)","#2563eb")+
     kpi(prodTotal,"In productie (fabriek)","#7c3aed")+
     kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)",true);
@@ -2224,6 +2224,7 @@ function kleurTabel(r){
         "<td style='color:"+(x.komt?"#7c3aed":"var(--muted)")+"'>"+(x.komt||"-")+"</td>"+
         "<td>"+vink(x)+"</td></tr>";
     }).join("")+
+    (ov.vanBinnen?voet("binnen, nog in Logic4 te boeken (kleur volgt)","-"+ov.vanBinnen,"#2563eb"):"")+
     (ov.vanZee?voet("op zee, kleur nog onbekend","-"+ov.vanZee,"#2563eb"):"")+
     voet("Tekort", r.tekort>0?("✗ "+r.tekort):"✓", r.tekort>0?"#b91c1c":"#15803d")+
     "</tbody></table></div>";

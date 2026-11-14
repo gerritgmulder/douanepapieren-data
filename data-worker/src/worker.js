@@ -10623,12 +10623,35 @@ async function berichtenRonde(env) {
      zeeTotaal:    stuks van dit model op schepen die onderweg zijn
      zeePf:        {proforma: stuks van dit model op zee}
      codeKleur:    artikelcode -> kleur (fpCodeKleur) */
-  function fpOverzichtModel(reserveringen, hal, prodRegels, zeeTotaal, zeePf, codeKleur) {
+  /* De kleur van een order op de kleur uit de catalogus van het model
+     (Chantal, video 12 nov 2026, Flame): "Pure White with Grey" en "Pure
+     White with Grey, 10% discount on dealer price" zijn "Pure White with
+     GREY/Oak trim". Tekst na de kleur eraf; past wat overblijft op het begin
+     van precies één catalogus-kleur, dan is het die. */
+  function fpOrderKleur(k, modelKleuren) {
+    var schoon = String(k == null ? "" : k).replace(/,.*$/, "")
+      .replace(/\b(\d+\s*%?\s*)?(discount|korting|dealer\s*price|ohne\s*cover|without\s*cover|zonder\s*cover|ohne|zonder)\b.*$/i, "");
+    var s = fpKleurSleutel(schoon);
+    if (!modelKleuren || !modelKleuren.length || s === "(geen kleur)" || modelKleuren.indexOf(s) >= 0) return s;
+    var pas = modelKleuren.filter(function (x) { return x.indexOf(s) === 0; });
+    return pas.length === 1 ? pas[0] : s;
+  }
+  function fpOverzichtModel(reserveringen, hal, prodRegels, zeeTotaal, zeePf, codeKleur, modelKleuren, binnenNb) {
     var fon = (reserveringen || []).filter(function (r) { return !r.container; });
     var con = (reserveringen || []).filter(function (r) { return r.container; });
     var res = fon.reduce(function (n, r) { return n + (Number(r.qty) || 0); }, 0);
     var conQty = con.reduce(function (n, r) { return n + (Number(r.qty) || 0); }, 0);
-    var voorraad = Number((hal || {}).available) || 0;
+    /* Op voorraad = wat er in Uddel STAAT, niet wat vrij is (Chantal, video
+       12 nov 2026). Vrij is de voorraad min de orders die er al aan hangen,
+       en die orders tellen hieronder al mee bij gereserveerd: met vrij ging
+       hun spa er twee keer af (Relax Mystic Mountain: 14 in de hal, vrij 0).
+       Oude data zonder fysiekPerCode valt terug op vrij. */
+    var fys = (hal && hal.fysiekPerCode && Object.keys(hal.fysiekPerCode).length) ? hal.fysiekPerCode : null;
+    var voorraad = Number(fys ? (hal || {}).physical : (hal || {}).available) || 0;
+    /* Binnengemeld, maar nog geen inkooplevering in Logic4: staat in Uddel,
+       zit nog niet in de hal-voorraad. Telt als voorraad, kleur onbekend. */
+    var binnen = Number(binnenNb) || 0;
+    voorraad += binnen;
     var prod = (prodRegels || []).filter(function (x) { return !AMERIKA.test(String(x.ref || "")); });
     // Productie per proforma, en wat daarvan al vaart.
     var perPf = {};
@@ -10646,10 +10669,10 @@ async function berichtenRonde(env) {
       if (!per[k]) per[k] = { kleur: k, gereserveerd: 0, voorraad: 0, komt: 0 };
       per[k][veld] += n;
     }
-    fon.forEach(function (r) { zet(fpKleurSleutel(r.kleur), "gereserveerd", Number(r.qty) || 0); });
-    var vs = (hal && hal.variants) || {};
+    fon.forEach(function (r) { zet(fpOrderKleur(r.kleur, modelKleuren), "gereserveerd", Number(r.qty) || 0); });
+    var vs = fys || (hal && hal.variants) || {};
     Object.keys(vs).forEach(function (code) { zet(fpKleurSleutel((codeKleur || {})[code]), "voorraad", Number(vs[code]) || 0); });
-    prod.forEach(function (x) { zet(fpKleurSleutel(x.kleur), "komt", Number(x.qty) || 0); });
+    prod.forEach(function (x) { zet(fpOrderKleur(x.kleur, modelKleuren), "komt", Number(x.qty) || 0); });
     var kleuren = Object.keys(per).map(function (k) { return per[k]; });
     var geen = per["(geen kleur)"] || { gereserveerd: 0 };
     var over = 0;
@@ -10664,13 +10687,14 @@ async function berichtenRonde(env) {
       g.open = Math.max(0, g.gereserveerd - g.voorraad - g.komt - over);
     }
     var openKleuren = kleuren.reduce(function (n, x) { return n + (x.open || 0); }, 0);
-    var vanZee = Math.min(openKleuren, zeeZonderKleur);
-    var tekort = openKleuren - vanZee;
+    var vanBinnen = Math.min(openKleuren, binnen);
+    var vanZee = Math.min(openKleuren - vanBinnen, zeeZonderKleur);
+    var tekort = openKleuren - vanBinnen - vanZee;
     kleuren.sort(function (a, b) { return (b.open - a.open) || (b.gereserveerd - a.gereserveerd) || a.kleur.localeCompare(b.kleur, "nl"); });
     return {
       gereserveerd: res, partnercontainers: conQty, voorraad: voorraad, zee: zee, productie: prodNet,
       kleuren: kleuren.filter(function (x) { return x.gereserveerd || x.voorraad || x.komt; }),
-      zeeZonderKleur: zeeZonderKleur, vanZee: vanZee, tekort: tekort,
+      zeeZonderKleur: zeeZonderKleur, vanZee: vanZee, binnenNogTeBoeken: binnen, vanBinnen: vanBinnen, tekort: tekort,
       gedekt: res > 0 ? tekort === 0 : null
     };
   }
@@ -10694,7 +10718,9 @@ async function berichtenRonde(env) {
     [byModel, halM, prodM, zeeM].forEach(function (o) { Object.keys(o).forEach(function (m) { namen[m] = 1; }); });
     var uit = {};
     Object.keys(namen).forEach(function (m) {
-      var r = fpOverzichtModel(byModel[m], halM[m], prodM[m], zeeM[m], zeePf[m], codeKleur);
+      var mk = {};
+      (((cat && cat.models) || {})[m] || []).forEach(function (v) { var k = (codeKleur || {})[String(v && v.code)]; if (k) mk[fpKleurSleutel(k)] = 1; });
+      var r = fpOverzichtModel(byModel[m], halM[m], prodM[m], zeeM[m], zeePf[m], codeKleur, Object.keys(mk), ((resv && resv.nogTeBoeken) || {})[m]);
       if (r.gereserveerd || r.partnercontainers || r.voorraad || r.zee || r.productie) uit[m] = r;
     });
     return uit;
@@ -11159,11 +11185,45 @@ async function dpRefreshReservations(env) {
      reservering alleen uit een bak kan pakken waar zijn eigen schaalkleur in
      zit. Kent de invoice de kleur niet, dan komt het aantal in een bak zonder
      kleur en die mag door iedereen gebruikt worden. */
-  const shipsByModel = {};
+  /* Een binnengemeld schip dat al als inkooplevering in Logic4 staat, zit in
+     de hal-voorraad (fysiek). Dan telt het niet nóg een keer als voorraad
+     (Chantal, video 12 nov 2026: 3362-2 met 50 Relax stond binnen en telde
+     naast de hal mee). Manon zet de batch en de containernummers in de
+     omschrijving van de levering; daarop herkennen we hem. Lukt het lezen
+     niet, dan blijft alles zoals het was. */
+  let leveringTekst = null;
+  try {
+    const tk = await l4Token(env);
+    const delen = [];
+    for (let skip = 0; skip < 600; skip += 100) {
+      const lr = await fetch("https://api.logic4server.nl/v3/BuyOrderDeliveries/GetBuyOrderDeliveries", { method: "POST",
+        headers: { "Authorization": "Bearer " + tk, "Content-Type": "application/json" },
+        body: JSON.stringify({ CreationDateFrom: new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10), Skip: skip, Take: 100 }) });
+      if (!lr.ok) break;
+      const lj = await lr.json(); const rows = Array.isArray(lj) ? lj : ((lj && lj.Records) || []);
+      for (const x of rows) delen.push([x.Description, x.Remarks, x.PickingListNumber].join(" "));
+      if (rows.length < 100) break;
+    }
+    if (delen.length) leveringTekst = delen.join(" | ").toUpperCase();
+  } catch (e) {}
+  const alGeboekt = (s) => {
+    if (!leveringTekst || !s.binnenGemeld) return false;
+    const batch = String(s.trackRef || "").trim().toUpperCase();
+    if (batch && batch.length >= 4 && leveringTekst.includes(batch)) return true;
+    const cont = String((s.track && s.track.container) || "").toUpperCase().match(/\b[A-Z]{4}\d{7}\b/g) || [];
+    return cont.some(c => leveringTekst.includes(c));
+  };
+  const shipsByModel = {}, nogTeBoeken = {};
   for (const s of (schepen.ships || [])) {
     // Dealercontainers varen naar de dealer en niet naar Uddel; ze kunnen dus
     // geen reservering van iemand anders dekken. Zie dpStockModels.
     if (s.dealerContainer) continue;
+    if (alGeboekt(s)) continue;
+    // Binnen, maar nog geen inkooplevering in Logic4: per model onthouden voor het Overzicht.
+    if (s.binnenGemeld) for (const [m0, q0] of Object.entries(s.models || {})) {
+      const mk0 = String(m0).replace(/^spa\s+/i, "").trim();
+      nogTeBoeken[mk0] = (nogTeBoeken[mk0] || 0) + (Number(q0) || 0);
+    }
     for (const [model, q] of Object.entries(s.models || {})) {
       const totaal = Number(q) || 0;
       if (totaal <= 0) continue;
@@ -11244,6 +11304,32 @@ async function dpRefreshReservations(env) {
     const k = kleurSleutel(kleur);
     return k ? (k + "|" + extraSleutel(extra)) : "";
   };
+  /* DE KLEUR VAN EEN ORDER IS DE KLEUR UIT DE CATALOGUS.
+     ═════════════════════════════════════════════════════════════════
+     Chantal (video 12 nov 2026, Flame): orders heten "Pure White with Grey",
+     "Pure White with Grey, 10% discount on dealer price" of "Pure White with
+     Grey OHNE COVER"; de catalogus, de hal en de inkooporder zeggen "Pure
+     White with GREY/Oak trim". Dat waren vier verschillende kleuren, dus de
+     30 die gemaakt worden telden niet mee tegen het tekort. Nu: tekst na de
+     kleur eraf (korting, ohne cover), en past de kleur van de order precies
+     op het begin van één kleur uit de catalogus van dat model, dan is het die
+     kleur. Past hij op meer dan één, dan blijft hij zoals hij was. */
+  const kleurRuis = (k) => String(k || "").replace(/,.*$/, "")
+    .replace(/\b(\d+\s*%?\s*)?(discount|korting|dealer\s*price|ohne\s*cover|without\s*cover|zonder\s*cover|ohne|zonder)\b.*$/i, "").trim();
+  const modelKleuren = {};
+  for (const [m, vs] of Object.entries(catalog.models || {})) {
+    const set = new Set();
+    for (const v of vs) { const kv = kleurVanCode[String(v.code)] || {}; const k = kleurSleutel(kv.kleur); if (k) set.add(k); }
+    modelKleuren[m] = [...set];
+  }
+  const orderKleur = (model, kleur) => {
+    const k = kleurSleutel(kleurRuis(kleur));
+    const lijst = modelKleuren[model] || [];
+    if (!k || lijst.includes(k)) return k;
+    const pas = lijst.filter(x => x.startsWith(k));
+    return pas.length === 1 ? pas[0] : k;
+  };
+  const orderPot = (model, kleur, extra) => { const k = orderKleur(model, kleur); return k ? (k + "|" + extraSleutel(extra)) : ""; };
 
   /* WAT AL BINNEN IS, IS BINNEN.
      ═══════════════════════════════════════════════════════════════════════
@@ -11281,9 +11367,17 @@ async function dpRefreshReservations(env) {
     const halRec = (hallen.models || {})[model] || {};
     /* Per kleur wat er vrij ligt. Valt een artikelcode niet thuis te brengen,
        dan gaat dat aantal naar het restpotje onder sleutel "". */
+    /* WAT ER STAAT, NIET WAT VRIJ IS (Chantal, video 12 nov 2026: "Relax
+       Mystic Mountain, ik heb maar geen voorraad staan"). "Vrij" is de
+       voorraad min de orders die er in Logic4 al aan hangen; die orders
+       staan hieronder óók in de lijst, dus met vrij werd hun spa twee keer
+       weggehaald. Er stonden 14 Relax in Mystic Mountain in Uddel, vrij 0.
+       Nu verdelen we wat er fysiek staat over de orders. Oude data zonder
+       fysiekPerCode valt terug op vrij. */
     const halPerKleur = {};
     let halTotaal = 0;
-    for (const [code, q] of Object.entries(halRec.variants || {})) {
+    const halBron = halRec.fysiekPerCode && Object.keys(halRec.fysiekPerCode).length ? halRec.fysiekPerCode : (halRec.variants || {});
+    for (const [code, q] of Object.entries(halBron)) {
       const n = Number(q) || 0;
       if (n <= 0) continue;
       const kv = kleurVanCode[String(code)] || {};
@@ -11295,7 +11389,7 @@ async function dpRefreshReservations(env) {
        formaat, of een model dat niet in de catalogus staat), dan valt alles
        terug op het restpotje. Zo blijft het gedrag voor die modellen precies
        zoals het was. */
-    const hal = Number(halRec.available) || 0;
+    const hal = Number(halRec.fysiekPerCode ? halRec.physical : halRec.available) || 0;
     if (!halTotaal && hal > 0) { halPerKleur[""] = hal; halTotaal = hal; }
     /* Een schip dat binnen is gemeld, ligt in Uddel: wie daaruit pakt, staat op
        voorraad en niet op een ETA uit het verleden (Chantal, 19 okt 2026: "Bangkok
@@ -11313,23 +11407,31 @@ async function dpRefreshReservations(env) {
       // uitvoering kent hij wél - de artikelcode zegt het - en die telt mee.
       .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko, fabriek: p.fabriek,
                                    kleur: null, extra: extraSleutel(p.uitvoering), voorOrder: p.voorOrder || null }));
-    for (const r of list) {
+    /* De orders die op Inplannen staan, pakken eerst uit de hal. Maar "op
+       voorraad" alleen zolang er in die kleur ook echt een spa staat (Chantal,
+       video 12 nov 2026: 37 Relax Mystic Mountain op voorraad, 14 in de hal).
+       Is die kleur op, dan gaat de order gewoon door de berekening. */
+    const volgorde = list.filter(r => isBinnenGevinkt(r)).concat(list.filter(r => !isBinnenGevinkt(r)));
+    for (const r of volgorde) {
       // Containerorders (Dealer magazijn) gaan rechtstreeks naar de dealer en
       // trekken NIET uit de Fonteyn-voorraad — die krijgen 'dealer-direct'.
       if (r.container && r.warehouseId === WH_DEALER) { r.verwacht = "dealer-direct"; continue; }
       let need = r.qty, landing = null;
       if (isBinnenGevinkt(r)) {
-        const bs = potSleutel(r.kleur, r.extra);
+        const bs = orderPot(model, r.kleur, r.extra);
         const bp = halPerKleur[bs] != null ? bs : (bs ? null : "");
-        if (bp != null && halPerKleur[bp] > 0) halPerKleur[bp] -= Math.min(need, halPerKleur[bp]);
-        r.verwacht = "voorraad"; r.verwachtBron = "binnen"; r.verwachtSchip = null;
-        continue;
+        if (bp != null && halPerKleur[bp] >= need) {
+          halPerKleur[bp] -= need;
+          r.verwacht = "voorraad"; r.verwachtBron = "binnen"; r.verwachtSchip = null;
+          continue;
+        }
+        r.inplannenZonderVoorraad = true;   // aangevinkt, maar in deze kleur staat er niets meer
       }
       /* Eerst de hal, in de kleur van deze order. Kent de order geen kleur,
          dan uit het restpotje. Is er van díe kleur niets vrij, dan slaan we de
          hal over en gaat hij door naar de schepen - ook als er van een andere
          kleur nog tien staan. */
-      const eigenSleutel = potSleutel(r.kleur, r.extra);
+      const eigenSleutel = orderPot(model, r.kleur, r.extra);
       const potje = halPerKleur[eigenSleutel] != null ? eigenSleutel
                   : (eigenSleutel ? null : "");
       if (potje != null && halPerKleur[potje] > 0) {
@@ -11481,7 +11583,7 @@ async function dpRefreshReservations(env) {
     }
   } catch (e) { console.log("[reserveringen] wijzigingen vergelijken mislukt: " + String(e.message || e)); }
 
-  await putAlsAnders(env, "reserveringen-live", { updated: new Date().toISOString(), byModel, byModelUSA });
+  await putAlsAnders(env, "reserveringen-live", { updated: new Date().toISOString(), byModel, byModelUSA, nogTeBoeken });
   const total = Object.values(byModel).reduce((n, l) => n + l.length, 0);
   const totalUSA = Object.values(byModelUSA).reduce((n, l) => n + l.length, 0);
   return { ok: true, models: Object.keys(byModel).length, reserveringen: total, amerika: totalUSA };
