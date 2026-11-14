@@ -467,11 +467,11 @@ mark.zoekRaak{background:#fde68a;color:inherit;padding:0 2px;border-radius:3px}
   #ovBacklog tr.ovBackRow td:first-child{grid-column:1/-1;font-size:16px;padding-bottom:6px!important}
   #ovBacklog tr.ovBackRow td::before,table.kleurGrid tr:not(.voet) td::before{display:block;max-width:none;font-size:11px;letter-spacing:0;margin-bottom:1px;white-space:nowrap;text-transform:none;font-weight:500}
   #ovBacklog tr.ovBackRow td:first-child::before{content:none}
-  #ovBacklog tr.ovBackRow td:nth-child(2)::before{content:"gereserveerd"}
-  #ovBacklog tr.ovBackRow td:nth-child(3)::before{content:"op voorraad"}
+  #ovBacklog tr.ovBackRow td:nth-child(2)::before{content:"verkocht"}
+  #ovBacklog tr.ovBackRow td:nth-child(3)::before{content:"in Uddel"}
   #ovBacklog tr.ovBackRow td:nth-child(4)::before{content:"op zee"}
   #ovBacklog tr.ovBackRow td:nth-child(5)::before{content:"in productie"}
-  #ovBacklog tr.ovBackRow td:nth-child(6)::before{content:"dekking"}
+  #ovBacklog tr.ovBackRow td:nth-child(6)::before{content:"nog te verkopen"}
   #ovBacklog tr.ovBackRow td:nth-child(7)::before{content:"tekort"}
   #ovBacklog tr.ovBackRow td:nth-child(2) span{display:block;font-size:10.5px;font-weight:400;white-space:normal}
   /* De kleuren van een uitgeklapt model: de kleur bovenaan, vier getallen eronder. */
@@ -480,10 +480,10 @@ mark.zoekRaak{background:#fde68a;color:inherit;padding:0 2px;border-radius:3px}
   table.kleurGrid tr:not(.voet) td:first-child{grid-column:1/-1;font-weight:600;padding-bottom:4px!important}
   table.kleurGrid tr:not(.voet) td:first-child::before{content:none}
   table.kleurGrid tr:not(.voet) td::before{font-size:10px!important;letter-spacing:-.01em!important}
-  table.kleurGrid tr:not(.voet) td:nth-child(2)::before{content:"gereserveerd"}
-  table.kleurGrid tr:not(.voet) td:nth-child(3)::before{content:"voorraad"}
+  table.kleurGrid tr:not(.voet) td:nth-child(2)::before{content:"verkocht"}
+  table.kleurGrid tr:not(.voet) td:nth-child(3)::before{content:"in Uddel"}
   table.kleurGrid tr:not(.voet) td:nth-child(4)::before{content:"zee/productie"}
-  table.kleurGrid tr:not(.voet) td:nth-child(5)::before{content:"dekking"}
+  table.kleurGrid tr:not(.voet) td:nth-child(5)::before{content:"nog te verkopen"}
   table.kleurGrid tr.voet{display:flex;justify-content:space-between;padding:8px 6px}
   table.kleurGrid tr.voet td{display:inline;padding:0!important}
   table.kleurGrid tr.voet td::before{content:none}
@@ -669,10 +669,10 @@ mark.zoekRaak{background:#fde68a;color:inherit;padding:0 2px;border-radius:3px}
         <input id="ovBestelZoek" placeholder="zoek een spa-model…" style="flex:1 1 320px;width:100%;max-width:520px;min-width:0;padding:9px 12px;font-size:15px">
         <span id="ovBestelTel" style="font-size:12px;color:var(--muted)"></span>
       </div>
-      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> is wat er bij de fabriek besteld staat; dat telt mee en gaat dus van het tekort af. <b>Dekking</b>: <span style="color:#15803d;font-weight:700">✓</span> = alle reserveringen van dit model zijn gedekt door wat er ligt, vaart en gemaakt wordt; <span style="color:#b91c1c;font-weight:700">✗</span> = er moet nog iets bij. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
+      <p class="lead" style="font-size:12px;margin-bottom:8px"><b>Verkocht</b> = orders die nog geleverd moeten worden. <b>In Uddel</b> = staat in de hal. <b>Op zee</b> = betaald en onderweg. <b>Voorraad</b> = In Uddel + Op zee. <b>In productie</b> = besteld bij de fabriek. <b>Nog te verkopen</b> = wat er staat, vaart en gemaakt wordt, min wat al verkocht is. <b>Tekort</b> = wat er nog besteld moet worden. Klik een model open om het per kleur te zien. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
       <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
-        <thead><tr><th>Model</th><th>Gereserveerd</th><th>Op voorraad</th><th>Op zee</th><th>In productie</th><th title="✓ = alle reserveringen zijn gedekt door voorraad, schepen en productie; ✗ = er moet nog iets bij">Dekking</th><th>Tekort</th></tr></thead>
+        <thead><tr><th>Model</th><th title="Orders die nog geleverd moeten worden">Verkocht</th><th title="Staat in de hal in Uddel">In Uddel</th><th title="Betaald en onderweg">Op zee</th><th title="Besteld bij de fabriek">In productie</th><th title="Wat er staat, vaart en gemaakt wordt, min wat al verkocht is">Nog te verkopen</th><th title="Wat er nog besteld moet worden">Tekort</th></tr></thead>
         <tbody id="ovBacklog"></tbody>
       </table></div>
     </div>
@@ -2095,15 +2095,16 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
   }
   const eur=n=>"€ "+Number(n).toLocaleString("nl-NL");
   document.getElementById("ovKpis").innerHTML=
-    kpi(actief,"Actieve reserveringen (Fonteyn)","var(--fonteyn-green)")+
+    kpi(actief,"Verkocht, nog te leveren","var(--fonteyn-green)")+
     kpi(betaald,"Betaald (geld binnen)","#15803d")+
     kpi(wacht,"Wacht op aanbetaling","#92400e")+
     // Dit telt spa's, geen containers. Het stond als "Containers
     // (dealer-direct)" boven een getal van 583 terwijl het om 46 orders ging -
     // een factor twaalf ernaast, en niemand die het kon narekenen.
     kpi(containers,"Spa's op partnercontainers ("+ovContainerOrders+" orders)","#c2410c")+
-    kpi(halTotal,"Op voorraad in Uddel","#2563eb")+
+    kpi(halTotal,"In Uddel","#2563eb")+
     kpi(shipTotal,"Op zee (onderweg)","#2563eb")+
+    kpi(halTotal+shipTotal,"Voorraad (In Uddel + Op zee)","#2563eb")+
     kpi(prodTotal,"In productie (fabriek)","#7c3aed")+
     kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)",true);
   // Wat deze cijfers wél en niet zijn. Zonder deze regel las "583" als een
@@ -2214,10 +2215,10 @@ function kleurTabel(r){
   const rijen=ov.kleuren||[];
   if(!rijen.length) return "<p class='lead' style='margin:0'>Kleurgegevens zijn nog leeg.</p>";
   const vink=(x)=>!x.gereserveerd?"<span style='color:var(--muted)'>-</span>"
-    :(x.open?"<span style='color:#b91c1c;font-weight:700'>✗ "+x.open+"</span>":"<span style='color:#15803d;font-weight:700'>✓</span>");
+    :(x.open?"<span style='color:#b91c1c;font-weight:700'>tekort "+x.open+"</span>":"<span style='color:#15803d;font-weight:700'>"+Math.max(0,(x.voorraad||0)+(x.komt||0)-(x.gereserveerd||0))+"</span>");
   const voet=(tekst,waarde,kleur)=>"<tr class='voet'><td colspan='4' style='text-align:right;font-weight:700;color:"+kleur+"'>"+tekst+"</td><td style='font-weight:700;color:"+kleur+"'>"+waarde+"</td></tr>";
   return "<div class='tablewrap'><table class='grid kleurGrid' style='margin:0'><thead><tr>"+
-    "<th>Kleur</th><th>Gereserveerd</th><th>Op voorraad</th><th>Op zee of in productie</th><th>Dekking</th></tr></thead><tbody>"+
+    "<th>Kleur</th><th>Verkocht</th><th>In Uddel</th><th>Op zee of in productie</th><th>Nog te verkopen</th></tr></thead><tbody>"+
     rijen.map(function(x){
       return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gereserveerd||"-")+"</td>"+
         "<td style='color:#2563eb'>"+(x.voorraad||"-")+"</td>"+
@@ -2286,17 +2287,15 @@ function renderBacklog(){
       "<td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px' title='partnercontainers: orders op magazijn Dealer magazijn, rechtstreeks naar de dealer'>+"+r.conQty+" partnercont.</span>"):"")+"</td>"+
       "<td>"+(r.voorraad||"-")+"</td><td>"+(r.zee||"-")+"</td>"+
       "<td style='color:"+(r.prodQty?"#7c3aed":"var(--muted)")+"'>"+(r.prodQty||"-")+"</td>"+
-      /* Gerrit (7 okt 2026): geen "Gedekt" met een getal, maar een vink of een
-         kruis: zijn de reserveringen gedekt door wat er besteld is, ja of nee. */
-      (r.actQty>0
-        ? (r.tekort>0
-            ? "<td style='color:#b91c1c;font-weight:700;font-size:15px'>✗</td>"
-            : "<td style='color:#15803d;font-weight:700;font-size:15px' title='alle "+r.actQty+" reserveringen zijn gedekt'>✓</td>")
-        : "<td style='color:var(--muted)'>-</td>")+
+      /* Nog te verkopen (Gerrit, 14 nov 2026: "wij noemen iets wat op zee is
+         ook al op voorraad"): wat er staat, vaart en gemaakt wordt, min wat
+         al verkocht is. Een tekort staat in de kolom ernaast. */
+      (function(){ const nog=Math.max(0,(Number(r.voorraad)||0)+(Number(r.zee)||0)+(Number(r.prodQty)||0)-(Number(r.actQty)||0));
+        return "<td style='color:"+(nog?"#15803d;font-weight:700":"var(--muted)")+"'>"+(nog||"-")+"</td>"; })()+
       "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"-")+"</td></tr>";
     if(open){
       h+="<tr><td colspan='7' style='background:#fafafa;padding:8px 14px'>"+
-        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Vraag per kleur - waar de dekking naartoe moet</div>"+
+        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Per kleur</div>"+
         kleurTabel(r)+
         "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px'>Kleuren - Fonteyn-reserveringen</div>"+kleurChips(r.kleuren)+
         (r.kleurenCont.length?("<div style='font-size:11px;color:#c2410c;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px'>Kleuren - partnercontainers (rechtstreeks naar de dealer)</div>"+kleurChips(r.kleurenCont)):"")+
@@ -2564,7 +2563,7 @@ function verwachtLabel(v,bron){
   if(verlopen(v)) return bron==="productie"
     ? "<span style='color:#92400e'>volgende productie (datum volgt)</span>"
     : "<span style='color:#15803d;font-weight:600'>schip is binnen</span>";
-  if(v==="voorraad") return "<span style='color:#15803d;font-weight:600'>op voorraad</span>";
+  if(v==="voorraad") return "<span style='color:#15803d;font-weight:600'>In Uddel</span>";
   if(v==="op-schip") return "<span style='color:#2563eb'>op schip (datum volgt)</span>";
   if(v==="productie") return "<span style='color:#92400e'>volgende productie</span>";
   if(v==="dealer-direct") return "<span style='color:#c2410c'>→ dealer (container)</span>";
@@ -3331,10 +3330,10 @@ function leveringCel(r,n,id,uit){
      niet aanwijzen en moest dan met de automatische berekening leven; nu is
      'op voorraad' een keuze als elke andere (27 aug 2026). */
   if(n.schip===VOORRAAD_KEUZE){
-    var kopV = "<span style='color:#15803d;font-weight:600'>op voorraad in Uddel</span>"+
+    var kopV = "<span style='color:#15803d;font-weight:600'>In Uddel</span>"+
                " <span style='color:var(--muted);font-size:11px'>(handmatig)</span>";
     var optiesV = "<option value=''>automatisch</option>"+
-      "<option value='"+VOORRAAD_KEUZE+"' selected>op voorraad (Uddel)</option>"+
+      "<option value='"+VOORRAAD_KEUZE+"' selected>In Uddel</option>"+
       schepenOnderweg().map(function(s){
         return "<option value='"+esc(s.sleutel)+"'>"+esc(s.ref)+(s.eta?" - "+esc(datumNL(s.eta)):" - ETA volgt")+"</option>";
       }).join("");
@@ -3378,7 +3377,7 @@ function leveringCel(r,n,id,uit){
   // iets gekozen is.
   if(gekozen && !lijst.some(function(s){ return s.sleutel===gekozen.sleutel; })) lijst = [gekozen].concat(lijst);
   var opties = "<option value=''>automatisch</option>" +
-    "<option value='"+VOORRAAD_KEUZE+"'>op voorraad (Uddel)</option>" + lijst.map(function(s){
+    "<option value='"+VOORRAAD_KEUZE+"'>In Uddel</option>" + lijst.map(function(s){
     return "<option value='"+esc(s.sleutel)+"'"+(n.schip===s.sleutel?" selected":"")+">"+
       esc(s.ref)+(s.eta?" - "+esc(datumNL(s.eta)):" - ETA volgt")+(zendingBinnen(s)?" (binnen)":"")+"</option>";
   }).join("");
@@ -6078,7 +6077,7 @@ function prioHerkomst(bakken, aantal){
 function prioHerkomstTekst(delen, aantal){
   return delen.map(function(d){
     var stuks = delen.length>1||d.aantal!==aantal ? d.aantal+"x " : "";
-    if(d.soort==="voorraad")  return "<span style='color:#15803d'>"+stuks+"op voorraad</span>";
+    if(d.soort==="voorraad")  return "<span style='color:#15803d'>"+stuks+"in Uddel</span>";
     if(d.soort==="productie") return "<span style='color:#92400e'>"+stuks+"volgende productie</span>";
     return "<span style='color:#2563eb'>"+stuks+esc(d.naam)+"</span>"+
       (d.eta?" <span style='color:var(--muted);font-size:11px'>"+esc(datumNL(d.eta))+"</span>"

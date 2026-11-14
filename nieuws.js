@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-14", bestand: "voorraad.html", soort: "beter",
+      titel: "Voorraad in onze eigen woorden",
+      wat:   "Overal dezelfde woorden: Verkocht, In Uddel, Op zee, In productie en Nog te verkopen. Voorraad is In Uddel plus Op zee. Bij een order staat In Uddel, of het schip met de datum."
+    },
+    {
       datum: "2026-11-14", bestand: "voorraad.html", soort: "hersteld",
       titel: "Voorraad en tekort kloppen weer",
       wat:   "Op voorraad is nu wat er echt in Uddel staat. Een order die op Inplannen staat, krijgt alleen 'op voorraad' als er in die kleur ook een spa staat. Kleuren als 'Pure White with Grey' en 'Pure White with GREY/Oak trim' zijn nu dezelfde kleur. Een container die binnen is maar nog niet in Logic4 is geboekt, telt mee als voorraad."
