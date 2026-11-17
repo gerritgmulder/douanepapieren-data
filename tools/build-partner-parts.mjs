@@ -184,6 +184,7 @@ for (const a of parts) {
   if ((p.ProductName1 || "").trim() !== "-" && naamOverlap(a.desc, p.ProductName1 || "") < 0.34)
     verkeerd.push({ code: a.code, excel: a.desc, l4: p.ProductName1 });
   a.logic4 = true;
+  a.pid = p.ProductId;   // de sleutel in de Logic4-prijslijsten; daarmee leest het portaal live
   a.vrij = Math.max(0, Number(p.FreeStock) || 0);
   a.btw = Number(p.VatPercent) || 21;
   if (Number(p.StatusId) === VERVALLEN) { a.vervallen = true; vervallen++; }

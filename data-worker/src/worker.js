@@ -1758,23 +1758,81 @@ async function dpHandleVracht(request, env) {
    per artikel in dealer-parts: staffel = partner, staffelDealer = dealer.
    Een dealer ziet en betaalt alleen zijn eigen lijst; staat een onderdeel
    niet op de dealerlijst, dan is het voor hem "ask us". */
-function dpPartStaffel(a, isDealer) {
+/* Live uit Logic4. Gerrit (17 nov 2026): "Als er nu een prijs wordt
+   aangepast in Logic4, verandert Passion Partners dan mee? Het liefst
+   realtime." Logic4 geeft een hele prijslijst in één aanroep terug
+   (PriceLists/GetPricelists met LoadContractPrices, ~0,2 s). Welke lijst
+   bij wie hoort staat ook in Logic4: elke lijst noemt zijn debiteuren. Zo
+   krijgt een klant precies de lijst die Logic4 hem zou rekenen, ook de
+   kleine lijsten (UK, Uyttebroek, Spahuis Nederland). Zonder debiteur
+   in een lijst: de dealer- of partnerlijst, naar de soort van het account.
+
+   Eén minuut onthouden per werker; een wijziging in Logic4 staat dus
+   binnen een minuut in het portaal. Een artikel dat niet op de lijst
+   staat, of een Logic4 dat even niet antwoordt, valt terug op de prijzen
+   die tools/build-partner-parts.mjs heeft weggeschreven. */
+const DP_PL_TTL = 60000;
+let _dpPl = null;                      // { ts, lijsten: [{ Id, Name, DebtorIds }] }
+const _dpPlPrijs = new Map();          // Id -> { ts, naam, perPid: Map(ProductId -> staffel) }
+async function dpL4Prijslijsten(env, body) {
+  const tk = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/PriceLists/GetPricelists", { method: "POST",
+    headers: { "Authorization": "Bearer " + tk, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.ok ? await r.json().catch(() => null) : null;
+}
+async function dpPrijslijstVoor(env, acc) {
+  try {
+    if (!_dpPl || Date.now() - _dpPl.ts > DP_PL_TTL) {
+      const l = await dpL4Prijslijsten(env, {}).catch(() => null);
+      if (Array.isArray(l) && l.length) _dpPl = { ts: Date.now(), lijsten: l };
+    }
+    const lijsten = (_dpPl && _dpPl.lijsten) || [];
+    const debs = ((acc && acc.debtorIds) || []).map(Number).filter(Boolean);
+    let pl = debs.length ? lijsten.find(l => (l.DebtorIds || []).some(d => debs.includes(Number(d)))) : null;
+    if (!pl) pl = lijsten.find(l => l.Name === (dpIsDealerAcc(acc) ? "Dealer verkoopprijslijst" : "Partner verkoopprijslijst"));
+    if (!pl) return null;
+    let c = _dpPlPrijs.get(pl.Id);
+    if (!c || Date.now() - c.ts > DP_PL_TTL) {
+      const r = await dpL4Prijslijsten(env, { PricelistId: pl.Id, LoadContractPrices: true }).catch(() => null);
+      const regels = Array.isArray(r) && r[0] && Array.isArray(r[0].ContractPrices) ? r[0].ContractPrices : null;
+      if (regels) {
+        const per = new Map();
+        for (const x of regels) {
+          if (!(Number(x.PriceEx) > 0)) continue;
+          const k = Number(x.ProductId);
+          if (!per.has(k)) per.set(k, []);
+          per.get(k).push({ vanaf: Math.max(1, Math.round(Number(x.Qty) || 1)), eur: Math.round(Number(x.PriceEx) * 100) / 100 });
+        }
+        for (const st of per.values()) st.sort((a, b) => a.vanaf - b.vanaf);
+        c = { ts: Date.now(), naam: pl.Name, perPid: per };
+        _dpPlPrijs.set(pl.Id, c);
+      }
+    }
+    return c || null;                  // bij een storing: de laatst bekende lijst
+  } catch (e) { return null; }
+}
+function dpPartStaffel(a, isDealer, pl) {
+  const live = pl && a.pid ? pl.perPid.get(Number(a.pid)) : null;
+  if (live && live.length) return live;
   if (!isDealer) return Array.isArray(a.staffel) ? a.staffel : [];
   return Array.isArray(a.staffelDealer) ? a.staffelDealer : [];
 }
 async function dpHandleParts(env, sess) {
   const data = (await env.FONTEYN_DATA.get("dealer-parts", { type: "json" })) || {};
   const parts = Array.isArray(data.parts) ? data.parts : [];
-  const isDealer = await dpIsDealer(env, sess);
+  const acc = sess && !sess.medewerker
+    ? (dpFindDealer(await dpGetAccounts(env), sess.email) || (sess.fictief ? PP_FICTIEF_DEALER : null)) : null;
+  const isDealer = dpIsDealerAcc(acc);
+  const pl = await dpPrijslijstVoor(env, acc);
   return reply(200, {
     ok: true, updated: data.updated || null,
     categories: Array.isArray(data.categories) ? data.categories : [],
     parts: parts.map(a => ({
       code: a.code, desc: a.descL4 || a.desc, brand: a.brand || "",
       cat: a.cat, sect: a.sect || "",
-      staffel: dpPartStaffel(a, isDealer),
+      staffel: dpPartStaffel(a, isDealer, pl),
       vrij: Number(a.vrij) || 0,
-      bestelbaar: a.logic4 !== false && dpPartStaffel(a, isDealer).length > 0,
+      bestelbaar: a.logic4 !== false && dpPartStaffel(a, isDealer, pl).length > 0,
       vervallen: !!a.vervallen,
     })),
   });
@@ -2057,6 +2115,7 @@ async function dpHandleReserve(request, env, sess, url) {
   // De cent-betaling is weg (2 okt 2026); een eigen bedrag doet hetzelfde.
   const wantsCent = false;
 
+  const plLive = await dpPrijslijstVoor(env, dealerPre);   // onderdeelprijzen live uit Logic4
   const regels = [];                      // wat er straks als orderregels in Logic4 komt
   let teBetalen = 0;                      // som van aanbetalingen/volledige bedragen, incl. BTW
   let totaalExVat = 0;
@@ -2070,7 +2129,7 @@ async function dpHandleReserve(request, env, sess, url) {
       const a = partByCode.get(String(it.code || "").trim());
       if (!a) continue;                              // onbekende code slaan we over
       if (a.logic4 === false) continue;              // zonder artikelcode kan er geen orderregel komen
-      const eur = dpPartPrijs(dpPartStaffel(a, dpIsDealerAcc(dealerPre)), qty);
+      const eur = dpPartPrijs(dpPartStaffel(a, dpIsDealerAcc(dealerPre), plLive), qty);
       if (!(eur > 0)) continue;
       // Onderdelen staan in euro's. Een Amerikaanse partner rekent in dollars,
       // dus daar gaat dezelfde koers overheen die de spa's ook gebruiken.
