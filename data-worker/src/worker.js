@@ -1752,18 +1752,29 @@ async function dpHandleVracht(request, env) {
    Artikelen zonder Logic4-code gaan wel mee (ze staan op de prijslijst en een
    partner mag ernaar vragen), maar het portaal laat er geen bestelknop bij
    zien: een orderregel zonder artikelcode laat Logic4 crashen. */
-async function dpHandleParts(env) {
+/* Onderdelen hebben in Logic4 twee prijslijsten: "Partner verkoopprijslijst"
+   en "Dealer verkoopprijslijst" (Gerrit, 17 nov 2026; Kevin: te zien bij
+   Artikelen-prijslijst overzicht). tools/build-partner-parts.mjs zet beide
+   per artikel in dealer-parts: staffel = partner, staffelDealer = dealer.
+   Een dealer ziet en betaalt alleen zijn eigen lijst; staat een onderdeel
+   niet op de dealerlijst, dan is het voor hem "ask us". */
+function dpPartStaffel(a, isDealer) {
+  if (!isDealer) return Array.isArray(a.staffel) ? a.staffel : [];
+  return Array.isArray(a.staffelDealer) ? a.staffelDealer : [];
+}
+async function dpHandleParts(env, sess) {
   const data = (await env.FONTEYN_DATA.get("dealer-parts", { type: "json" })) || {};
   const parts = Array.isArray(data.parts) ? data.parts : [];
+  const isDealer = await dpIsDealer(env, sess);
   return reply(200, {
     ok: true, updated: data.updated || null,
     categories: Array.isArray(data.categories) ? data.categories : [],
     parts: parts.map(a => ({
       code: a.code, desc: a.descL4 || a.desc, brand: a.brand || "",
       cat: a.cat, sect: a.sect || "",
-      staffel: Array.isArray(a.staffel) ? a.staffel : [],
+      staffel: dpPartStaffel(a, isDealer),
       vrij: Number(a.vrij) || 0,
-      bestelbaar: a.logic4 !== false,
+      bestelbaar: a.logic4 !== false && dpPartStaffel(a, isDealer).length > 0,
       vervallen: !!a.vervallen,
     })),
   });
@@ -2059,7 +2070,7 @@ async function dpHandleReserve(request, env, sess, url) {
       const a = partByCode.get(String(it.code || "").trim());
       if (!a) continue;                              // onbekende code slaan we over
       if (a.logic4 === false) continue;              // zonder artikelcode kan er geen orderregel komen
-      const eur = dpPartPrijs(a.staffel, qty);
+      const eur = dpPartPrijs(dpPartStaffel(a, dpIsDealerAcc(dealerPre)), qty);
       if (!(eur > 0)) continue;
       // Onderdelen staan in euro's. Een Amerikaanse partner rekent in dollars,
       // dus daar gaat dezelfde koers overheen die de spa's ook gebruiken.
@@ -5742,7 +5753,7 @@ async function handleDealerRoutes(request, env, url) {
     }
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env, sess);
     if (p === "/dealers/api/vracht" && request.method === "POST") return dpHandleVracht(request, env);
-    if (p === "/dealers/api/parts" && request.method === "GET") return dpHandleParts(env);
+    if (p === "/dealers/api/parts" && request.method === "GET") return dpHandleParts(env, sess);
     if (p === "/dealers/api/photo" && request.method === "GET") return dpHandleSpaPhoto(env, url);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);

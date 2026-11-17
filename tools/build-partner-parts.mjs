@@ -200,6 +200,43 @@ if (verkeerd.length) {
   for (const v of verkeerd) console.log("    " + v.code + "  prijslijst: " + v.excel + "\n              Logic4:     " + v.l4);
 }
 
+/* ── Prijzen uit Logic4: partnerlijst én dealerlijst ─────────────────
+   Gerrit (17 nov 2026): een dealer betaalt voor onderdelen meer dan een
+   partner, en die prijzen staan in Logic4 ("Partner verkoopprijslijst" en
+   "Dealer verkoopprijslijst", scherm Artikelen-prijslijst overzicht). We
+   vragen de prijs op zoals Logic4 hem aan een echte debiteur van elke soort
+   zou rekenen. Staat een artikel op de partnerlijst, dan wint Logic4 van de
+   Excel. Staat het niet op de dealerlijst, dan krijgt de dealer wat Logic4
+   hem anders rekent (de standaardprijs): nooit minder dan Logic4 zelf. */
+const DEBITEUR_DEALER = 24628;    // HNR Piscine, prijslijst "Dealer verkoopprijslijst"
+const DEBITEUR_PARTNER = 4910;    // Tubs Parts, prijslijst "Partner verkoopprijslijst"
+async function l4Prijzen(code, debiteur) {
+  const r = await fetch("https://api.logic4server.nl/v3/Products/GetPriceInformationForProduct", {
+    method: "POST", headers: { Authorization: "Bearer " + t.access_token, "Content-Type": "application/json" },
+    body: JSON.stringify({ ProductCode: String(code), DebtorId: debiteur }) });
+  const j = r.ok ? await r.json().catch(() => null) : null;
+  return (j && Array.isArray(j.ShiftPrices) ? j.ShiftPrices : []).filter(x => Number(x.SellPriceExcl) > 0);
+}
+const alsStaffel = (l) => l.map(x => ({ vanaf: Math.max(1, Math.round(Number(x.Qty) || 1)), eur: Math.round(Number(x.SellPriceExcl) * 100) / 100 }))
+  .sort((a, b) => a.vanaf - b.vanaf);
+let opDealerlijst = 0, partnerUitL4 = 0, gedaan = 0;
+const rij = parts.filter(a => a.logic4);
+await Promise.all([0, 1, 2, 3].map(async () => {
+  while (rij.length) {
+    const a = rij.shift();
+    const [dl, pt] = await Promise.all([l4Prijzen(a.code, DEBITEUR_DEALER), l4Prijzen(a.code, DEBITEUR_PARTNER)]);
+    const dLijst = dl.filter(x => /Dealer verkoopprijslijst/.test(x.Description || ""));
+    a.staffelDealer = alsStaffel(dLijst.length ? dLijst : dl);
+    a.dealerBron = dLijst.length ? "Dealer verkoopprijslijst" : "standaardprijs Logic4";
+    if (dLijst.length) opDealerlijst++;
+    const pLijst = pt.filter(x => /Partner verkoopprijslijst/.test(x.Description || ""));
+    if (pLijst.length) { a.staffel = alsStaffel(pLijst); partnerUitL4++; }
+    if (++gedaan % 50 === 0) process.stderr.write(`\r  ${gedaan} prijzen uit Logic4`);
+  }
+}));
+process.stderr.write("\n");
+console.log(`Prijzen: ${opDealerlijst} op de dealerlijst, ${partnerUitL4} partnerprijzen uit Logic4`);
+
 // ── Wegschrijven ────────────────────────────────────────────────────
 const uit = { updated: new Date().toISOString(), bron: bestand.split("/").pop(),
               categories: categorieen, parts };
