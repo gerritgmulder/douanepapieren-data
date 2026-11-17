@@ -1344,7 +1344,7 @@ function renderStock(){
       <div class="vouw"><ul class="vrr">${voorraadRegels(m)}</ul>${pakketRegel(m) ? `<ul>${pakketRegel(m)}</ul>` : ""}</div>
       <ul>
         ${m.opAanvraag?`<li style="margin-top:6px;color:var(--muted)">Price on request - ask us via the Contact tab.</li>`
-          :(m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):"")}
+          :(m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">${m.dealerPrijs?"Dealer price:":"Partner price:"} <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">${m.dealerPrijs?"Dealer price:":"Partner price:"} <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):"")}
       </ul>
       <div class="knoppen">
         ${m.opAanvraag
@@ -1499,7 +1499,7 @@ function renderPrices(){
   };
   $("priceTable").innerHTML =
     `<thead><tr>${kop("collection","Collection")}${kop("model","Model")}${kop("besch","In stock")}
-      ${kop("prijs","Partner price",1)}${kop("vracht","Freight &amp; packing",1)}${kop("totaal","Total",1)}<th></th></tr></thead>
+      ${kop("prijs",lijst.some(m=>m.dealerPrijs)?"Dealer price":"Partner price",1)}${kop("vracht","Freight &amp; packing",1)}${kop("totaal","Total",1)}<th></th></tr></thead>
      <tbody>${rijen}</tbody>`;
   $("priceTable").querySelectorAll(".prijsKop").forEach(h=>h.addEventListener("click",()=>{
     const k=h.dataset.kolom;

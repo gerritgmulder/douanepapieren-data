@@ -1171,8 +1171,12 @@ function dpTeMakenModel(catModels, model) {
   return n;
 }
 
-async function dpHandleStock(env) {
+async function dpHandleStock(env, sess) {
   const agg = await dpStockModels(env);
+  /* Een dealer ziet zijn eigen prijs (zie dpPrijsVoor). Een meekijkende
+     collega ziet de partnerweergave, net als bij de documenten. */
+  const prijsAcc = sess && !sess.medewerker
+    ? (dpFindDealer(await dpGetAccounts(env), sess.email) || (sess.fictief ? PP_FICTIEF_DEALER : null)) : null;
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
   const prices = priceData.prices || {};
   // Catalogus: alle kleurvarianten per model (code → nette kleurnaam)
@@ -1211,7 +1215,7 @@ async function dpHandleStock(env) {
   const dozen = ((await env.FONTEYN_DATA.get("spa-dozen", { type: "json" })) || {}).dozen || {};
   const models = [];
   for (const m of agg.models) {
-    const p = prices[m.model];
+    const p = dpPrijsVoor(prices[m.model], prijsAcc);
     if (!(p && typeof p === "object")) continue;                        // alleen prijslijst
     /* Een model dat op de prijslijst staat maar nog geen bedrag heeft, laten
        we wél zien - met "prijs op aanvraag" erbij. Verbergen leest als "dit
@@ -1307,6 +1311,13 @@ async function dpHandleStock(env) {
     m.surchargeUsd = Number(p.surcharge) || 0;
     m.partnerEur = opAanvraag ? null : Math.round(Number(p.usd) / rate);    // USD → EUR via live koers
     m.surchargeEur = Math.round((Number(p.surcharge) || 0) / rate);
+    // Dealer: vaste europrijs, geen vrachttoeslag (de $50 verpakking telt het scherm zelf).
+    if (p.dealerVast) {
+      m.dealerPrijs = true;
+      m.partnerEur = Number(p.dealerVast);
+      m.partnerUsd = Math.round(Number(p.dealerVast) * rate);
+      m.surchargeEur = 0; m.surchargeUsd = 0;
+    }
     m.retailEur = Number(p.retailEur) || null;
     m.collection = p.collection || null;
     m.collectionColor = DP_COLLECTION_COLORS[p.collection] || "#9ca3af";
@@ -1863,7 +1874,46 @@ async function dpRate(env) {
    27 aug 2026). $50 per spa, omgerekend naar euro's. */
 const DP_PACKING_CODE = "7894565";
 
+/* Dealer of partner. Gerrit (17 nov 2026): "Een Partner ontvangt
+   partnerprijzen. Voor Dealers ligt die prijs hoger." Tot nu toe kreeg
+   iedereen in het portaal de partnerprijs, ook de 86 accounts die bij de
+   import als dealer zijn aangemerkt (soort "dealer", uit Gerrits lijst).
+
+   Een dealer betaalt de Dealer Price uit de prijslijst (dealerEur, in euro's,
+   af warehouse Uddel). Daar komt geen Freight Surcharge bovenop - die hoort
+   bij de dollarprijs van een partner - maar wel de $50 verpakking die de
+   prijslijst voor iedereen noemt. Heeft een model geen dealerprijs, dan is
+   het voor een dealer "prijs op aanvraag": liever een vraag dan een spa voor
+   de partnerprijs. */
+function dpIsDealerAcc(acc) {
+  return String((acc && acc.soort) || "").toLowerCase() === "dealer";
+}
+function dpPrijsVoor(pEntry, acc) {
+  if (!pEntry || !dpIsDealerAcc(acc)) return pEntry;
+  const eur = Number(pEntry.dealerEur) || 0;
+  return eur > 0 ? { ...pEntry, dealerVast: eur } : { ...pEntry, usd: 0 };
+}
+
 function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = true, fraction = 0.30 }) {
+  const vast = Number(pEntry.dealerVast) || 0;
+  if (vast > 0) {
+    const r = rate > 0 ? rate : 1.11;
+    const q = Number(qty) || 1;
+    const f = fraction > 0 ? fraction : 0.30;
+    const packUsd = withSurcharge ? 50 : 0;
+    if (isUS) {
+      const spa = Math.round(vast * r * 100) / 100;
+      const total = (spa + packUsd) * q;
+      return { currency: "USD", vatPercent: 0, exVatUnit: spa + packUsd, spaUnit: spa, packUnit: packUsd,
+               totalExVat: total, totalInclVat: total, deposit: Math.round(total * f * 100) / 100 };
+    }
+    const packUnit = packUsd / r;
+    const totalExVat = (vast + packUnit) * q;
+    const vat = Number(vatPercent) || 0;
+    const totalInclVat = totalExVat * (1 + vat / 100);
+    return { currency: "EUR", vatPercent: vat, exVatUnit: vast + packUnit, spaUnit: vast, packUnit,
+             totalExVat, totalInclVat, deposit: Math.round(totalInclVat * f * 100) / 100 };
+  }
   const usd = Number(pEntry.usd) || 0;
   const sur = withSurcharge ? (Number(pEntry.surcharge) || 0) : 0;
   /* De 50 dollar verpakkingskosten. Bevestigd door Gretha (27 aug 2026): dat
@@ -2023,7 +2073,7 @@ async function dpHandleReserve(request, env, sess, url) {
       continue;
     }
     const model = String(it.model || "").trim().slice(0, 80);
-    const pEntry = (priceData.prices || {})[model];
+    const pEntry = dpPrijsVoor((priceData.prices || {})[model], dealerPre);
     if (!model || !(pEntry && Number(pEntry.usd) > 0)) continue;
     /* Bij een hele container gaan de vrachttoeslag en de 50 dollar
        verpakkingskosten eraf. Gerrit (7 sep 2026): "Ja dat moet eraf want ze
@@ -3159,13 +3209,15 @@ async function dpAdminReserveFor(request, env, url) {
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
   // Elke regel moet een prijs hebben; anders klopt de aanbetaling niet en dat
   // merk je pas als de partner al betaald heeft.
-  for (const r of regels) {
-    const pe = (priceData.prices || {})[r.model];
-    if (!(pe && Number(pe.usd) > 0)) return reply(400, { ok: false, error: "geen prijs voor " + r.model });
-  }
-  const pEntry = (priceData.prices || {})[model];
   const accounts = await dpGetAccounts(env);
   const dealer = dpFindDealer(accounts, email);
+  // Een dealer betaalt de dealerprijs, ook als sales de betaallink maakt.
+  const prijsAcc = custType === "partner" ? dealer : null;
+  for (const r of regels) {
+    const pe = dpPrijsVoor((priceData.prices || {})[r.model], prijsAcc);
+    if (!(pe && Number(pe.usd) > 0)) return reply(400, { ok: false, error: "geen prijs voor " + r.model });
+  }
+  const pEntry = dpPrijsVoor((priceData.prices || {})[model], prijsAcc);
   const isUS = custType === "partner" && String((dealer && dealer.region) || "").toUpperCase() === "US";
   const rate = await dpRate(env);
   const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId || (dealer && (dealer.debtorIds || [])[0]));
@@ -3174,7 +3226,7 @@ async function dpAdminReserveFor(request, env, url) {
   let deposit = 0, currency = null;
   const regelsUit = [];
   for (const r of regels) {
-    const pe = (priceData.prices || {})[r.model];
+    const pe = dpPrijsVoor((priceData.prices || {})[r.model], prijsAcc);
     const c = dpDepositCalc(pe, { isUS, qty: r.qty, rate, vatPercent });
     deposit += c.deposit;
     currency = currency || c.currency;
@@ -5688,7 +5740,7 @@ async function handleDealerRoutes(request, env, url) {
       if (tok) await env.FONTEYN_DATA.delete("dp-sess:" + tok);
       return reply(200, { ok: true });
     }
-    if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
+    if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env, sess);
     if (p === "/dealers/api/vracht" && request.method === "POST") return dpHandleVracht(request, env);
     if (p === "/dealers/api/parts" && request.method === "GET") return dpHandleParts(env);
     if (p === "/dealers/api/photo" && request.method === "GET") return dpHandleSpaPhoto(env, url);
