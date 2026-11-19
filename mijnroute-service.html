@@ -89,6 +89,10 @@ textarea{resize:vertical}
 .voet button{flex:1;min-width:140px;border:0;border-radius:10px;padding:13px;font:inherit;font-weight:700;font-size:15px;cursor:pointer;background:#fff;color:var(--groen);border:1px solid var(--rand)}
 .voet button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
 .bericht{font-size:13.5px;font-weight:600;margin-top:10px;min-height:1em}.bericht.fout{color:var(--rood)}.bericht.goed{color:var(--goed)}
+.opnieuwvak{background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:10px 12px;margin-top:8px}
+.opnieuwvak label{display:block;font-size:13px;font-weight:700;color:var(--rood);margin-bottom:6px}
+.knopopnieuw{background:#fff;color:var(--rood);border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;margin-top:12px}
+.knopopnieuw.aan{background:#fee2e2}
 .slot{background:#fef3c7;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:8px}
 .leeg{background:#fff;border:1px dashed var(--rand);border-radius:12px;padding:28px;text-align:center;color:var(--grijs)}
 #fout{color:var(--rood);font-weight:600;margin-bottom:10px}
@@ -126,7 +130,7 @@ async function api(pad, body){
 }
 function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 var DAG = ["zo","ma","di","wo","do","vr","za"], DAGDEEL = { 1:"ochtend", 2:"eind ochtend / begin middag", 3:"middag" };
-var vandaag = iso(new Date()), datum = vandaag, als = "", data = null, open = {}, bonnen = {}, timers = {};
+var vandaag = iso(new Date()), datum = vandaag, als = "", data = null, open = {}, bonnen = {}, timers = {}, opnieuwOpen = {}, wachtrij = {};
 try { datum = sessionStorage.getItem("mrs.datum") || vandaag; als = sessionStorage.getItem("mrs.als") || ""; } catch(e) {}
 
 async function laad(){
@@ -203,6 +207,10 @@ function detailsHtml(s){
     (slot ? '' : '<input type="search" data-zoek placeholder="Zoek materiaal in Logic4 (code of naam)" autocomplete="off"><div class="zoekres" data-res style="display:none"></div>') +
     '<h4>Arbeid</h4><div class="uren"><input type="number" inputmode="decimal" step="0.25" min="0" max="24" data-v="uren" value="' + (bon.uren || "") + '"' + dis + '> <span>uur gewerkt</span></div>' +
     '<p style="font-size:12px;color:#6b7280;margin:6px 0 0">De voorrijkosten rekent kantoor zelf uit.</p>' +
+    /* Opnieuw (Kevin, document 17 nov 2026): de monteur moet terugkomen en
+       schrijft waarvoor; kantoor ziet het in het rood bij Opleverbonnen Service. */
+    (slot && !bon.opnieuw ? '' : '<button type="button" class="knopopnieuw' + (opnieuwOpen[s.id] || bon.opnieuw ? ' aan' : '') + '" data-opnieuw' + dis + ' title="Het Dashboard zet bij de opleverbon in het rood dat we opnieuw moeten komen, met jouw uitleg">🔁 Opnieuw komen</button>') +
+    (opnieuwOpen[s.id] || bon.opnieuw ? '<div class="opnieuwvak"><label>Waarvoor moeten we opnieuw komen?</label><textarea data-v="opnieuw" rows="3" maxlength="1000" placeholder="Bijvoorbeeld: onderdeel besteld, nog plaatsen"' + dis + '>' + esc(bon.opnieuw||"") + '</textarea></div>' : '') +
     '<h4>Opmerking voor kantoor</h4><textarea data-v="opmerking" rows="2" maxlength="1000"' + dis + '>' + esc(bon.opmerking||"") + '</textarea>' +
     '<h4>Akkoord klant</h4><input type="text" data-v="klantNaam" placeholder="Naam van de klant" value="' + esc(bon.klantNaam||"") + '" maxlength="80"' + dis + '>' +
     '<div class="hand" style="margin-top:8px"><canvas></canvas><button type="button" class="wis"' + dis + '>Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>' +
@@ -214,16 +222,24 @@ function bericht(vak, t, soort){ var b = vak.querySelector("[data-bericht]"); if
 function bewaar(id, status, meteen){
   var bon = bonnen[id]; if (!bon) return;
   clearTimeout(timers[id]);
-  timers[id] = setTimeout(async function(){
-    var vak = document.querySelector('[data-bon="' + id + '"]');
-    var j = await api("/service/bon", { bon: Object.assign({}, bon, { status: status }) }).catch(function(e){ return { ok:false, error:e.message }; });
-    if (!j.ok) { if (vak) bericht(vak, j.error, "fout"); return; }
-    bon.status = j.status;
-    if (status === "klaar") {
-      try { if (window.fpLog) fpLog("service-werkbon-klaar", "ITS " + bon.its); } catch(e) {}
-      laad(); setTimeout(function(){ var v = document.querySelector('[data-bon="' + id + '"]'); if (v) bericht(v, "Werkbon afgerond. Kantoor ziet hem nu.", "goed"); }, 600);
-    } else if (meteen && vak) bericht(vak, "Bewaard.", "goed");
+  /* Eenmaal afgerond blijft afgerond (Kevin, document 17 nov 2026): de worker
+     houdt hem op afgerond als de telefoon daarna nog iets bewaart. En de
+     verzoeken gaan één voor één, zodat een oud concept nooit na het afronden
+     aankomt. */
+  timers[id] = setTimeout(function(){
+    var kopie = JSON.parse(JSON.stringify(Object.assign({}, bon, { status: status })));
+    wachtrij[id] = (wachtrij[id] || Promise.resolve()).then(function(){ return stuur(id, bon, kopie, status, meteen); });
   }, meteen ? 0 : 800);
+}
+async function stuur(id, bon, kopie, status, meteen){
+  var vak = document.querySelector('[data-bon="' + id + '"]');
+  var j = await api("/service/bon", { bon: kopie }).catch(function(e){ return { ok:false, error:e.message }; });
+  if (!j.ok) { if (vak) bericht(vak, j.error, "fout"); return; }
+  bon.status = j.status;
+  if (status === "klaar") {
+    try { if (window.fpLog) fpLog("service-werkbon-klaar", "ITS " + bon.its); } catch(e) {}
+    laad(); setTimeout(function(){ var v = document.querySelector('[data-bon="' + id + '"]'); if (v) bericht(v, "Werkbon afgerond. Kantoor ziet hem nu.", "goed"); }, 600);
+  } else if (meteen && vak) bericht(vak, "Bewaard.", "goed");
 }
 var zoekTimer = null;
 function koppel(vak){
@@ -252,6 +268,9 @@ function koppel(vak){
   });
   koppelHand(vak.querySelector(".hand"), bon, function(){ bewaar(id, "concept"); });
   var bw = vak.querySelector("[data-bewaar]"); if (bw) bw.onclick = function(){ bewaar(id, "concept", true); };
+  var on = vak.querySelector("[data-opnieuw]"); if (on) on.onclick = function(){
+    if (opnieuwOpen[id] || bon.opnieuw) { opnieuwOpen[id] = false; bon.opnieuw = ""; bewaar(id, "concept", true); teken(); return; }
+    opnieuwOpen[id] = true; teken(); var t = document.querySelector('[data-bon="' + id + '"] [data-v="opnieuw"]'); if (t) t.focus(); };
   var af = vak.querySelector("[data-afrond]"); if (af) af.onclick = function(){
     if (!String(bon.gedaan||"").trim()) { bericht(vak, "Vul in wat je bij de klant hebt gedaan.", "fout"); return; }
     if (!(bon.uren > 0)) { bericht(vak, "Vul de gewerkte uren in.", "fout"); return; }

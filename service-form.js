@@ -95,7 +95,7 @@
         j.gepland.map(function (g) { return "<li><b>" + esc(g.naam || ("ITS " + g.its)) + "</b> " + esc(g.plaats || "") + "<br><span style=\"color:#6b7280\">" + esc(datumLang(g.datum)) + " · route " + g.nr + " · " + esc(g.monteur) + " · " + esc(DAGDEEL[g.dagdeel]) + "</span>" +
           (g.zelfdeMonteur ? " <span class=\"svc-pil groen\">zelfde monteur als vorige keer</span>" : "") +
           (g.buitenVoorkeur ? " <span class=\"svc-pil oranje\">op een andere dag dan de voorkeur</span>" : "") +
-          (g.geenMail ? " <span class=\"svc-pil grijs\">zonder mail, meteen akkoord</span>" : "") + "</li>"; }).join("") + "</ul>";
+          (g.geenMail ? " <span class=\"svc-pil grijs\">zonder mail, meteen akkoord</span>" : "") + (g.spoed ? " <span class=\"svc-pil rood\">spoed</span>" : "") + "</li>"; }).join("") + "</ul>";
     } else h += '<p style="font-size:13.5px">' + (j.voorbeeld ? "Er is nu niets om in te plannen." : "Er is niets bijgekomen.") + "</p>";
     if (j.over && j.over.length) {
       h += '<div class="svc-kop2">Nog zonder plek (' + j.over.length + ")</div><ul class=\"svc-uitslag\">" +
@@ -162,6 +162,9 @@
           '<div class="breed svc-groep">Verwachte duur van de afspraak (verplicht)<div class="svc-duren">' +
             duren.map(function (d) { return '<button type="button" class="svc-dag' + (Number(m.duur) === d ? " aan" : "") + '" data-duur="' + d + '">' + duurTekst(d) + "</button>"; }).join("") +
             '<input id="fDuur" type="number" min="5" max="600" step="5" style="width:96px" placeholder="minuten" value="' + esc(m.duur || "") + '"> <span style="font-weight:500">minuten</span></div></div>' +
+          /* Spoed (Kevin, document 17 nov 2026): Plannen zet deze melding zo vroeg
+             als het kan, in een route die er logisch bij past. */
+          '<label class="breed" style="flex-direction:row;align-items:center;gap:8px;font-size:13.5px;color:#b91c1c;font-weight:700"><input type="checkbox" id="fSpoed"' + (m.spoed ? " checked" : "") + ' style="width:auto"> Spoed: zo snel mogelijk inplannen</label>' +
           '<div class="breed svc-groep">Voorkeursdagen van de klant<div class="svc-dagen">' +
             [1, 2, 3, 4, 5].map(function (d) { return '<button type="button" class="svc-dag' + (voork.indexOf(d) >= 0 ? " aan" : "") + '" data-dag="' + d + '">' + DAGLANG[d] + "</button>"; }).join("") +
             '</div><span style="font-weight:500">Niets aangetikt = elke werkdag.</span></div>' +
@@ -197,6 +200,7 @@
           // Toevoegen zet hem altijd (weer) in de lijst, ook als hij al eens ingepland stond.
           heropen: !!opties.heropen || !!nieuw,
           geenMail: romp.querySelector("#fGeenMail").checked, vast: romp.querySelector("#fVast").value || null,
+          spoed: romp.querySelector("#fSpoed").checked,
         };
         if (m.handmatig) { body.tekst = romp.querySelector("#fTekst").value; body.omschrijving = body.tekst.slice(0, 300); }
         if ((body.nietVan && !body.nietTot) || (!body.nietVan && body.nietTot)) { meld("Vul bij 'klant is weg' allebei de datums in.", "fout"); return; }

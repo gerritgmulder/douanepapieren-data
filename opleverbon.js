@@ -48,6 +48,18 @@
      aantal en stukprijs, en voorrijkosten (per km) plus arbeid (per uur). */
   global.OPLEVERBON_KM_TARIEF = 1.25;
   global.OPLEVERBON_UUR_TARIEF = 60;
+  /* Voorrijkosten en arbeid: km x tarief en uren x tarief, tenzij kantoor het
+     bedrag zelf heeft aangepast (Kevin, document 17 nov 2026). */
+  global.serviceKosten = function (sv) {
+    sv = sv || {};
+    var hand = function (x) { return x !== null && x !== undefined && x !== "" && isFinite(Number(x)); };
+    var r = function (x) { return Math.round(x * 100) / 100; };
+    return {
+      voorrij: r(hand(sv.voorrijBedrag) ? Number(sv.voorrijBedrag) : (Number(sv.km) || 0) * global.OPLEVERBON_KM_TARIEF),
+      arbeid: r(hand(sv.arbeidBedrag) ? Number(sv.arbeidBedrag) : (Number(sv.uren) || 0) * global.OPLEVERBON_UUR_TARIEF),
+      voorrijHand: hand(sv.voorrijBedrag), arbeidHand: hand(sv.arbeidBedrag)
+    };
+  };
   /* Regels die op elke order staan en niets zeggen over wat er mee moet
      (Kevin, 18 sep 2026: "die mogen eraf zodat het op de order overzichtelijk
      blijft"). Op artikelcode, plus alles wat met ** begint: dat zijn de vaste

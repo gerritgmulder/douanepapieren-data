@@ -104,6 +104,13 @@ body.verplaatsen .route:hover{outline:2px dashed #ca8a04;outline-offset:2px}
 .stop .p{font-size:11.5px;color:var(--grijs);overflow-wrap:break-word}
 .stop .pillen{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
 .stop.klaar{opacity:.55}
+/* Monteur ziek: de klanten blijven zichtbaar, met waar ze naartoe zijn. */
+.ziekweg{display:flex;gap:7px;padding:6px 9px;border-top:1px solid #f0efe8;align-items:flex-start;opacity:.8}
+.ziekweg:first-child{border-top:0}
+.ziekweg .nr{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#fee2e2;color:#b91c1c;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.ziekweg .k{font-weight:600;font-size:12.5px;overflow-wrap:break-word;text-decoration:line-through;text-decoration-color:#fca5a5}
+.ziekweg .p{font-size:11.5px;color:var(--grijs);overflow-wrap:break-word}
+.ziekweg .pillen{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
 .pil{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
 .pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.rood{background:#fee2e2;color:var(--rood)}.pil.grijs{background:#f3f4f6;color:var(--grijs)}.pil.groen{background:#dcfce7;color:#14532d}
 .leegroute{font-size:12px;color:var(--grijs);padding:8px 9px;font-style:italic}
@@ -194,6 +201,7 @@ function stopHtml(a, i){
   /* De klant kreeg een ander dagdeel gemaild dan waar hij nu uitkomt. */
   if (j.dagdeelNu && a.status !== "klaar") pillen += '<span class="pil rood" title="Gemaild: ' + esc(svc.DAGDEEL[a.dagdeel]) + '">verschuift naar: ' + esc(svc.DAGDEEL[j.dagdeelNu]) + '</span>';
   if (/^ja/i.test(m.garantie||"")) pillen += '<span class="pil groen">garantie</span>';
+  if (m.spoed && a.status !== "klaar") pillen += '<span class="pil rood">spoed</span>';
   /* Kevin (27 okt 2026): de klant met één klik op akkoord zetten (of terug). */
   var akKnop = (a.status === "voorstel" || a.status === "akkoord") && a.datum >= vandaag
     ? '<button type="button" class="akknop' + (a.status === "akkoord" ? " aan" : "") + '" data-ak="' + esc(a.id) + '" title="' + (a.status === "akkoord" ? "Het Dashboard haalt het akkoord weg; de afspraak wacht dan weer op de klant" : "Het Dashboard zet deze afspraak op akkoord, bijvoorbeeld als de klant telefonisch ja zei") + '">' + (a.status === "akkoord" ? "✓ akkoord" : "akkoord zetten") + '</button>' : '';
@@ -203,6 +211,18 @@ function stopHtml(a, i){
     '<div class="k">' + esc(k.naam || "ITS " + a.its) + akKnop + '</div>' +
     '<div class="p">' + esc(k.plaats || (k.adres||"").split(",").pop()) + ' · ITS ' + esc(a.its) + (k.debiteur ? ' · deb. ' + esc(k.debiteur) : '') + ' · ' + esc(svc.duurTekst(m.duur)) + '</div>' +
     '<div class="pillen">' + pillen + '</div></div></li>';
+}
+/* Een klant van een zieke route (Kevin, document 17 nov 2026): gemaild en
+   verplaatst, of terug in de lijst om te bellen. */
+function ziekWegHtml(a, i){
+  var m = melding(a.its) || {}, k = m.klant || {}, n = a.naar;
+  var pil = !n ? '<span class="pil rood">terug in de lijst: klant bellen</span>'
+    : '<span class="pil ' + (n.status === "akkoord" ? "groen" : n.status === "anders" ? "oranje" : "") + '">' + (n.gemaild ? "gemaild, " : "") + 'nu ' + esc(svc.datumNL(n.datum)) + (n.monteur ? " bij " + esc(n.monteur) : "") + '</span>' +
+      (n.status === "akkoord" ? '<span class="pil groen">akkoord</span>' : n.status === "anders" ? '<span class="pil oranje">klant wil andere datum</span>' : n.status === "voorstel" ? '<span class="pil">wacht op klant</span>' : '');
+  return '<li class="ziekweg" title="Afspraak van de zieke monteur; de klant staat nu op een andere datum"><span class="nr">' + (i+1) + '</span><div class="wat">' +
+    '<div class="k">' + esc(k.naam || "ITS " + a.its) + '</div>' +
+    '<div class="p">' + esc(k.plaats || (k.adres||"").split(",").pop()) + ' · ITS ' + esc(a.its) + '</div>' +
+    '<div class="pillen">' + pil + '</div></div></li>';
 }
 function teken(){
   var titel = "Week " + weekNr(maandag) + " · " + svc.datumNL(maandag) + " t/m " + svc.datumNL(plus(maandag, 4));
@@ -225,6 +245,7 @@ function teken(){
     routes.forEach(function(r){
       var stops = (data.afspraken||[]).filter(function(a){ return a.datum === d && a.nr === r.nr && a.status !== "vervallen"; }).sort(function(a,b){ return a.volg - b.volg; });
       var actief = stops.filter(function(a){ return a.status !== "klaar"; });
+      var ziekWeg = r.ziek ? (data.ziekWeg||[]).filter(function(a){ return a.datum === d && a.nr === r.nr; }).sort(function(a,b){ return a.volg - b.volg; }) : [];
       var vul = Math.min(100, Math.round((terugOm(r, actief) - r.start) / Math.max(1, r.eind - r.start) * 100));
       var afwijkend = r.start !== data.tijden.start || r.eind !== data.tijden.eind;
       /* Kevin (27 okt 2026): hoe lang de route duurt, klussen en rijden bij elkaar. */
@@ -239,7 +260,9 @@ function teken(){
           (r.ziek ? '<span class="pil rood">ziek</span>' : afwijkend ? '<span class="rtijd">' + (r.start !== data.tijden.start ? "begint " + tijd(r.start) : "") + (r.start !== data.tijden.start && r.eind !== data.tijden.eind ? " · " : "") + (r.eind !== data.tijden.eind ? "terug " + tijd(r.eind) : "") + '</span>' : '') + '</div>' +
         (rt.wacht ? '<div class="rwacht" title="Tijd tussen twee klanten, omdat een klant pas later in de dag kan; die tijd is nog te vullen">+ ' + esc(svc.duurTekst(rt.wacht)) + ' nog vrij, een klant kan pas later · terug rond ' + tijd(rt.terug) + '</div>' : '') +
         (actief.length ? '<div class="vul" title="Zo vol is de dag ongeveer"><span' + (vul >= 95 ? ' class="vol"' : '') + ' style="width:' + vul + '%"></span></div>' : '') +
-        (stops.length ? '<ul class="stops">' + stops.map(stopHtml).join("") + '</ul>' : '<div class="leegroute">' + (r.ziek ? "Afspraken zijn verdeeld." : "Nog leeg: Plannen vult deze route als de andere vol zijn.") + '</div>') +
+        (stops.length ? '<ul class="stops">' + stops.map(stopHtml).join("") + '</ul>' : '') +
+        (ziekWeg.length ? '<ul class="stops">' + ziekWeg.map(ziekWegHtml).join("") + '</ul>' : '') +
+        (!stops.length && !ziekWeg.length ? '<div class="leegroute">' + (r.ziek ? "Afspraken zijn verdeeld." : "Nog leeg: Plannen vult deze route als de andere vol zijn.") + '</div>' : '') +
         /* Kevin (28 okt 2026): met de hand een melding in deze route zetten, buiten In te plannen meldingen om. */
         /* Ook op de dag zelf (Kevin, document 3 nov 2026). */
         (d >= vandaag && r.monteur && !r.ziek ? '<button class="rplus" type="button" data-rplus="' + d + '|' + r.nr + '" title="Het Dashboard zet een melding direct in deze route, op de meest logische plek">+ Melding in deze route</button>' : '') +

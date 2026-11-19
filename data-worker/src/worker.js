@@ -8562,8 +8562,11 @@ function bonSchoon(b, wie) {
       const sv = b.service || {};
       const mats = Array.isArray(sv.materialen) ? sv.materialen.slice(0, 40).map(r => ({
         oms: s(r && r.oms, 120), aantal: Math.max(0, Number(r && r.aantal) || 0), prijs: Math.max(0, Math.round((Number(r && r.prijs) || 0) * 100) / 100) })) : [];
+      // Bedrag met de hand aangepast door kantoor (Kevin, document 17 nov 2026); null = km/uren x tarief.
+      const bedrag = (x) => x === null || x === undefined || x === "" || !isFinite(Number(x)) ? null : Math.max(0, Math.round(Number(x) * 100) / 100);
       return { melding: s(sv.melding, 2000), gedaan: s(sv.gedaan, 2000), materialen: mats,
-               km: Math.max(0, Number(sv.km) || 0), uren: Math.max(0, Number(sv.uren) || 0) };
+               km: Math.max(0, Number(sv.km) || 0), uren: Math.max(0, Number(sv.uren) || 0),
+               voorrijBedrag: bedrag(sv.voorrijBedrag), arbeidBedrag: bedrag(sv.arbeidBedrag) };
     })(),
     handtekeningMonteur: hand(b.handtekeningMonteur), handtekeningKlant: hand(b.handtekeningKlant),
     klantNaamHandtekening: s(b.klantNaamHandtekening, 80),
@@ -8596,7 +8599,13 @@ async function bonHandle(request, env, url) {
     if (oud && ["akkoord", "gemaild"].includes(oud.status)) return reply(409, { ok: false, error: "deze bon is al " + oud.status + " op kantoor en kan niet meer worden veranderd" });
     const bon = bonSchoon(inkomend, wie);
     if (oud) { bon.gemaakt = oud.gemaakt || bon.gemaakt; }
-    if (bon.status === "klaar") {
+    /* Een afgeronde bon blijft afgerond (Kevin, document 17 nov 2026): de
+       telefoon bewaart soms nog iets na het afronden, en dat zette hem terug
+       op bezig. Kantoor kan hem nog wel terugzetten. */
+    const blijftKlaar = !!(oud && oud.status === "klaar" && bon.status === "concept");
+    if (blijftKlaar) bon.status = "klaar";
+    if (bon.status === "klaar") bon.klaarTs = (oud && oud.klaarTs) || new Date().toISOString();
+    if (bon.status === "klaar" && !blijftKlaar) {
       /* Kevin (18 sep 2026): bij een servicemelding geen handtekening van
          de monteur, wel van de klant. */
       if (bon.soort === "service" || bon.itsId) {
@@ -8703,7 +8712,9 @@ const BON_KM_TARIEF = 1.25, BON_UUR_TARIEF = 60;   // zelfde als in opleverbon.j
 function bonServiceTotalen(sv) {
   sv = sv || {};
   const mat = (sv.materialen || []).reduce((n, r) => n + (Number(r.aantal) || 0) * (Number(r.prijs) || 0), 0);
-  const rij = (Number(sv.km) || 0) * BON_KM_TARIEF, arb = (Number(sv.uren) || 0) * BON_UUR_TARIEF;
+  const hand = (x) => x !== null && x !== undefined && x !== "" && isFinite(Number(x));
+  const rij = hand(sv.voorrijBedrag) ? Number(sv.voorrijBedrag) : (Number(sv.km) || 0) * BON_KM_TARIEF;
+  const arb = hand(sv.arbeidBedrag) ? Number(sv.arbeidBedrag) : (Number(sv.uren) || 0) * BON_UUR_TARIEF;
   const c = (x) => Math.round(x * 100) / 100;
   return { materiaal: c(mat), voorrij: c(rij), arbeid: c(arb), totaal: c(mat + rij + arb) };
 }
@@ -8744,8 +8755,8 @@ function bonHtml(bon, vragen) {
     "<h3 style='color:#144734;margin:18px 0 6px'>Uitgevoerd</h3><p style='font-size:13px;white-space:pre-line;margin:0'>" + e(sv.gedaan || "-") + "</p>" +
     "<h3 style='color:#144734;margin:18px 0 6px'>Materialen en kosten</h3><table style='border-collapse:collapse;font-size:13px;width:100%'>" +
     (sv.materialen || []).map(r => "<tr><td " + td + ">" + e(r.oms) + "</td><td " + td + " align='right'>" + e(r.aantal) + " x " + geld(r.prijs) + "</td><td " + td + " align='right'>" + geld((Number(r.aantal) || 0) * (Number(r.prijs) || 0)) + "</td></tr>").join("") +
-    (sv.km ? "<tr><td " + td + ">Voorrijkosten</td><td " + td + " align='right'>" + e(sv.km) + " km x " + geld(BON_KM_TARIEF) + "</td><td " + td + " align='right'>" + geld(st.voorrij) + "</td></tr>" : "") +
-    (sv.uren ? "<tr><td " + td + ">Arbeid</td><td " + td + " align='right'>" + e(sv.uren) + " uur x " + geld(BON_UUR_TARIEF) + "</td><td " + td + " align='right'>" + geld(st.arbeid) + "</td></tr>" : "") +
+    (sv.km || st.voorrij ? "<tr><td " + td + ">Voorrijkosten</td><td " + td + " align='right'>" + (sv.voorrijBedrag != null ? "" : e(sv.km) + " km x " + geld(BON_KM_TARIEF)) + "</td><td " + td + " align='right'>" + geld(st.voorrij) + "</td></tr>" : "") +
+    (sv.uren || st.arbeid ? "<tr><td " + td + ">Arbeid</td><td " + td + " align='right'>" + (sv.arbeidBedrag != null ? e(sv.uren) + " uur" : e(sv.uren) + " uur x " + geld(BON_UUR_TARIEF)) + "</td><td " + td + " align='right'>" + geld(st.arbeid) + "</td></tr>" : "") +
     "<tr><td " + td + " colspan='2'><b>Totaal</b></td><td " + td + " align='right'><b>" + geld(st.totaal) + "</b></td></tr></table>";
   return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:640px'>" +
     "<h2 style='color:#144734;margin:0 0 4px'>" + (isService ? "Servicebon Fonteyn" : "Opleverbon Fonteyn Bezorgservice") + "</h2>" +

@@ -237,13 +237,13 @@ async function bonDetail(id){
   var heeftOrder = !!bon.ordernr && !bon.itsId, alleenBezoek = !!bon.itsId;
   var KM = window.OPLEVERBON_KM_TARIEF||1.25, UU = window.OPLEVERBON_UUR_TARIEF||60;
   var mat = (sv.materialen||[]).reduce(function(n,r){ return n + (Number(r.aantal)||0)*(Number(r.prijs)||0); }, 0);
-  var voorrij = (Number(sv.km)||0)*KM, arbeid = (Number(sv.uren)||0)*UU;
+  var kost = serviceKosten(sv), voorrij = kost.voorrij, arbeid = kost.arbeid;
   var serviceHtml = '<h4>1. Melding</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.melding||"-")+'</p>'+
     '<h4>2. Wat is er gedaan</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.gedaan||"-")+'</p>'+
     '<h4>3. Materialen</h4><table class="vr">'+((sv.materialen||[]).length ? (sv.materialen||[]).map(function(r){ return '<tr><td style="width:45%">'+esc(r.oms)+'</td><td>'+esc(r.aantal)+' x '+bonGeld(r.prijs)+'</td><td style="text-align:right">'+bonGeld((Number(r.aantal)||0)*(Number(r.prijs)||0))+'</td></tr>'; }).join("") : '<tr><td colspan="3" style="color:var(--grijs)">0 materialen</td></tr>')+'</table>'+
     '<h4>4. Voorrijkosten en arbeid</h4><table class="vr">'+
-      '<tr><td style="width:45%">Voorrijkosten</td><td>'+esc(sv.km||0)+' km x '+bonGeld(KM)+'</td><td style="text-align:right">'+bonGeld(voorrij)+'</td></tr>'+
-      '<tr><td>Arbeid</td><td>'+esc(sv.uren||0)+' uur x '+bonGeld(UU)+'</td><td style="text-align:right">'+bonGeld(arbeid)+'</td></tr>'+
+      '<tr><td style="width:45%">Voorrijkosten</td><td>'+esc(sv.km||0)+' km'+(kost.voorrijHand ? ', bedrag aangepast door kantoor' : ' x '+bonGeld(KM))+'</td><td style="text-align:right">'+bonGeld(voorrij)+'</td></tr>'+
+      '<tr><td>Arbeid</td><td>'+esc(sv.uren||0)+' uur'+(kost.arbeidHand ? ', bedrag aangepast door kantoor' : ' x '+bonGeld(UU))+'</td><td style="text-align:right">'+bonGeld(arbeid)+'</td></tr>'+
       '<tr><td>Materialen</td><td></td><td style="text-align:right">'+bonGeld(mat)+'</td></tr>'+
       '<tr><td><b>Totaal</b></td><td></td><td style="text-align:right"><b>'+bonGeld(mat+voorrij+arbeid)+'</b></td></tr></table>';
   box.innerHTML = '<div class="bondetail">'+
@@ -385,7 +385,11 @@ async function bonAanvullen(bon, isService, vragen, A, meld, heeftOrder){
         '<td><input data-reden="'+esc(v.k)+'" value="'+esc(c.opm||"")+'" placeholder="reden of extra info" style="width:100%;padding:5px 7px;border:1px solid var(--rand);border-radius:6px;font:inherit;font-size:12.5px"></td></tr>'; }).join("")+'</table>');
   if (isService)
     html += veld("Wat is er gedaan", '<textarea id="avGedaan" rows="3" '+inv+'>'+esc(sv.gedaan||"")+'</textarea>')+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+veld("Kilometers",'<input id="avKm" type="number" min="0" '+inv+' value="'+esc(sv.km||"")+'">')+veld("Gewerkte uren",'<input id="avUren" type="number" min="0" step="0.25" '+inv+' value="'+esc(sv.uren||"")+'">')+'</div>';
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+veld("Kilometers",'<input id="avKm" type="number" min="0" '+inv+' value="'+esc(sv.km||"")+'">')+veld("Gewerkte uren",'<input id="avUren" type="number" min="0" step="0.25" '+inv+' value="'+esc(sv.uren||"")+'">')+'</div>'+
+      /* Kevin (document 17 nov 2026): de bedragen zelf kunnen aanpassen. Leeg = km x tarief en uren x tarief. */
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+        veld("Voorrijkosten (\u20ac)",'<input id="avVoorrij" type="number" min="0" step="0.01" '+inv+' value="'+esc(serviceKosten(sv).voorrijHand ? sv.voorrijBedrag : "")+'" placeholder="'+esc(((Number(sv.km)||0)*KM).toFixed(2).replace(".",","))+' (km x tarief)" title="Leeg laten = kilometers x tarief; vul een bedrag in om het aan te passen">')+
+        veld("Arbeidskosten (\u20ac)",'<input id="avArbeid" type="number" min="0" step="0.01" '+inv+' value="'+esc(serviceKosten(sv).arbeidHand ? sv.arbeidBedrag : "")+'" placeholder="'+esc(((Number(sv.uren)||0)*UU).toFixed(2).replace(".",","))+' (uren x tarief)" title="Leeg laten = uren x tarief; vul een bedrag in om het aan te passen">')+'</div>';
   var bt = bon.betaling || {};
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
     veld("Bij de klant voldaan", '<select id="avMethode" '+inv+'>'+[["","-"],["geen","Niets"],["bank","Per bank"],["contant","Contant"]].map(function(x){ return '<option value="'+x[0]+'"'+((bt.methode||"")===x[0]?" selected":"")+'>'+x[1]+'</option>'; }).join("")+'</select>')+
@@ -399,7 +403,9 @@ async function bonAanvullen(bon, isService, vragen, A, meld, heeftOrder){
     if (heeftOrder && (bon.geleverd||[]).length) b.geleverd = bon.geleverd.map(function(g, i){ var el = vak.querySelector('[data-gel="'+i+'"]'); return Object.assign({}, g, { aantal: Math.max(0, Number(el && el.value) || 0) }); });
     if (!isService && !bon.alleenLeveren){ var c = {}; vak.querySelectorAll("[data-vraag]").forEach(function(s){ var k = s.dataset.vraag, r = vak.querySelector('[data-reden="'+k+'"]'); if (s.value || (r && r.value)) c[k] = { a: s.value, opm: r ? r.value : "" }; }); b.checklist = c; }
     b.betaling = Object.assign({}, bon.betaling||{}, { methode: document.getElementById("avMethode").value, bedrag: Number(document.getElementById("avBedrag").value)||0 });
-    if (isService) b.service = Object.assign({}, bon.service||{}, { gedaan: document.getElementById("avGedaan").value, km: Number(document.getElementById("avKm").value)||0, uren: Number(document.getElementById("avUren").value)||0 });
+    if (isService){ var vb = document.getElementById("avVoorrij").value.trim(), ab = document.getElementById("avArbeid").value.trim();
+      b.service = Object.assign({}, bon.service||{}, { gedaan: document.getElementById("avGedaan").value, km: Number(document.getElementById("avKm").value)||0, uren: Number(document.getElementById("avUren").value)||0,
+        voorrijBedrag: vb === "" ? null : Math.max(0, Number(vb.replace(",", "."))||0), arbeidBedrag: ab === "" ? null : Math.max(0, Number(ab.replace(",", "."))||0) }); }
     return b;
   };
   var bewaar = async function(akkoord){

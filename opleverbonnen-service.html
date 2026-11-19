@@ -64,6 +64,9 @@ main{max-width:1200px;margin:0 auto;padding:14px 14px 50px}
 .kaart .sub{font-size:12.5px;color:var(--grijs);overflow-wrap:break-word}
 .kaart .gedaan{font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:break-word;max-height:6em;overflow:hidden}
 .kaart ul{margin:0;padding-left:18px;font-size:12.5px}
+.kaart .melding{font-size:12.5px;line-height:1.45;background:#f7f7f2;border-radius:8px;padding:7px 9px;white-space:pre-wrap;overflow-wrap:break-word;max-height:7.5em;overflow:auto}
+.kaart .melding b{display:block;font-size:11px;color:var(--grijs);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
+.kaart .opnieuw{font-size:13px;line-height:1.45;background:#fee2e2;color:var(--rood);border:1px solid #fca5a5;border-radius:8px;padding:7px 9px;white-space:pre-wrap;overflow-wrap:break-word;font-weight:600}
 .pillen{display:flex;gap:5px;flex-wrap:wrap}
 .pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
 .pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.rood{background:#fee2e2;color:var(--rood)}.pil.grijs{background:#f3f4f6;color:var(--grijs)}.pil.groen{background:#dcfce7;color:#14532d}
@@ -114,7 +117,7 @@ function teken(){
   var tel = { doen:0, monteur:0, klaar:0, weg:0 }; bonnen.forEach(function(b){ tel[soort(b)]++; });
   $("nDoen").textContent = tel.doen; $("nMonteur").textContent = tel.monteur; $("nKlaar").textContent = tel.klaar; $("nWeg").textContent = tel.weg;
   var q = zoek.trim().toLowerCase();
-  var lijst = bonnen.filter(function(b){ return soort(b) === tab; }).filter(function(b){ return !q || ((b.klant||{}).naam + " " + b.its + " " + b.monteur).toLowerCase().indexOf(q) >= 0; });
+  var lijst = bonnen.filter(function(b){ return soort(b) === tab; }).filter(function(b){ return !q || ((b.klant||{}).naam + " " + b.its + " " + b.monteur + (b.opnieuw ? " opnieuw" : "")).toLowerCase().indexOf(q) >= 0; });
   if (!lijst.length) { $("lijst").innerHTML = '<div class="leeg">' + (tab === "doen" ? "Alles is nagekeken, gemaild en gefactureerd." : tab === "monteur" ? "Er staan geen werkbonnen open bij de monteurs." : tab === "weg" ? "Er zijn geen opleverbonnen weggehaald." : "Hier komen de werkbonnen die gemaild en gefactureerd zijn.") + '</div>'; return; }
   $("lijst").innerHTML = '<div class="kaarten">' + lijst.map(function(b){
     var k = b.klant || {}, f = b.factuur || {};
@@ -129,7 +132,12 @@ function teken(){
         (f.fout && f.factuurId ? '<span class="pil rood">factuur: in Logic4 afronden</span>' : '') +
         ((f.oudeOrder || (f.orderId && !f.factuurId)) ? '<span class="pil oranje" title="Deze order maakte het Dashboard vóór 27 oktober, met prijzen van € 0. Haal hem weg in Logic4.">oude order ' + esc(f.oudeOrder || f.orderId) + ' weghalen in Logic4</span>' : '') +
         (b.getekend ? '' : '<span class="pil rood">handtekening klant ontbreekt</span>') +
+        (b.opnieuw ? '<span class="pil rood">opnieuw komen</span>' : '') +
       '</div>' +
+      /* Wat de monteur moest doen (Kevin, document 17 nov 2026); alleen voor kantoor, niet op de werkbon voor de klant. */
+      (b.meldingNu || b.melding ? '<div class="melding" title="Alleen voor kantoor; de klant krijgt dit niet te zien"><b>Melding</b>' + esc(b.meldingTitel ? b.meldingTitel + "\n" : "") + esc(b.meldingNu || b.melding) + '</div>' : '') +
+      /* Opnieuw komen (Kevin, document 17 nov 2026): wat de monteur invulde, in het rood. */
+      (b.opnieuw ? '<div class="opnieuw">🔁 Opnieuw komen: ' + esc(b.opnieuw) + '</div>' : '') +
       (b.gedaan ? '<div class="gedaan">' + esc(b.gedaan) + '</div>' : '') +
       ((b.materialen||[]).length ? '<ul>' + b.materialen.map(function(r){ return '<li>' + esc(String(r.aantal).replace(".", ",")) + 'x ' + esc(r.oms) + ' <span style="color:#6b7280">' + esc(r.code) + '</span></li>'; }).join("") + '</ul>' : '') +
       (b.opmerking ? '<div class="sub">📝 ' + esc(b.opmerking) + '</div>' : '') +

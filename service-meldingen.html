@@ -135,7 +135,7 @@ function teken(){
     .sort(function(a,b){
       if (volg === "postcode") return (postcode(a) || "~").localeCompare(postcode(b) || "~") || Number(a.its) - Number(b.its);
       if (volg === "its") return Number(a.its) - Number(b.its);
-      return (b.klantWens||b.ziekVan ? 1 : 0) - (a.klantWens||a.ziekVan ? 1 : 0) || String(a.gemeld||a.gemaakt||"").localeCompare(String(b.gemeld||b.gemaakt||"")); });
+      return (b.spoed ? 1 : 0) - (a.spoed ? 1 : 0) || (b.klantWens||b.ziekVan ? 1 : 0) - (a.klantWens||a.ziekVan ? 1 : 0) || String(a.gemeld||a.gemaakt||"").localeCompare(String(b.gemeld||b.gemaakt||"")); });
   var gepland = (data.meldingen||[]).filter(function(m){ return m.status === "gepland"; }).length;
   var ml = data.mail || {};
   $("mailbalk").innerHTML = (ml.aan ? '✉️ Klantmails <b>staan aan</b>' + (ml.proef ? ' (proef: alles gaat naar ' + esc(ml.proef) + ')' : '') : '✉️ Klantmails <b>staan nog uit</b>: Plannen zet de mails klaar, ze gaan mee zodra het mailen aan staat')
@@ -157,7 +157,7 @@ function teken(){
         '<div class="kop"><span class="naam">' + esc(k.naam || m.titel || "ITS " + m.its) + '</span><span class="its">ITS ' + esc(m.its) + '</span></div>' +
         '<div class="sub">' + esc(k.adres || "adres nog invullen") + (k.tel ? ' · ' + esc(k.tel) : '') + (k.debiteur ? ' · deb. ' + esc(k.debiteur) : '') + '</div>' +
         (m.titel || m.omschrijving ? '<div class="wat">' + esc(m.titel ? m.titel + (m.omschrijving ? ": " + m.omschrijving : "") : m.omschrijving) + '</div>' : '') +
-        '<div class="pillen"><span class="pil">' + esc(svc.duurTekst(m.duur)) + '</span>' + wensen(m) +
+        '<div class="pillen">' + (m.spoed ? '<span class="pil rood">spoed</span>' : '') + '<span class="pil">' + esc(svc.duurTekst(m.duur)) + '</span>' + wensen(m) +
           (/^ja/i.test(m.garantie||"") ? '<span class="pil groen">garantie</span>' : '') +
           (!k.mail ? '<span class="pil rood">mailadres invullen</span>' : '') +
           (!m.geo ? '<span class="pil oranje">adres nakijken</span>' : '') +

@@ -51,6 +51,56 @@
 
   var NIEUWS = [
     {
+      datum: "2026-11-19", bestand: "mijnroute.html", soort: "hersteld",
+      titel: "Afgeronde bon blijft afgerond",
+      wat:   "Een opleverbon die je hebt afgerond, blijft afgerond. Ook als je daarna nog iets aanpast."
+    },
+    {
+      datum: "2026-11-19", bestand: "mijnroute-service.html", soort: "hersteld",
+      titel: "Afgeronde werkbon blijft afgerond",
+      wat:   "Een werkbon die je hebt afgerond, blijft afgerond. Ook als je daarna nog iets aanpast."
+    },
+    {
+      datum: "2026-11-19", bestand: "mijnroute-service.html", soort: "nieuw",
+      titel: "Knop Opnieuw komen",
+      wat:   "Moeten we nog een keer terug? Druk op Opnieuw komen en schrijf erbij waarvoor. Kantoor ziet het in het rood."
+    },
+    {
+      datum: "2026-11-19", bestand: "mijnroute.html", soort: "nieuw",
+      titel: "Let op: klant moet nog betalen",
+      wat:   "Staat er nog een bedrag open? Dan zie je een grote melding met het bedrag als je de opleverbon opent en als je hem afrondt."
+    },
+    {
+      datum: "2026-11-19", bestand: "opleverbonnen-service.html", soort: "beter",
+      titel: "Melding en opnieuw komen op de bon",
+      wat:   "Op elke opleverbon staat nu wat de monteur moest doen. De klant krijgt dat niet te zien. Moet de monteur terug, dan staat dat er in het rood bij."
+    },
+    {
+      datum: "2026-11-19", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Voorrijkosten en arbeid aanpassen",
+      wat:   "Bij Aanpassen kun je nu zelf het bedrag van de voorrijkosten en de arbeid invullen. Laat je het leeg, dan rekent het Dashboard met de kilometers en de uren."
+    },
+    {
+      datum: "2026-11-19", bestand: "service-meldingen.html", soort: "nieuw",
+      titel: "Spoed",
+      wat:   "Zet een vinkje bij Spoed. Plannen zet de melding dan zo vroeg mogelijk in, in een route die er logisch bij past."
+    },
+    {
+      datum: "2026-11-19", bestand: "planning-service.html", soort: "beter",
+      titel: "Monteur ziek: klanten blijven staan",
+      wat:   "Meld je een monteur ziek, dan blijven zijn klanten op die dag zichtbaar. Je ziet dat ze gemaild zijn en op welke nieuwe datum ze staan."
+    },
+    {
+      datum: "2026-11-19", bestand: "planning.html", soort: "beter",
+      titel: "Ingepland op welke dag",
+      wat:   "Bij ingepland door staat nu ook op welke dag het is ingepland."
+    },
+    {
+      datum: "2026-11-19", bestand: "planning.html", soort: "hersteld",
+      titel: "Foto's zonder schuifbalk",
+      wat:   "De foto's bij een klus zijn klein en staan op één regel. Het venster blijft daardoor passen op het scherm."
+    },
+    {
       datum: "2026-11-14", bestand: "voorraad.html", soort: "beter",
       titel: "Voorraad in onze eigen woorden",
       wat:   "Overal dezelfde woorden: Verkocht, In Uddel, Op zee, In productie en Nog te verkopen. Voorraad is In Uddel plus Op zee. Bij een order staat In Uddel, of het schip met de datum."

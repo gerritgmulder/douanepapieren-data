@@ -210,6 +210,15 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .bon .melding{font-size:12.5px;margin-top:8px;min-height:16px}
 .bon .melding.bad{color:var(--rood)}.bon .melding.ok{color:var(--goed)}
 .bon .slot{background:#eff6ff;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#1e40af;margin-bottom:8px}
+/* Let op: de klant moet nog betalen (Kevin, document 17 nov 2026). */
+.betaallaag{position:fixed;inset:0;background:rgba(17,24,39,.6);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.betaallaag .doos{background:#fff;border:4px solid #dc2626;border-radius:16px;max-width:440px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.betaallaag h2{margin:0 0 10px;color:#dc2626;font-size:30px;font-weight:800}
+.betaallaag p{margin:0 0 6px;font-size:19px;line-height:1.4;color:#1f2937}
+.betaallaag p.bedrag b{font-size:30px;color:#dc2626;white-space:nowrap}
+.betaallaag .knoppen{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.betaallaag .knoppen button{flex:1;min-width:140px;border-radius:12px;padding:15px;font:inherit;font-size:16px;font-weight:700;cursor:pointer;border:1px solid #e5e7eb;background:#fff;color:#144734}
+.betaallaag .knoppen button.doe{background:#dc2626;border-color:#dc2626;color:#fff}
 </style>
 </head>
 <body>
@@ -503,7 +512,7 @@ try { stopOpen = JSON.parse(sessionStorage.getItem("fp.mr.open") || "{}") || {};
    en klant. Bewaren gaat vanzelf bij elke wijziging (concept); Afronden
    controleert alles en zet hem op klaar, waarna kantoor hem in Planning
    ziet, accordeert en naar de klant mailt. */
-var bonnen = {}, bonOpen = {}, bonTimers = {}, bonIndex = {};
+var bonnen = {}, bonOpen = {}, bonTimers = {}, bonIndex = {}, bonRij = {};
 function bonVan(a, o){
   var id = String(a.id);
   if (bonnen[id]) return bonnen[id];
@@ -533,8 +542,8 @@ function bonVan(a, o){
 }
 function serviceTotalen(sv){
   var mat = (sv.materialen||[]).reduce(function(n, r){ return n + (Number(r.aantal)||0) * (Number(r.prijs)||0); }, 0);
-  var rij = (Number(sv.km)||0) * (window.OPLEVERBON_KM_TARIEF||1.25);
-  var arb = (Number(sv.uren)||0) * (window.OPLEVERBON_UUR_TARIEF||60);
+  var k = window.serviceKosten ? serviceKosten(sv) : { voorrij: (Number(sv.km)||0) * (window.OPLEVERBON_KM_TARIEF||1.25), arbeid: (Number(sv.uren)||0) * (window.OPLEVERBON_UUR_TARIEF||60) };
+  var rij = k.voorrij, arb = k.arbeid;
   return { materiaal: Math.round(mat*100)/100, voorrij: Math.round(rij*100)/100, arbeid: Math.round(arb*100)/100, totaal: Math.round((mat+rij+arb)*100)/100 };
 }
 /* De namen die in de Planning op de route staan, als monteur en 2e monteur
@@ -672,6 +681,8 @@ function koppelBon(box){
         catch(e){}
       }
       teken();
+      var st = bonnen[id] && bonnen[id].status;
+      if (bonOpen[id] && st !== "akkoord" && st !== "gemaild"){ var nog = nogTeBetalen(id); if (nog > 0.01) betaalMelding(nog, false); }
     });
   });
   box.querySelectorAll("[data-bonvak]").forEach(function(vak){
@@ -755,20 +766,49 @@ function serviceHerteken(id){
   vak.querySelectorAll(".matrij").forEach(function(rij, i){ var r = bon.service.materialen[i]||{}; var s = rij.querySelector(".mtot"); if (s) s.textContent = geld((Number(r.aantal)||0)*(Number(r.prijs)||0)); });
   vak.querySelectorAll("[data-tot]").forEach(function(b){ b.textContent = geld(t[b.dataset.tot] || 0); });
 }
+/* Wat de klant van de order nog moet betalen: eerst de stand uit Logic4,
+   anders het bedrag op de bon. Bij een servicemelding niets: daar telt
+   alleen het bezoek, niet de oude order van de spa. */
+function nogTeBetalen(id){
+  var bon = bonnen[id], a = (plan.afspraken||[]).find(function(x){ return String(x.id) === String(id); }) || {};
+  if (a.itsId || (bon && bon.itsId)) return 0;
+  var nr = String(a.ordernr || (bon && bon.ordernr) || "").trim(), b = nr ? betaald[nr] : null;
+  var open = b && b.bedrag != null ? (Number(b.bedrag)||0) - (Number(b.betaald)||0) : (bon && bon.betaling && bon.betaling.openstaand != null ? Number(bon.betaling.openstaand)||0 : 0);
+  if (b && b.stand === "betaald") open = 0;
+  return Math.round(open*100)/100;
+}
+/* De grote melding; geen confirm() (die blokkeert het typen in de app op Windows). */
+function betaalMelding(bedrag, afronden){
+  return new Promise(function(klaar){
+    var l = document.createElement("div"); l.className = "betaallaag";
+    l.innerHTML = '<div class="doos" role="alertdialog" aria-label="Let op"><h2>Let op!</h2><p class="bedrag">De klant moet nog <b>'+esc(geld(bedrag))+'</b> betalen.</p>'+
+      (afronden ? '<p style="font-size:15px;color:#6b7280">Vul bij Betaling in wat de klant nu heeft voldaan.</p>' : '')+
+      '<div class="knoppen">'+(afronden ? '<button type="button" data-k="0">Terug naar de bon</button><button type="button" class="doe" data-k="1">Begrepen, bon afronden</button>' : '<button type="button" class="doe" data-k="1">Begrepen</button>')+'</div></div>';
+    document.body.appendChild(l);
+    l.querySelectorAll("[data-k]").forEach(function(b){ b.onclick = function(){ l.remove(); klaar(b.dataset.k === "1"); }; });
+    var k = l.querySelector(".doe"); if (k) k.focus();
+  });
+}
 function bonMelding(id, tekst, klas){
   var m = document.querySelector('[data-melding="'+id+'"]'); if (m){ m.textContent = tekst; m.className = "melding "+(klas||""); }
 }
 function bonBewaar(id, status, meteen){
   var bon = bonnen[id]; if (!bon) return;
   clearTimeout(bonTimers[id]);
-  bonTimers[id] = setTimeout(async function(){
-    try{
-      bon.status = status;
-      var kopie = Object.assign({}, bon); delete kopie._geladen;
-      var j = await lees("/planning/bon", { method:"POST", body: JSON.stringify({ bon: kopie }) });
-      if (!j.ok) throw new Error(j.error||"vraagt nog een poging");
-      bonMelding(id, meteen ? "Bewaard." : "", "ok");
-    }catch(e){ bonMelding(id, "Bewaren vraagt nog een poging: "+e.message, "bad"); }
+  /* Eenmaal afgerond blijft afgerond (Kevin, document 17 nov 2026): een
+     wijziging na het afronden gaat mee als afgerond, en de verzoeken gaan één
+     voor één, zodat een oud concept nooit na het afronden aankomt. */
+  bonTimers[id] = setTimeout(function(){
+    if (bon.status !== "klaar") bon.status = status;
+    var kopie = JSON.parse(JSON.stringify(bon)); delete kopie._geladen;
+    bonRij[id] = (bonRij[id] || Promise.resolve()).then(async function(){
+      try{
+        var j = await lees("/planning/bon", { method:"POST", body: JSON.stringify({ bon: kopie }) });
+        if (!j.ok) throw new Error(j.error||"vraagt nog een poging");
+        if (j.status) bon.status = j.status;
+        bonMelding(id, meteen ? "Bewaard." : "", "ok");
+      }catch(e){ bonMelding(id, "Bewaren vraagt nog een poging: "+e.message, "bad"); }
+    });
   }, meteen ? 0 : 700);
 }
 async function bonAfronden(id){
@@ -788,8 +828,13 @@ async function bonAfronden(id){
   if (bon.betaling.methode==="contant" && !bon.betaling.contantAan){ bonMelding(id, "Geef aan of het contante geld bij de monteur of op kantoor is.", "bad"); return; }
   if (!isService && !bon.handtekeningMonteur){ bonMelding(id, "Zet nog even de handtekening van de monteur.", "bad"); return; }
   if (!bon.handtekeningKlant){ bonMelding(id, "Zet nog even de handtekening van de klant.", "bad"); return; }
+  /* Wat er nu bij de klant is voldaan gaat van het openstaande bedrag af. */
+  var nog = nogTeBetalen(id) - ((bon.betaling.methode==="bank"||bon.betaling.methode==="contant") ? (Number(bon.betaling.bedrag)||0) : 0);
+  if (nog > 0.01 && !(await betaalMelding(Math.round(nog*100)/100, true))) return;
   clearTimeout(bonTimers[id]);
   try{
+    await (bonRij[id] || Promise.resolve());
+    var was = bon.status;
     bon.status = "klaar";
     var kopie = Object.assign({}, bon); delete kopie._geladen;
     var j = await lees("/planning/bon", { method:"POST", body: JSON.stringify({ bon: kopie }) });
@@ -797,7 +842,7 @@ async function bonAfronden(id){
     try{ if (window.fpLog) window.fpLog("opleverbon-afgerond", "afspraak "+id+(bon.ordernr?" order "+bon.ordernr:"")); }catch(e){}
     teken();
     bonMelding(id, "Bon afgerond. Kantoor ziet hem nu in Planning.", "ok");
-  }catch(e){ bon.status = "concept"; bonMelding(id, "Afronden mislukt: "+e.message, "bad"); }
+  }catch(e){ bon.status = was === "klaar" ? "klaar" : "concept"; bonMelding(id, "Afronden mislukt: "+e.message, "bad"); }
 }
 
 function teken(){

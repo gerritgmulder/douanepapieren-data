@@ -61,6 +61,8 @@ const SVC_EIND = 15 * 60;          // 15:00 (Kevin, 29 okt 2026; was 16:00)
 const SVC_MAX_OMRIJ = 40;
 const SVC_BUREN_KM = 60;
 const SVC_LEEG_KOST = 60;
+// Spoed: een dag eerder is zoveel minuten omrijden waard.
+const SVC_SPOED_DAG = 25;
 const SVC_MAIL_MAX = 40;           // per dag, van de 100 die Resend geeft
 const SVC_ANTWOORD = "spaplanning@fonteyn.nl";
 const SVC_INSTEL = "service-instellingen";
@@ -216,7 +218,11 @@ function svcBestePlek1(m, routes, stopsPer, thuis, vandaag, zoSnelMogelijk, zond
       gevonden = true;
       const kand = { R, p, leeg: stops.length === 0, extra: t.terug - oud - m.duur, dagen, aankomst: t.aankomst[p] };
       const kost = (k) => k.leeg ? SVC_LEEG_KOST + k.dagen * 3 : k.extra + k.dagen * 3 + Math.max(0, k.extra - SVC_MAX_OMRIJ) * 4;
-      const sleutel = (k) => zoSnelMogelijk ? [k.dagen, k.leeg ? 1 : 0, k.extra] : [kost(k), k.R.nr];
+      /* Spoed (Kevin, document 17 nov 2026): zo snel mogelijk, maar de route
+         moet logisch blijven. Elke dag later telt als SVC_SPOED_DAG minuten
+         omrijden; zo wint een vroege dag, tenzij die route de andere kant op gaat. */
+      const sleutel = (k) => zoSnelMogelijk === "spoed" ? [kost(k) + k.dagen * (SVC_SPOED_DAG - 3), k.R.nr]
+        : zoSnelMogelijk ? [k.dagen, k.leeg ? 1 : 0, k.extra] : [kost(k), k.R.nr];
       if (!beste) { beste = kand; continue; }
       const a = sleutel(kand), b = sleutel(beste);
       for (let i = 0; i < a.length; i++) { if (a[i] < b[i]) { beste = kand; break; } if (a[i] > b[i]) break; }
@@ -335,6 +341,7 @@ function svcSchoonMelding(b, oud) {
   // Kevin (27 okt 2026): klanten overzetten uit Logic4 zonder mail, eventueel op een al afgesproken datum.
   if (b.geenMail !== undefined) m.geenMail = !!b.geenMail;
   if (b.vast !== undefined) m.vast = datum(b.vast);
+  if (b.spoed !== undefined) m.spoed = !!b.spoed;
   return m;
 }
 async function svcMeldingBewaar(env, H, wie, b) {
@@ -609,8 +616,8 @@ async function svcPlannen(env, H, wie, opts) {
     }
     for (const m of lijst) m.vorigeMonteur = vorig["its:" + m.its] || ((m.klant || {}).debiteur ? vorig["deb:" + m.klant.debiteur] : null) || null;
   }
-  // Wie het langst wacht eerst.
-  lijst.sort((a, b) => String(a.gemeld || a.gemaakt || "").localeCompare(String(b.gemeld || b.gemaakt || "")));
+  // Spoed eerst, daarna wie het langst wacht.
+  lijst.sort((a, b) => (b.spoed ? 1 : 0) - (a.spoed ? 1 : 0) || String(a.gemeld || a.gemaakt || "").localeCompare(String(b.gemeld || b.gemaakt || "")));
   const gepland = [], over = [], klaarIts = new Set();
   const zet = (m, plek) => {
     const k = plek.R.datum + "|" + plek.R.nr;
@@ -619,7 +626,7 @@ async function svcPlannen(env, H, wie, opts) {
     stops.splice(plek.p, 0, stop);
     klaarIts.add(m.its);
     gepland.push({ its: m.its, naam: (m.klant || {}).naam || "", plaats: (m.klant || {}).plaats || "", datum: plek.R.datum, nr: plek.R.nr, monteur: plek.R.monteur, dagdeel: stop.dagdeel, leeg: plek.leeg,
-      buitenVoorkeur: !!plek.buitenVoorkeur, zelfdeMonteur: !!plek.zelfdeMonteur, geenMail: !!m.geenMail });
+      buitenVoorkeur: !!plek.buitenVoorkeur, zelfdeMonteur: !!plek.zelfdeMonteur, geenMail: !!m.geenMail, spoed: !!m.spoed });
   };
   /* Maak route vol (Kevin, document 3 nov 2026): alleen deze ene route, en
      telkens de klant die er het minst omrijden bij geeft, tot er niets meer
@@ -641,7 +648,7 @@ async function svcPlannen(env, H, wie, opts) {
   for (const m of opts.route ? [] : lijst) {
     if (klaarIts.has(m.its)) continue;
     if (!m.duur) { over.push({ its: m.its, naam: (m.klant || {}).naam || "", reden: "De verwachte duur ontbreekt nog." }); continue; }
-    const plek = svcBestePlek(m, routes, stopsPer, thuis, vandaag, false);
+    const plek = svcBestePlek(m, routes, stopsPer, thuis, vandaag, m.spoed ? "spoed" : false);
     if (plek.geen) { over.push({ its: m.its, naam: (m.klant || {}).naam || "", reden: plek.reden }); continue; }
     zet(m, plek);
     /* De buren meteen erbij (Kevin, 30 okt 2026): wie binnen 60 km woont en met
@@ -750,11 +757,26 @@ async function svcOverzicht(env, url) {
   const van = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("van") || "") ? url.searchParams.get("van") : svcPlus(vandaag, -7);
   const tot = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("tot") || "") ? url.searchParams.get("tot") : svcPlus(vandaag, 42);
   const meldRijen = (await db.prepare("SELECT its, status, json, ts FROM svc_melding WHERE status IN ('open','gepland')").all()).results || [];
-  const afs = ((await db.prepare("SELECT * FROM svc_afspraak WHERE datum >= ?1 AND datum <= ?2 AND status IN ('voorstel','akkoord','klaar')").bind(van, tot).all()).results || []).map(svcAfspraakUit);
+  const alle = ((await db.prepare("SELECT * FROM svc_afspraak WHERE datum >= ?1 AND datum <= ?2 AND status IN ('voorstel','akkoord','klaar','vervallen')").bind(van, tot).all()).results || []).map(svcAfspraakUit);
+  const afs = alle.filter(a => a.status !== "vervallen");
+  /* Monteur ziek (Kevin, document 17 nov 2026): de klanten van de zieke
+     route blijven op die dag staan, met de nieuwe datum, zodat de planner
+     ziet dat ze gemaild en verplaatst zijn. */
+  const ziekWeg = alle.filter(a => a.status === "vervallen" && a.json.reden === "monteur ziek");
+  if (ziekWeg.length) {
+    const lijst = [...new Set(ziekWeg.map(a => a.its))].slice(0, 90);
+    const nieuw = ((await db.prepare("SELECT a.its, a.datum, a.nr, a.status, a.json, r.monteur FROM svc_afspraak a LEFT JOIN svc_route r ON r.datum = a.datum AND r.nr = a.nr WHERE a.its IN (" + lijst.map((_, i) => "?" + (i + 1)).join(",") + ")").bind(...lijst).all()).results || [])
+      .map(x => Object.assign(x, { json: svcJson(x.json, {}) })).filter(x => x.json.ziek);
+    for (const a of ziekWeg) {
+      const n = nieuw.find(x => x.its === a.its && x.json.oudeDatum === a.datum);
+      a.naar = n ? { datum: n.datum, nr: Number(n.nr), monteur: n.monteur || "", status: n.status, gemaild: (n.json.mails || []).some(x => x.soort === "ziek") } : null;
+      delete a.token;
+    }
+  }
   /* De meldingen bij afspraken in dit venster die niet meer open of gepland
      zijn (klaar), zodat een oude afspraak nog een naam heeft. */
   const bekend = new Set(meldRijen.map(r => r.its));
-  const missend = [...new Set(afs.map(a => a.its).filter(i => !bekend.has(i)))].slice(0, 90);
+  const missend = [...new Set(alle.map(a => a.its).filter(i => !bekend.has(i)))].slice(0, 90);
   let extra = [];
   if (missend.length) extra = (await db.prepare("SELECT its, status, json, ts FROM svc_melding WHERE its IN (" + missend.map((_, i) => "?" + (i + 1)).join(",") + ")").bind(...missend).all()).results || [];
   const routes = ((await db.prepare("SELECT * FROM svc_route WHERE datum >= ?1 AND datum <= ?2 ORDER BY datum, nr").bind(van, tot).all()).results || [])
@@ -764,7 +786,7 @@ async function svcOverzicht(env, url) {
   for (const a of afs) delete a.token;
   return { ok: true, vandaag, van, tot,
     meldingen: [...meldRijen, ...extra].map(r => Object.assign(svcJson(r.json, {}), { its: r.its, status: r.status, ts: r.ts })),
-    afspraken: afs, routes, monteurs: SVC_MONTEURS,
+    afspraken: afs, ziekWeg, routes, monteurs: SVC_MONTEURS,
     mail: { aan: !!inst.mailAan, proef: inst.proefAdres || "", vandaag: await svcMailTeller(db), max: SVC_MAIL_MAX },
     tijden: { start: SVC_START, eind: SVC_EIND } };
 }
@@ -1168,6 +1190,8 @@ function svcBonSchoon(b, oud) {
   if (b.gedaan !== undefined) bon.gedaan = tekst(b.gedaan, 3000);
   if (b.melding !== undefined) bon.melding = tekst(b.melding, 3000);
   if (b.opmerking !== undefined) bon.opmerking = tekst(b.opmerking, 1000);
+  // Opnieuw komen (Kevin, document 17 nov 2026): waarvoor de monteur terug moet.
+  if (b.opnieuw !== undefined) bon.opnieuw = tekst(b.opnieuw, 1000).trim();
   if (b.klantNaam !== undefined) bon.klantNaam = tekst(b.klantNaam, 80);
   if (b.uren !== undefined) bon.uren = Math.max(0, Math.min(24, Math.round((Number(String(b.uren).replace(",", ".")) || 0) * 4) / 4));
   if (b.materialen !== undefined) bon.materialen = (Array.isArray(b.materialen) ? b.materialen : []).slice(0, 60).map(r => ({
@@ -1309,7 +1333,11 @@ async function svcBonPost(env, wie, planner, b) {
     if (bon.materialen.some(r => !(r.aantal > 0))) return { ok: false, error: "Vul bij elk materiaal een aantal in." };
     if (!bon.handtekeningKlant) return { ok: false, error: "Laat de klant nog even tekenen." };
     bon.status = "klaar"; bon.klaarTs = new Date().toISOString(); bon.klaarDoor = wie;
-  } else if (oud.status === "concept" || oud.status === "klaar") bon.status = "concept";
+  } else if (oud.status === "concept") bon.status = "concept";
+  /* Een afgeronde werkbon blijft afgerond (Kevin, document 17 nov 2026): de
+     telefoon bewaart soms nog iets na het afronden (handtekening, een vak),
+     en dat zette hem terug op bezig. Kantoor kan hem nog wel terugzetten. */
+  else if (oud.status === "klaar") bon.status = "klaar";
   await svcBonSchrijf(db, bon);
   if (bon.status === "klaar" && a) {
     a.status = "klaar"; a.json.klaarTs = Date.now(); await svcAfspraakSchrijf(db, a);
@@ -1351,7 +1379,16 @@ async function svcBonnen(env, alleenWeg) {
   const r = (alleenWeg
     ? await db.prepare("SELECT json, status FROM svc_bon WHERE status = 'weg' ORDER BY datum DESC LIMIT 200").all()
     : await db.prepare("SELECT json, status FROM svc_bon WHERE status IN ('concept','klaar','akkoord') OR (status = 'gemaild' AND ts > ?1) ORDER BY datum DESC LIMIT 400").bind(Date.now() - 45 * 864e5).all()).results || [];
-  return { ok: true, bonnen: r.map(x => { const b = Object.assign(svcJson(x.json, {}), { status: x.status }); delete b.handtekeningKlant; b.getekend = !!svcJson(x.json, {}).handtekeningKlant; return b; }) };
+  const bonnen = r.map(x => { const b = Object.assign(svcJson(x.json, {}), { status: x.status }); b.getekend = !!b.handtekeningKlant; delete b.handtekeningKlant; return b; });
+  /* De melding zoals hij nu in de lijst staat (Kevin, document 17 nov 2026):
+     wat de monteur moest doen. Alleen voor kantoor; de klant krijgt hem niet. */
+  const its = [...new Set(bonnen.map(b => String(b.its)))];
+  for (let i = 0; i < its.length; i += 90) {
+    const deel = its.slice(i, i + 90);
+    const ms = (await db.prepare("SELECT its, json FROM svc_melding WHERE its IN (" + deel.map((_, k) => "?" + (k + 1)).join(",") + ")").bind(...deel).all()).results || [];
+    for (const m of ms) { const j = svcJson(m.json, {}); for (const b of bonnen) if (String(b.its) === m.its) { b.meldingTitel = j.titel || ""; b.meldingNu = j.tekst || j.omschrijving || ""; } }
+  }
+  return { ok: true, bonnen };
 }
 async function svcBonKantoor(env, wie, b) {
   const db = await svcBonDb(env);

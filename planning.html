@@ -517,10 +517,16 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .formkaart{background:#fff;border-radius:14px;max-width:720px;width:100%;padding:16px 18px;margin:auto}
 /* Foto's bij een klus voor de monteurs (Kevin, 3 nov 2026). */
 .ffotos{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.ffotos .fotovak{position:relative;display:inline-block}
-.ffotos img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--rand);background:#f3f3ef;cursor:zoom-in}
-.ffotos .fotoweg{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#b91c1c;color:#fff;font-size:15px;line-height:22px;padding:0;cursor:pointer}
-.ffotos .fotoknop{display:inline-flex;align-items:center;gap:6px;border:2px dashed var(--groen);color:var(--groen);border-radius:9px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer;background:#fff;margin:0}
+/* Kleine foto's op één regel (Kevin, document 17 nov 2026): met grote foto's
+   werd het venster hoger dan het scherm en kwam er een schuifbalk. */
+.ffotos .fotovak{position:relative;display:inline-block;line-height:0}
+.ffotos img{width:34px;height:34px;object-fit:cover;border-radius:7px;border:1px solid var(--rand);background:#f3f3ef;cursor:zoom-in}
+.ffotos .fotoweg{position:absolute;top:-5px;right:-5px;width:17px;height:17px;border-radius:50%;border:0;background:#b91c1c;color:#fff;font-size:12px;line-height:17px;padding:0;cursor:pointer}
+.ffotos .fotomeer{height:34px;min-width:34px;border:1px solid var(--rand);border-radius:7px;background:#f3f3ef;color:var(--ink);font:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:0 8px}
+.ffotos .fotoknop{display:inline-flex;align-items:center;gap:6px;border:2px dashed var(--groen);color:var(--groen);border-radius:9px;padding:5px 10px;font-weight:700;font-size:12.5px;cursor:pointer;background:#fff;margin:0}
+.fotomeld{font-weight:400;color:var(--grijs);margin-left:6px}
+.fotoalle{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:900px;cursor:default}
+.fotoalle img{width:160px;height:160px;object-fit:cover;border-radius:8px;cursor:zoom-in}
 .ffotos .fotoknop input{display:none}
 .fotogroot{position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
 .fotogroot img{max-width:100%;max-height:100%;border-radius:8px}
@@ -777,6 +783,15 @@ var PLANNERS = { "servicespa":"Mike", "spaservice":"Mike", "mike.deboer":"Mike d
    route, en dan hoort hun naam ook niet in dat menu te staan. */
 var NIET_OP_DE_WEG = ["gerrit","dolf","chantal","arno","don","fonteyn.don","maartens",
                       "fonteynbot","nomi","gretha","osman","manon","reinier.k","plaatsing","werkplaats"];
+/* Op welke dag iets is ingepland of gewijzigd (Kevin, document 17 nov 2026). */
+function opDag(ts){
+  var d = ts ? new Date(ts) : null;
+  return d && !isNaN(d) ? " op "+d.getDate()+"-"+(d.getMonth()+1)+"-"+d.getFullYear() : "";
+}
+function wieWanneer(a){
+  if (!a.door) return "";
+  return planNaam(a.door)+opDag(a.gemaakt)+(a.gewijzigdDoor && (a.gewijzigdDoor!==a.door || opDag(a.gewijzigd)!==opDag(a.gemaakt)) ? ", laatst gewijzigd door "+planNaam(a.gewijzigdDoor)+opDag(a.gewijzigd) : "");
+}
 function planNaam(wie){
   var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"").toLowerCase();
   return PLANNERS[lokaal] || voornaam(wie);
@@ -2170,7 +2185,7 @@ function toonBlokInfo(el){
     ["Telefoon", a.telefoon],
     ["Order", [a.ordernr, a.itsId?"ITS "+a.itsId:""].filter(Boolean).join(" · ")],
     ["Betaling", betaalUitleg(a)],
-    ["Ingepland", a.door ? planNaam(a.door)+(a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?", laatst gewijzigd door "+planNaam(a.gewijzigdDoor):"") : ""]
+    ["Ingepland", wieWanneer(a)]
   ].filter(function(r){ return r[1]; });
   var kaart = document.createElement("div");
   kaart.id = "blokInfo"; kaart.className = "blokinfo";
@@ -2582,8 +2597,7 @@ function blokken(items){
        Gerrit (7 sep 2026): "Ik wil ook kunnen zien wie het heeft ingepland."
        Bij een laag blok is er geen ruimte voor een regel, dus dan wordt het
        een rondje met de initiaal rechtsboven; de hele naam staat in de tip. */
-    var plander = a.door ? '<span class="planner" title="Ingepland door '+esc(planNaam(a.door))+
-      (a.gewijzigdDoor && a.gewijzigdDoor!==a.door ? ', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)) : '')+'">'+
+    var plander = a.door ? '<span class="planner" title="Ingepland door '+esc(wieWanneer(a))+'">'+
       esc(planInitiaal(a.door))+'</span>' : "";
     return '<div class="blok'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+zoekKlas(a)+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" title="'+esc(a.tijd)+(a.duurMin?' - '+tijdStr(b.tot):'')+(a.wie?' · '+esc(a.wie):'')+(betaalUitleg(a)?'\n'+esc(betaalUitleg(a)):'')+'" style="top:'+top+'px;height:'+hoog+'px;'+
       'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+';'+betaalRand(a)+'">'+
@@ -2611,7 +2625,7 @@ function kaartje(a){
   var sub = [a.plaats, a.wat].filter(Boolean).map(esc).join(" · ");
   var voet = [];
   if (a.wie) voet.push("👤 "+esc(a.wie));
-  if (a.door) voet.push("gepland door "+esc(voornaam(a.door)));
+  if (a.door) voet.push("gepland door "+esc(voornaam(a.door))+esc(opDag(a.gemaakt)));
   return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';'+betaalRand(a)+'">'+
     '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
     '<span class="badge" style="background:rgba(255,255,255,.55);color:inherit">'+esc(c.naam)+'</span>'+
@@ -2710,8 +2724,10 @@ async function formFotos(afspraakId){
   try { lijst = ((await fotoApi("/planning/foto/lijst?afspraken="+encodeURIComponent(afspraakId))).fotos || {})[afspraakId] || []; } catch(e) {}
   function teken2(){
     if (!$("fFotos")) return;
-    box.innerHTML = lijst.map(function(f){ return '<span class="fotovak"><img data-ffoto="'+esc(f.id)+'" alt="foto" title="Klik om groot te bekijken">'+
+    var MAX = 8, zicht = lijst.length > MAX ? lijst.slice(0, MAX - 1) : lijst;
+    box.innerHTML = zicht.map(function(f){ return '<span class="fotovak"><img data-ffoto="'+esc(f.id)+'" alt="foto" title="Klik om groot te bekijken">'+
         (MAG_BEWERKEN ? '<button type="button" class="fotoweg" data-ffotoweg="'+esc(f.id)+'" title="Het Dashboard haalt deze foto weg bij deze klus">&times;</button>' : '')+'</span>'; }).join("")+
+      (lijst.length > zicht.length ? '<button type="button" class="fotomeer" id="fFotoMeer" title="Het Dashboard toont alle foto\'s van deze klus">+'+(lijst.length - zicht.length)+'</button>' : '')+
       (MAG_BEWERKEN ? '<label class="fotoknop" title="Kies een of meer foto\'s; de monteurs zien ze in Mijn route Plaatsing">📷 Foto\'s toevoegen<input type="file" accept="image/*" multiple id="fFotoIn"></label>'
         : (lijst.length ? '' : '<span style="font-size:12px;color:var(--grijs)">Nog geen foto\'s bij deze klus.</span>'));
     box.querySelectorAll("img[data-ffoto]").forEach(async function(img){
@@ -2720,6 +2736,14 @@ async function formFotos(afspraakId){
       if (!fotoUrl[id]) { try { var r = await fetch(W+"/planning/foto?id="+encodeURIComponent(id), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } }); if (r.ok) fotoUrl[id] = URL.createObjectURL(await r.blob()); } catch(e) {} }
       if (fotoUrl[id]) img.src = fotoUrl[id];
     });
+    var meer = $("fFotoMeer");
+    if (meer) meer.onclick = function(){
+      var g = document.createElement("div"); g.className = "fotogroot";
+      g.innerHTML = '<div class="fotoalle">'+lijst.map(function(f){ return '<img alt="foto" data-alle="'+esc(f.id)+'">'; }).join("")+'</div>';
+      g.querySelectorAll("img[data-alle]").forEach(function(im){ if (fotoUrl[im.dataset.alle]) im.src = fotoUrl[im.dataset.alle];
+        else fetch(W+"/planning/foto?id="+encodeURIComponent(im.dataset.alle), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } }).then(function(r){ return r.ok ? r.blob() : null; }).then(function(bl){ if (bl){ fotoUrl[im.dataset.alle] = URL.createObjectURL(bl); im.src = fotoUrl[im.dataset.alle]; } }).catch(function(){});
+        im.onclick = function(e){ e.stopPropagation(); g.innerHTML = '<img alt="foto">'; g.querySelector("img").src = im.src; }; });
+      g.onclick = function(){ g.remove(); }; document.body.appendChild(g); };
     box.querySelectorAll("[data-ffotoweg]").forEach(function(b){ b.addEventListener("click", async function(){
       b.disabled = true;
       try { await fotoApi("/planning/foto/weg", { method:"POST", body: JSON.stringify({ id: b.dataset.ffotoweg }) });
@@ -2851,8 +2875,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '</div></div>'+
     /* Foto's bij de klus: de monteurs zien ze in Mijn route Plaatsing
        (Kevin, document 3 nov 2026). Ze horen bij deze afspraak. */
-    '<label>Foto\'s voor de monteurs</label><div class="ffotos" id="fFotos"><span style="font-size:12px;color:var(--grijs)">Even ophalen…</span></div>'+
-    '<div class="melding" id="fFotoMelding"></div>'+
+    '<label>Foto\'s voor de monteurs<span class="fotomeld" id="fFotoMelding"></span></label><div class="ffotos" id="fFotos"><span style="font-size:12px;color:var(--grijs)">Even ophalen…</span></div>'+
     '<div class="fverkl" id="fVerkl"></div>'+
     '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fLetop" style="width:auto"'+(a.letop?" checked":"")+'> '+
@@ -2870,8 +2893,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       '<span>Klant akkoord <span style="color:var(--grijs)">(de klant heeft de afspraak bevestigd; de monteur ziet dit in Mijn route)</span></span></label>'+
     (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
-    (nieuw?"":'<div class="gepland-door">Ingepland door '+esc(planNaam(a.door||"?"))+
-      (a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)):'')+'</div>')+
+    (nieuw?"":'<div class="gepland-door">Ingepland door '+esc(a.door ? wieWanneer(a) : "?")+'</div>')+
     '<div class="melding" id="fMelding"></div>'+
     '<div class="knoppen">'+
       (MAG_BEWERKEN && !nieuw?'<button type="button" class="weg" id="fWeg">Verwijderen</button>':"")+
