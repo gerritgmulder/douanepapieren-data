@@ -1508,11 +1508,9 @@ function voorkomen(a, dISO){
   if (a.herhaalTot && start > a.herhaalTot) return null;
   return { van: start, tot: dagPlus(start, lengte) };
 }
-/* De stops van één route, op volgorde. 'volg' is de handmatige volgorde die
-   ontstaat als iemand stops binnen een route versleept; staat die er niet,
-   dan is de tijd leidend. Zo blijft een route die nooit is aangeraakt gewoon
-   op tijd staan, en houdt een gesleepte route de volgorde die de planner
-   heeft bedoeld. */
+/* De stops van één route, op volgorde: op tijd, en bij dezelfde tijd op
+   'volg' (de volgorde van het slepen). Slepen op het tijdraster zet de tijd
+   mee, dus de volgorde blijft wat de planner ziet. */
 function stopsVan(dISO, nr, eerste){
   return afspraken.filter(function(a){
     if (!opDag(a, dISO) || filterUit[a.soort]) return false;
@@ -1520,12 +1518,16 @@ function stopsVan(dISO, nr, eerste){
     var rn = Number(a.route) || 0;
     return rn === nr || (!rn && eerste);
   }).sort(function(x,y){
-    var vx = Number(x.volg), vy = Number(y.volg);
-    if (isFinite(vx) && isFinite(vy) && vx !== vy) return vx - vy;
-    if (isFinite(vx) !== isFinite(vy)) return isFinite(vx) ? -1 : 1;
-    /* Op de echte tijd, niet als tekst: anders kwam 10:00 vóór 8:30 (Kevin, 28 okt 2026). */
+    /* De tijd is leidend, zoals in het tijdraster van Planning Plaatsing; de
+       volgorde (volg, van het slepen) telt alleen bij dezelfde tijd. Een lege
+       volg telde eerst als 0, waardoor nieuwe stops vóór de eerste klant
+       kwamen (Kevin, 20 nov 2026: Hoofddorp, Almere, en dan terug naar
+       Nieuw-Vennep). Mijn route sorteert precies zo. */
     var tx = minuten(x.tijd), ty = minuten(y.tijd);
-    return (tx == null ? 9999 : tx) - (ty == null ? 9999 : ty);
+    if (tx !== ty) return (tx == null ? 9999 : tx) - (ty == null ? 9999 : ty);
+    var vx = x.volg == null || x.volg === "" ? NaN : Number(x.volg), vy = y.volg == null || y.volg === "" ? NaN : Number(y.volg);
+    if (isFinite(vx) && isFinite(vy)) return vx - vy;
+    return isFinite(vx) === isFinite(vy) ? 0 : (isFinite(vx) ? -1 : 1);
   });
 }
 

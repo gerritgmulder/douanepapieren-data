@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-11-19", bestand: "mijnroute.html", soort: "hersteld",
+      titel: "Route in dezelfde volgorde als de Planning",
+      wat:   "Mijn route zet de klanten nu altijd op tijd, net als het tijdraster in Planning Plaatsing. Een klant die later bij een route kwam, stond soms bovenaan."
+    },
+    {
+      datum: "2026-11-19", bestand: "mijnroute.html", soort: "hersteld",
       titel: "Lege materiaalregel houdt de bon niet meer tegen",
       wat:   "Staat er bij een servicebon een lege materiaalregel, dan haalt het Dashboard die bij Bon afronden zelf weg. De bon wordt dan gewoon afgerond."
     },
