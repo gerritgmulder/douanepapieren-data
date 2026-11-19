@@ -816,8 +816,11 @@ async function bonAfronden(id){
   var isService = bon.soort === "service" || !!bon.itsId;
   if (isService){
     if (!String((bon.service||{}).gedaan||"").trim()){ bonMelding(id, "Vul in wat je bij de klant hebt gedaan (vak 2).", "bad"); return; }
-    var leeg = (bon.service.materialen||[]).filter(function(r){ return !String(r.oms||"").trim(); });
-    if (leeg.length){ bonMelding(id, "Er staat een materiaalregel zonder omschrijving; vul die in of haal hem weg.", "bad"); return; }
+    /* Een lege regel (geen omschrijving, geen prijs) haalt het Dashboard zelf
+       weg: bij Kooiman bleef de bon daardoor open staan (Kevin, 19 nov 2026). */
+    bon.service.materialen = (bon.service.materialen||[]).filter(function(r){ return String(r.oms||"").trim() || Number(r.prijs) > 0; });
+    var leeg = bon.service.materialen.filter(function(r){ return !String(r.oms||"").trim(); });
+    if (leeg.length){ bonMelding(id, "Er staat een materiaalregel met een prijs maar zonder omschrijving; vul die in of haal hem weg.", "bad"); return; }
   } else if (!bon.alleenLeveren) {
     var open = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ return !(bon.checklist[v.k]||{}).a; });
     if (open.length){ bonMelding(id, open.length+" vraag(en) staan nog open: "+open.slice(0,3).map(function(v){ return v.t; }).join(", ")+(open.length>3?" ...":""), "bad"); return; }

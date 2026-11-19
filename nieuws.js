@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-11-19", bestand: "mijnroute.html", soort: "hersteld",
+      titel: "Lege materiaalregel houdt de bon niet meer tegen",
+      wat:   "Staat er bij een servicebon een lege materiaalregel, dan haalt het Dashboard die bij Bon afronden zelf weg. De bon wordt dan gewoon afgerond."
+    },
+    {
+      datum: "2026-11-19", bestand: "mijnroute.html", soort: "hersteld",
       titel: "Afgeronde bon blijft afgerond",
       wat:   "Een opleverbon die je hebt afgerond, blijft afgerond. Ook als je daarna nog iets aanpast."
     },
